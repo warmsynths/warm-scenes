@@ -17,7 +17,7 @@ export class LofiDiorama extends LitElement {
   container!: HTMLDivElement;
 
   private scene!: THREE.Scene;
-  private camera!: THREE.PerspectiveCamera;
+  private camera!: THREE.OrthographicCamera;
   private renderer!: THREE.WebGLRenderer;
   
   private resizeObserver!: ResizeObserver;
@@ -99,10 +99,12 @@ export class LofiDiorama extends LitElement {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x1a1520);
 
-    // Perspective camera — elevated view looking down at the desk
-    this.camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 500);
-    this.camera.position.set(0, 16, 12);
-    this.camera.lookAt(0, 3, -8);
+    // Orthographic camera — Isometric view
+    const aspect = width / height;
+    const d = 14;
+    this.camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 0.1, 1000);
+    this.camera.position.set(20, 25, 13);
+    this.camera.lookAt(0, 5, -7);
 
     // Crisp, clean renderer — Pixar-style
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
@@ -124,7 +126,7 @@ export class LofiDiorama extends LitElement {
 
     // Desk lamp — warm point light
     this.deskLight = new THREE.PointLight(0xffcc77, 60, 40, 2);
-    this.deskLight.position.set(-8, 10, 2);
+    this.deskLight.position.set(-8.5, 12, 2);
     this.deskLight.castShadow = true;
     this.deskLight.shadow.mapSize.width = 2048;
     this.deskLight.shadow.mapSize.height = 2048;
@@ -133,7 +135,7 @@ export class LofiDiorama extends LitElement {
 
     // Window daylight
     const windowLight = new THREE.DirectionalLight(0xffffff, 1.5);
-    windowLight.position.set(0, 15, -30);
+    windowLight.position.set(0, 20, -30);
     windowLight.castShadow = true;
     windowLight.shadow.mapSize.width = 2048;
     windowLight.shadow.mapSize.height = 2048;
@@ -175,38 +177,38 @@ export class LofiDiorama extends LitElement {
     
     // Wall sections around window
     // Left of window
-    const wallLeft = new THREE.Mesh(new THREE.BoxGeometry(8, 14, 0.5), wallMat);
-    wallLeft.position.set(-12, 7, -15);
+    const wallLeft = new THREE.Mesh(new THREE.BoxGeometry(10, 24, 0.5), wallMat);
+    wallLeft.position.set(-13, 12, -15);
     wallLeft.receiveShadow = true;
     this.scene.add(wallLeft);
     
     // Right of window
-    const wallRight = new THREE.Mesh(new THREE.BoxGeometry(8, 14, 0.5), wallMat);
-    wallRight.position.set(12, 7, -15);
+    const wallRight = new THREE.Mesh(new THREE.BoxGeometry(10, 24, 0.5), wallMat);
+    wallRight.position.set(13, 12, -15);
     wallRight.receiveShadow = true;
     this.scene.add(wallRight);
     
     // Above window
-    const wallAbove = new THREE.Mesh(new THREE.BoxGeometry(16, 3, 0.5), wallMat);
-    wallAbove.position.set(0, 12.5, -15);
+    const wallAbove = new THREE.Mesh(new THREE.BoxGeometry(16.5, 7.6, 0.5), wallMat);
+    wallAbove.position.set(0, 20.2, -15);
     wallAbove.receiveShadow = true;
     this.scene.add(wallAbove);
     
     // Below window (window sill area)
-    const wallBelow = new THREE.Mesh(new THREE.BoxGeometry(16, 3, 0.5), wallMat);
-    wallBelow.position.set(0, 1.5, -15);
+    const wallBelow = new THREE.Mesh(new THREE.BoxGeometry(16.5, 8.0, 0.5), wallMat);
+    wallBelow.position.set(0, 4.0, -15);
     wallBelow.receiveShadow = true;
     this.scene.add(wallBelow);
 
     // Side walls (fading into periphery)
     const sideWallMat = new THREE.MeshStandardMaterial({ color: 0xb89878, roughness: 0.9 });
-    const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.5, 14, 30), sideWallMat);
-    leftWall.position.set(-16, 7, 0);
+    const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.5, 24, 30), sideWallMat);
+    leftWall.position.set(-18, 12, 0);
     leftWall.receiveShadow = true;
     this.scene.add(leftWall);
     
-    const rightWall = new THREE.Mesh(new THREE.BoxGeometry(0.5, 14, 30), sideWallMat);
-    rightWall.position.set(16, 7, 0);
+    const rightWall = new THREE.Mesh(new THREE.BoxGeometry(0.5, 24, 30), sideWallMat);
+    rightWall.position.set(18, 12, 0);
     rightWall.receiveShadow = true;
     this.scene.add(rightWall);
   }
@@ -214,16 +216,16 @@ export class LofiDiorama extends LitElement {
   private buildDesk() {
     // Desk surface
     const deskMat = new THREE.MeshStandardMaterial({ color: 0x5c3d2e, roughness: 0.4, metalness: 0.05 });
-    const deskTop = new THREE.Mesh(new THREE.BoxGeometry(28, 0.8, 14), deskMat);
-    deskTop.position.set(0, 3.6, -7);
+    const deskTop = new THREE.Mesh(new THREE.BoxGeometry(22, 0.8, 14), deskMat);
+    deskTop.position.set(0, 5.6, -7);
     deskTop.castShadow = true;
     deskTop.receiveShadow = true;
     this.scene.add(deskTop);
 
     // Desk legs
     const legMat = new THREE.MeshStandardMaterial({ color: 0x3a2518, roughness: 0.5 });
-    const legGeo = new THREE.BoxGeometry(0.8, 3.6, 0.8);
-    const legPositions = [[-13, 1.8, -1], [13, 1.8, -1], [-13, 1.8, -13], [13, 1.8, -13]];
+    const legGeo = new THREE.BoxGeometry(0.8, 5.6, 0.8);
+    const legPositions = [[-10, 2.8, -1], [10, 2.8, -1], [-10, 2.8, -13], [10, 2.8, -13]];
     for (const pos of legPositions) {
       const leg = new THREE.Mesh(legGeo, legMat);
       leg.position.set(pos[0], pos[1], pos[2]);
@@ -238,7 +240,7 @@ export class LofiDiorama extends LitElement {
     
     const trackerBodyMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.15, metalness: 0.85 });
     const trackerBody = new THREE.Mesh(new THREE.BoxGeometry(7, 0.5, 8), trackerBodyMat);
-    trackerBody.position.set(-3, 4.2, -7);
+    trackerBody.position.set(-2, 6.2, -7);
     trackerBody.rotation.y = 0.05;
     trackerBody.castShadow = true;
     trackerBody.receiveShadow = true;
@@ -275,7 +277,7 @@ export class LofiDiorama extends LitElement {
     // Circuit Tracks — right of Polyend
     const ctBodyMat = new THREE.MeshStandardMaterial({ color: 0x181a20, roughness: 0.25, metalness: 0.65 });
     const ctBody = new THREE.Mesh(new THREE.BoxGeometry(8, 0.5, 5), ctBodyMat);
-    ctBody.position.set(6, 4.2, -6);
+    ctBody.position.set(6, 6.2, -6);
     ctBody.rotation.y = -0.08;
     ctBody.castShadow = true;
     ctBody.receiveShadow = true;
@@ -304,7 +306,7 @@ export class LofiDiorama extends LitElement {
     const buildPedal = (colorHex: number, x: number, z: number, rot: number) => {
       const pMat = new THREE.MeshStandardMaterial({ color: colorHex, metalness: 0.7, roughness: 0.25 });
       const pedal = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.8, 2.5), pMat);
-      pedal.position.set(x, 4.4, z);
+      pedal.position.set(x, 6.4, z);
       pedal.rotation.y = rot;
       pedal.castShadow = true;
       pedal.receiveShadow = true;
@@ -327,13 +329,13 @@ export class LofiDiorama extends LitElement {
       this.scene.add(pedal);
     };
 
-    buildPedal(0xcc7777, -10, -5, 0.1);  // MOOD
-    buildPedal(0x4a6ea8, -8, -5, -0.05); // Blooper
+    buildPedal(0xcc7777, -7.5, -5, 0.1);  // MOOD
+    buildPedal(0x4a6ea8, -9.5, -5, -0.05); // Blooper
 
     // Reel-to-reel (Templo)
     const reelMat = new THREE.MeshStandardMaterial({ color: 0xa0a0a0, metalness: 0.9, roughness: 0.2 });
     const reel = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.8, 3), reelMat);
-    reel.position.set(12, 4.4, -8);
+    reel.position.set(8.5, 6.4, -10);
     reel.rotation.y = 0.15;
     reel.castShadow = true;
     reel.receiveShadow = true;
@@ -351,44 +353,44 @@ export class LofiDiorama extends LitElement {
     // Desk lamp — left side
     const brassMat = new THREE.MeshStandardMaterial({ color: 0xb5a642, metalness: 0.8, roughness: 0.2 });
     const lampBase = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, 0.3, 32), brassMat);
-    lampBase.position.set(-8, 4.15, -10);
+    lampBase.position.set(-8.5, 6.15, -11);
     lampBase.castShadow = true;
     this.scene.add(lampBase);
     
     const lampArm = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 6, 8), brassMat);
-    lampArm.position.set(-8, 7.2, -10);
+    lampArm.position.set(-8.5, 9.2, -11);
     lampArm.rotation.z = -0.15;
     lampArm.castShadow = true;
     this.scene.add(lampArm);
     
     const lampHead = new THREE.Mesh(new THREE.ConeGeometry(1.2, 1.8, 32), brassMat);
-    lampHead.position.set(-7.5, 10.2, -10);
+    lampHead.position.set(-8.0, 12.2, -11);
     lampHead.rotation.z = Math.PI + 0.3;
     lampHead.castShadow = true;
     this.scene.add(lampHead);
 
     const bulbMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffcc77, emissiveIntensity: 2.0 });
     this.lampBulb = new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 16), bulbMat);
-    this.lampBulb.position.set(-7.5, 9.2, -10);
+    this.lampBulb.position.set(-8.0, 11.2, -11);
     this.scene.add(this.lampBulb);
 
     // Coffee mug
     const mugMat = new THREE.MeshStandardMaterial({ color: 0xf0f0f0, roughness: 0.3 });
     const mug = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.4, 1.0, 32), mugMat);
-    mug.position.set(4.5, 4.5, -3);
+    mug.position.set(3, 6.5, -3);
     mug.castShadow = true;
     this.scene.add(mug);
     // Coffee surface
     const coffeeMat = new THREE.MeshStandardMaterial({ color: 0x3a2010, roughness: 0.2 });
     const coffee = new THREE.Mesh(new THREE.CircleGeometry(0.45, 32), coffeeMat);
     coffee.rotation.x = -Math.PI / 2;
-    coffee.position.set(4.5, 5.0, -3);
+    coffee.position.set(3, 7.0, -3);
     this.scene.add(coffee);
 
     // Small plant on right side of desk
     const potMat = new THREE.MeshStandardMaterial({ color: 0xcc6633, roughness: 0.85 });
     const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.4, 1.0, 16), potMat);
-    pot.position.set(13, 4.5, -4);
+    pot.position.set(9.5, 6.5, -3.5);
     pot.castShadow = true;
     this.scene.add(pot);
 
@@ -396,7 +398,7 @@ export class LofiDiorama extends LitElement {
     const soilMat = new THREE.MeshStandardMaterial({ color: 0x3a2a1a, roughness: 0.9 });
     const soil = new THREE.Mesh(new THREE.CircleGeometry(0.55, 16), soilMat);
     soil.rotation.x = -Math.PI / 2;
-    soil.position.set(13, 5.0, -4);
+    soil.position.set(9.5, 7.0, -3.5);
     this.scene.add(soil);
 
     // Little plant leaves
@@ -405,9 +407,9 @@ export class LofiDiorama extends LitElement {
       const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 8), leafMat);
       leaf.scale.set(1, 0.2, 1.2);
       leaf.position.set(
-        13 + (Math.random() - 0.5) * 0.5,
-        5.4 + Math.random() * 0.6,
-        -4 + (Math.random() - 0.5) * 0.5
+        9.5 + (Math.random() - 0.5) * 0.5,
+        7.4 + Math.random() * 0.6,
+        -3.5 + (Math.random() - 0.5) * 0.5
       );
       leaf.rotation.set(Math.random(), Math.random(), Math.random());
       this.scene.add(leaf);
@@ -417,7 +419,7 @@ export class LofiDiorama extends LitElement {
     const hpMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.3, metalness: 0.5 });
     // Headband arc
     const headband = new THREE.Mesh(new THREE.TorusGeometry(1.0, 0.12, 8, 32, Math.PI), hpMat);
-    headband.position.set(10, 4.6, -3);
+    headband.position.set(7.5, 6.6, -2);
     headband.rotation.x = Math.PI / 2;
     headband.rotation.z = 0.3;
     headband.castShadow = true;
@@ -425,12 +427,12 @@ export class LofiDiorama extends LitElement {
     // Ear cups
     const cupMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.4 });
     const cup1 = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.3, 16), cupMat);
-    cup1.position.set(9.1, 4.3, -3.2);
+    cup1.position.set(6.6, 6.3, -2.2);
     cup1.rotation.x = Math.PI / 2;
     cup1.castShadow = true;
     this.scene.add(cup1);
     const cup2 = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.3, 16), cupMat);
-    cup2.position.set(10.9, 4.3, -2.5);
+    cup2.position.set(8.4, 6.3, -1.5);
     cup2.rotation.x = Math.PI / 2;
     cup2.castShadow = true;
     this.scene.add(cup2);
@@ -442,34 +444,34 @@ export class LofiDiorama extends LitElement {
     
     // Outer frame
     const frameTop = new THREE.Mesh(new THREE.BoxGeometry(16.5, 0.8, 1), frameMat);
-    frameTop.position.set(0, 11.4, -14.8);
+    frameTop.position.set(0, 16.4, -14.8);
     this.scene.add(frameTop);
     
     const frameBottom = new THREE.Mesh(new THREE.BoxGeometry(16.5, 0.8, 1.5), frameMat);
-    frameBottom.position.set(0, 3.0, -14.6);
+    frameBottom.position.set(0, 8.0, -14.6);
     this.scene.add(frameBottom);
     
     const frameL = new THREE.Mesh(new THREE.BoxGeometry(0.8, 9, 1), frameMat);
-    frameL.position.set(-8, 7.2, -14.8);
+    frameL.position.set(-8, 12.2, -14.8);
     this.scene.add(frameL);
     
     const frameR = new THREE.Mesh(new THREE.BoxGeometry(0.8, 9, 1), frameMat);
-    frameR.position.set(8, 7.2, -14.8);
+    frameR.position.set(8, 12.2, -14.8);
     this.scene.add(frameR);
     
     // Center cross dividers
     const frameMidH = new THREE.Mesh(new THREE.BoxGeometry(15.5, 0.5, 0.8), frameMat);
-    frameMidH.position.set(0, 7.2, -14.8);
+    frameMidH.position.set(0, 12.2, -14.8);
     this.scene.add(frameMidH);
     
     const frameMidV = new THREE.Mesh(new THREE.BoxGeometry(0.5, 9, 0.8), frameMat);
-    frameMidV.position.set(0, 7.2, -14.8);
+    frameMidV.position.set(0, 12.2, -14.8);
     this.scene.add(frameMidV);
 
     // Window sill
     const sillMat = new THREE.MeshStandardMaterial({ color: 0xf5eed8, roughness: 0.5 });
     const sill = new THREE.Mesh(new THREE.BoxGeometry(17, 0.4, 2), sillMat);
-    sill.position.set(0, 3.4, -14);
+    sill.position.set(0, 8.4, -14);
     sill.castShadow = true;
     this.scene.add(sill);
   }
@@ -480,14 +482,14 @@ export class LofiDiorama extends LitElement {
     this.skyMat = new THREE.MeshBasicMaterial({ color: skyColor, fog: false });
     const skyGeo = new THREE.PlaneGeometry(40, 20);
     const sky = new THREE.Mesh(skyGeo, this.skyMat);
-    sky.position.set(0, 8, -20);
+    sky.position.set(0, 12.2, -20);
     sky.name = 'sky';
     this.scene.add(sky);
 
     // Sun glow
     const sunMat = new THREE.MeshBasicMaterial({ color: 0xffffcc, transparent: true, opacity: 0.9 });
     this.sunGlow = new THREE.Mesh(new THREE.CircleGeometry(2.5, 32), sunMat);
-    this.sunGlow.position.set(4, 10, -19.5);
+    this.sunGlow.position.set(4, 14, -19.5);
     this.sunGlow.name = 'sunGlow';
     this.sunGlow.visible = this.weather === 'sunny';
     this.scene.add(this.sunGlow);
@@ -495,7 +497,7 @@ export class LofiDiorama extends LitElement {
     // Sun halo
     const haloMat = new THREE.MeshBasicMaterial({ color: 0xffeedd, transparent: true, opacity: 0.3 });
     const halo = new THREE.Mesh(new THREE.CircleGeometry(4.5, 32), haloMat);
-    halo.position.set(4, 10, -19.6);
+    halo.position.set(4, 14, -19.6);
     halo.name = 'sunHalo';
     halo.visible = this.weather === 'sunny';
     this.scene.add(halo);
@@ -507,8 +509,8 @@ export class LofiDiorama extends LitElement {
     });
     
     const cloudPositions = [
-      [-6, 10.5, -19], [2, 11, -19], [8, 10, -19],
-      [-3, 9.5, -18.5], [6, 11.5, -18.5]
+      [-6, 14.5, -19], [2, 15, -19], [8, 14, -19],
+      [-3, 13.5, -18.5], [6, 15.5, -18.5]
     ];
     
     for (const pos of cloudPositions) {
@@ -533,7 +535,7 @@ export class LofiDiorama extends LitElement {
     const rainPositions = new Float32Array(rainCount * 3);
     for (let i = 0; i < rainCount; i++) {
       rainPositions[i * 3] = (Math.random() - 0.5) * 16;
-      rainPositions[i * 3 + 1] = Math.random() * 10 + 3;
+      rainPositions[i * 3 + 1] = Math.random() * 10 + 8;
       rainPositions[i * 3 + 2] = -15 + Math.random() * 3;
     }
     rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPositions, 3));
@@ -603,7 +605,12 @@ export class LofiDiorama extends LitElement {
     const height = this.container.clientHeight;
     if (width === 0 || height === 0) return;
 
-    this.camera.aspect = width / height;
+    const aspect = width / height;
+    const d = 14;
+    this.camera.left = -d * aspect;
+    this.camera.right = d * aspect;
+    this.camera.top = d;
+    this.camera.bottom = -d;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height, false);
   }
@@ -686,8 +693,8 @@ export class LofiDiorama extends LitElement {
       const positions = this.rainDrops.geometry.attributes.position.array as Float32Array;
       for (let i = 0; i < positions.length / 3; i++) {
         positions[i * 3 + 1] -= 0.15;
-        if (positions[i * 3 + 1] < 3) {
-          positions[i * 3 + 1] = 13;
+        if (positions[i * 3 + 1] < 8) {
+          positions[i * 3 + 1] = 18;
           positions[i * 3] = (Math.random() - 0.5) * 16;
         }
       }
