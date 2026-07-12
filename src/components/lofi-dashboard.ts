@@ -28,6 +28,9 @@ export class LofiDashboard extends LitElement {
   @state()
   private weather: Weather = 'sunny';
 
+  @state()
+  private activeGear: string[] = ['polyend', 'circuit_tracks', 'mood', 'blooper', 'reel', 'sp404', 'strat'];
+
   private progressUpdateId: number | null = null;
 
   static styles = css`
@@ -428,6 +431,14 @@ export class LofiDashboard extends LitElement {
     this.stopProgressLoop();
   }
 
+  private toggleGear(gear: string) {
+    if (this.activeGear.includes(gear)) {
+      this.activeGear = this.activeGear.filter(g => g !== gear);
+    } else {
+      this.activeGear = [...this.activeGear, gear];
+    }
+  }
+
   private handleDragOver(e: DragEvent) {
     e.preventDefault();
     this.isDragOver = true;
@@ -736,6 +747,29 @@ export class LofiDashboard extends LitElement {
             </div>
           </div>
         </div>
+
+        <div class="weather-toggle" style="margin-top: 8px;">
+          <div class="weather-label">Desk Gear</div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            ${[
+              { id: 'polyend', label: 'Polyend Tracker' },
+              { id: 'sp404', label: 'SP404mkII' },
+              { id: 'circuit_tracks', label: 'Circuit Tracks' },
+              { id: 'mood', label: 'CBA Mood' },
+              { id: 'blooper', label: 'CBA Blooper' },
+              { id: 'reel', label: 'Reel-to-Reel' },
+              { id: 'strat', label: 'Fender Strat' }
+            ].map(gear => html`
+              <div
+                class="weather-btn ${this.activeGear.includes(gear.id) ? 'active' : ''}"
+                style="text-align: left; padding: 6px 10px;"
+                @click="${() => this.toggleGear(gear.id)}"
+              >
+                ${this.activeGear.includes(gear.id) ? '✓' : '+'} ${gear.label}
+              </div>
+            `)}
+          </div>
+        </div>
       </aside>
 
       <main class="viewport-panel">
@@ -748,7 +782,11 @@ export class LofiDashboard extends LitElement {
             STATUS: ${status}
           </div>
         </header>
-        <lofi-diorama .audioManager="${this.audioManager}" .weather="${this.weather}"></lofi-diorama>
+        <lofi-diorama 
+          .audioManager="${this.audioManager}" 
+          .weather="${this.weather}"
+          .activeGear="${this.activeGear}"
+        ></lofi-diorama>
       </main>
     `;
   }

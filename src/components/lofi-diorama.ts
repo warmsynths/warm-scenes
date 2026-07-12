@@ -13,19 +13,23 @@ export class LofiDiorama extends LitElement {
   @property({ type: String })
   weather: 'sunny' | 'rainy' = 'sunny';
 
+  @property({ type: Array })
+  activeGear: string[] = ['polyend', 'circuit_tracks', 'mood', 'blooper', 'reel', 'sp404', 'strat'];
+
   @query('.canvas-container')
   container!: HTMLDivElement;
 
   private scene!: THREE.Scene;
   private camera!: THREE.OrthographicCamera;
   private renderer!: THREE.WebGLRenderer;
+  private gearGroup!: THREE.Group;
   
   private resizeObserver!: ResizeObserver;
   private animationFrameId: number | null = null;
   
   // Scene targets
   private trackerScreen!: TrackerScreen;
-  private tapeSpools: THREE.Mesh[] = [];
+  private tapeSpools: THREE.Object3D[] = [];
   private circuitPads: THREE.Mesh[] = [];
   private lampBulb!: THREE.Mesh;
   private deskLight!: THREE.PointLight;
@@ -89,6 +93,9 @@ export class LofiDiorama extends LitElement {
     if (changedProperties.has('weather') && this.scene) {
       this.updateWeather();
     }
+    if (changedProperties.has('activeGear') && this.scene) {
+      this.updateGear();
+    }
   }
 
   private initThreeJS() {
@@ -148,7 +155,11 @@ export class LofiDiorama extends LitElement {
     // Build scene
     this.buildRoom();
     this.buildDesk();
-    this.buildGear();
+    
+    this.gearGroup = new THREE.Group();
+    this.scene.add(this.gearGroup);
+    this.updateGear();
+    
     this.buildClutter();
     this.buildWindow();
     this.buildWeather();
@@ -160,9 +171,9 @@ export class LofiDiorama extends LitElement {
     const floorTex = textureLoader.load('/dark_wood_floor.png');
     floorTex.wrapS = THREE.RepeatWrapping;
     floorTex.wrapT = THREE.RepeatWrapping;
-    floorTex.repeat.set(4, 4);
+    floorTex.repeat.set(8, 8);
     
-    const floorGeo = new THREE.PlaneGeometry(60, 60);
+    const floorGeo = new THREE.PlaneGeometry(120, 120);
     const floorMat = new THREE.MeshStandardMaterial({ 
       map: floorTex, roughness: 0.6, metalness: 0.05
     });
@@ -177,20 +188,20 @@ export class LofiDiorama extends LitElement {
     
     // Wall sections around window
     // Left of window
-    const wallLeft = new THREE.Mesh(new THREE.BoxGeometry(10, 24, 0.5), wallMat);
-    wallLeft.position.set(-13, 12, -15);
+    const wallLeft = new THREE.Mesh(new THREE.BoxGeometry(10, 40, 0.5), wallMat);
+    wallLeft.position.set(-13, 20, -15);
     wallLeft.receiveShadow = true;
     this.scene.add(wallLeft);
     
-    // Right of window
-    const wallRight = new THREE.Mesh(new THREE.BoxGeometry(10, 24, 0.5), wallMat);
-    wallRight.position.set(13, 12, -15);
+    // Right of window - extended to cover the entire right side
+    const wallRight = new THREE.Mesh(new THREE.BoxGeometry(40, 40, 0.5), wallMat);
+    wallRight.position.set(28, 20, -15);
     wallRight.receiveShadow = true;
     this.scene.add(wallRight);
     
     // Above window
-    const wallAbove = new THREE.Mesh(new THREE.BoxGeometry(16.5, 7.6, 0.5), wallMat);
-    wallAbove.position.set(0, 20.2, -15);
+    const wallAbove = new THREE.Mesh(new THREE.BoxGeometry(16.5, 23.6, 0.5), wallMat);
+    wallAbove.position.set(0, 28.2, -15);
     wallAbove.receiveShadow = true;
     this.scene.add(wallAbove);
     
@@ -202,15 +213,10 @@ export class LofiDiorama extends LitElement {
 
     // Side walls (fading into periphery)
     const sideWallMat = new THREE.MeshStandardMaterial({ color: 0xb89878, roughness: 0.9 });
-    const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.5, 24, 30), sideWallMat);
-    leftWall.position.set(-18, 12, 0);
+    const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.5, 40, 30), sideWallMat);
+    leftWall.position.set(-18, 20, 0);
     leftWall.receiveShadow = true;
     this.scene.add(leftWall);
-    
-    const rightWall = new THREE.Mesh(new THREE.BoxGeometry(0.5, 24, 30), sideWallMat);
-    rightWall.position.set(18, 12, 0);
-    rightWall.receiveShadow = true;
-    this.scene.add(rightWall);
   }
 
   private buildDesk() {
@@ -234,13 +240,29 @@ export class LofiDiorama extends LitElement {
     }
   }
 
-  private buildGear() {
-    // Polyend Tracker — center of desk
+  private updateGear() {
+    if (!this.gearGroup) return;
+
+    // Clear old gear
+    this.gearGroup.clear(); 
+    this.tapeSpools = [];
+    this.circuitPads = [];
+    
+    if (this.activeGear.includes('polyend')) this.buildPolyend();
+    if (this.activeGear.includes('circuit_tracks')) this.buildCircuitTracks();
+    if (this.activeGear.includes('mood')) this.buildMood();
+    if (this.activeGear.includes('blooper')) this.buildBlooper();
+    if (this.activeGear.includes('reel')) this.buildReel();
+    if (this.activeGear.includes('sp404')) this.buildSP404();
+    if (this.activeGear.includes('strat')) this.buildStrat();
+  }
+
+  private buildPolyend() {
     this.trackerScreen = new TrackerScreen();
     
     const trackerBodyMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.15, metalness: 0.85 });
     const trackerBody = new THREE.Mesh(new THREE.BoxGeometry(7, 0.5, 8), trackerBodyMat);
-    trackerBody.position.set(-2, 6.2, -7);
+    trackerBody.position.set(-3, 6.2, -8);
     trackerBody.rotation.y = 0.05;
     trackerBody.castShadow = true;
     trackerBody.receiveShadow = true;
@@ -272,81 +294,318 @@ export class LofiDiorama extends LitElement {
         trackerBody.add(key);
       }
     }
-    this.scene.add(trackerBody);
+    this.gearGroup.add(trackerBody);
+  }
 
-    // Circuit Tracks — right of Polyend
-    const ctBodyMat = new THREE.MeshStandardMaterial({ color: 0x181a20, roughness: 0.25, metalness: 0.65 });
-    const ctBody = new THREE.Mesh(new THREE.BoxGeometry(8, 0.5, 5), ctBodyMat);
+  private buildCircuitTracks() {
+    // Matte black body
+    const ctBodyMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8, metalness: 0.2 });
+    const ctBody = new THREE.Mesh(new THREE.BoxGeometry(8, 0.5, 6.5), ctBodyMat);
     ctBody.position.set(6, 6.2, -6);
     ctBody.rotation.y = -0.08;
     ctBody.castShadow = true;
     ctBody.receiveShadow = true;
 
-    // Knobs
-    const ctKnobMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.2, metalness: 0.9 });
-    for (let i = 0; i < 8; i++) {
-      const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.3, 16), ctKnobMat);
-      knob.position.set(-2.8 + i * 0.78, 0.35, -1.8);
-      ctBody.add(knob);
+    // Knobs (10 Knobs: Master Vol, 4x2 Macro, Master Filter)
+    const ctKnobMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.3, metalness: 0.5 });
+    const knobGeo = new THREE.CylinderGeometry(0.25, 0.25, 0.3, 16);
+    
+    // Master Vol
+    const mVol = new THREE.Mesh(knobGeo, ctKnobMat);
+    mVol.position.set(-3.2, 0.35, -2.2);
+    ctBody.add(mVol);
+    
+    // Master Filter
+    const mFilt = new THREE.Mesh(knobGeo, ctKnobMat);
+    mFilt.position.set(3.2, 0.35, -2.2);
+    ctBody.add(mFilt);
+
+    // 4x2 Macro Knobs (Staggered)
+    for (let col = 0; col < 4; col++) {
+      const topKnob = new THREE.Mesh(knobGeo, ctKnobMat);
+      topKnob.position.set(-1.8 + col * 1.2, 0.35, -2.6);
+      ctBody.add(topKnob);
+      
+      const botKnob = new THREE.Mesh(knobGeo, ctKnobMat);
+      botKnob.position.set(-1.8 + col * 1.2, 0.35, -1.6);
+      ctBody.add(botKnob);
     }
 
-    // Pads
+    // Pads (4x8 Grid)
     for (let row = 0; row < 4; row++) {
       for (let col = 0; col < 8; col++) {
-        const padMat = new THREE.MeshStandardMaterial({ color: 0x222222, emissive: 0x000000 });
+        const padMat = new THREE.MeshStandardMaterial({ color: 0x151515, emissive: 0x000000 });
         const pad = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.1, 0.65), padMat);
-        pad.position.set(-2.8 + col * 0.78, 0.3, -0.5 + row * 0.75);
+        pad.position.set(-2.8 + col * 0.8, 0.3, 0.0 + row * 0.8);
         this.circuitPads.push(pad);
         ctBody.add(pad);
       }
     }
-    this.scene.add(ctBody);
+    this.gearGroup.add(ctBody);
+  }
 
-    // Chase Bliss pedals — left side of desk
-    const buildPedal = (colorHex: number, x: number, z: number, rot: number) => {
-      const pMat = new THREE.MeshStandardMaterial({ color: colorHex, metalness: 0.7, roughness: 0.25 });
-      const pedal = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.8, 2.5), pMat);
-      pedal.position.set(x, 6.4, z);
-      pedal.rotation.y = rot;
-      pedal.castShadow = true;
-      pedal.receiveShadow = true;
+  private buildMood() {
+    const pGroup = this.buildBasePedal(0xffa07a, -7.5, -5, 0.1); // Salmon Peach
+    
+    // MOOD Red Stripe
+    const redMat = new THREE.MeshStandardMaterial({ color: 0xcc2222, roughness: 0.5 });
+    const redStripe = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 0.7), redMat);
+    redStripe.rotation.x = -Math.PI / 2;
+    redStripe.position.set(0, 0.61, 0.4); 
+    pGroup.add(redStripe);
+    
+    // MOOD Blue Stripe (Bottom)
+    const blueMat = new THREE.MeshStandardMaterial({ color: 0x1a2b4c, roughness: 0.5 });
+    const blueStripe = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 0.75), blueMat);
+    blueStripe.rotation.x = -Math.PI / 2;
+    blueStripe.position.set(0, 0.61, 1.125); 
+    pGroup.add(blueStripe);
+    
+    this.gearGroup.add(pGroup);
+  }
 
-      const knobMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
-      for (let i = 0; i < 3; i++) {
-        for (let j = 0; j < 2; j++) {
-          const k = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.15, 16), knobMat);
-          k.position.set(-0.4 + i * 0.4, 0.5, -0.8 + j * 0.5);
-          pedal.add(k);
-        }
-      }
+  private buildBlooper() {
+    const pGroup = this.buildBasePedal(0xa4c8e1, -9.5, -5, -0.05); // Pastel Blue
+    this.gearGroup.add(pGroup);
+  }
 
-      const stompMat = new THREE.MeshStandardMaterial({ color: 0xdddddd, metalness: 1.0 });
-      const s1 = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.25, 16), stompMat);
-      s1.position.set(-0.4, 0.5, 0.8); pedal.add(s1);
-      const s2 = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.25, 16), stompMat);
-      s2.position.set(0.4, 0.5, 0.8); pedal.add(s2);
+  private buildBasePedal(colorHex: number, x: number, z: number, rotY: number) {
+    const pedal = new THREE.Group();
+    pedal.position.set(x, 6.6, z); // Sits properly on the desk now
+    pedal.rotation.y = rotY;
+
+    const pedalMat = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.3, metalness: 0.4 });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(2, 1.2, 3), pedalMat);
+    body.castShadow = true;
+    body.receiveShadow = true;
+    pedal.add(body);
+    
+    // Silver metallic knobs
+    const knobMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.8, roughness: 0.3 });
+    for (let i = 0; i < 3; i++) {
+      const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.25, 16), knobMat);
+      knob.position.set(-0.6 + i * 0.6, 0.725, -1.0);
+      pedal.add(knob);
+    }
+    for (let i = 0; i < 3; i++) {
+      const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.25, 16), knobMat);
+      knob.position.set(-0.6 + i * 0.6, 0.725, -0.4);
+      pedal.add(knob);
+    }
+
+    // 3 small toggle switches
+    const toggleMat = new THREE.MeshStandardMaterial({ color: 0xeeeeee, metalness: 1.0 });
+    for(let i = 0; i < 3; i++) {
+      const tog = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.25), toggleMat);
+      tog.position.set(-0.6 + i * 0.6, 0.725, 0.1);
+      pedal.add(tog);
+    }
+
+    // Footswitches
+    const switchMat = new THREE.MeshStandardMaterial({ color: 0xdddddd, metalness: 0.9, roughness: 0.1 });
+    const fs1 = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.3, 16), switchMat);
+    fs1.position.set(-0.6, 0.75, 1.15);
+    pedal.add(fs1);
+
+    const fs2 = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.3, 16), switchMat);
+    fs2.position.set(0.6, 0.75, 1.15);
+    pedal.add(fs2);
+
+    return pedal;
+  }
+
+  private buildReel() {
+    const reelGroup = new THREE.Group();
+    reelGroup.position.set(8.5, 8.25, -10);
+    reelGroup.rotation.y = -0.2;
+
+    // Wood sides
+    const woodMat = new THREE.MeshStandardMaterial({ color: 0x4a3018, roughness: 0.8, metalness: 0.1 });
+    const sideL = new THREE.Mesh(new THREE.BoxGeometry(0.3, 4.5, 1.5), woodMat);
+    sideL.position.set(-1.6, 0, 0);
+    reelGroup.add(sideL);
+    
+    const sideR = new THREE.Mesh(new THREE.BoxGeometry(0.3, 4.5, 1.5), woodMat);
+    sideR.position.set(1.6, 0, 0);
+    reelGroup.add(sideR);
+
+    // Silver Faceplate
+    const faceMat = new THREE.MeshStandardMaterial({ color: 0xd0d0d0, metalness: 0.8, roughness: 0.3 });
+    const face = new THREE.Mesh(new THREE.BoxGeometry(2.9, 4.5, 1.3), faceMat);
+    face.position.set(0, 0, 0);
+    reelGroup.add(face);
+
+    // Tape Spools
+    const spoolMat = new THREE.MeshStandardMaterial({ color: 0xc0c0c0, metalness: 0.9, roughness: 0.2 });
+    const tapeMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 });
+    
+    const createSpool = (x: number, y: number) => {
+      const spoolGroup = new THREE.Group();
+      spoolGroup.position.set(x, y, 0.75);
       
-      this.scene.add(pedal);
+      const flange = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, 0.05, 32), spoolMat);
+      flange.rotation.x = Math.PI / 2;
+      spoolGroup.add(flange);
+      
+      const tape = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.85, 0.06, 32), tapeMat);
+      tape.rotation.x = Math.PI / 2;
+      spoolGroup.add(tape);
+
+      return spoolGroup;
     };
 
-    buildPedal(0xcc7777, -7.5, -5, 0.1);  // MOOD
-    buildPedal(0x4a6ea8, -9.5, -5, -0.05); // Blooper
-
-    // Reel-to-reel (Templo)
-    const reelMat = new THREE.MeshStandardMaterial({ color: 0xa0a0a0, metalness: 0.9, roughness: 0.2 });
-    const reel = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.8, 3), reelMat);
-    reel.position.set(8.5, 6.4, -10);
-    reel.rotation.y = 0.15;
-    reel.castShadow = true;
-    reel.receiveShadow = true;
-
-    const spoolMat = new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.15 });
-    const spool1 = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 0.15, 32), spoolMat);
-    spool1.position.set(-0.6, 0.45, -0.5); reel.add(spool1);
-    const spool2 = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 0.15, 32), spoolMat);
-    spool2.position.set(0.6, 0.45, 0.5); reel.add(spool2);
+    const spool1 = createSpool(-0.75, 0.8);
+    const spool2 = createSpool(0.75, 0.8);
+    reelGroup.add(spool1, spool2);
     this.tapeSpools.push(spool1, spool2);
-    this.scene.add(reel);
+
+    // Head stack block
+    const headMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.5 });
+    const headStack = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.6, 0.2), headMat);
+    headStack.position.set(0, -0.6, 0.75);
+    reelGroup.add(headStack);
+
+    // VU Meters
+    const vuMat = new THREE.MeshStandardMaterial({ color: 0xeeeedd, emissive: 0x333322 });
+    const vu1 = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.4, 0.1), vuMat);
+    vu1.position.set(-0.4, -1.5, 0.7);
+    reelGroup.add(vu1);
+    
+    const vu2 = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.4, 0.1), vuMat);
+    vu2.position.set(0.4, -1.5, 0.7);
+    reelGroup.add(vu2);
+
+    reelGroup.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
+
+    this.gearGroup.add(reelGroup);
+  }
+
+  private buildSP404() {
+    // Black body
+    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.8, metalness: 0.2 });
+    const spBody = new THREE.Mesh(new THREE.BoxGeometry(4.5, 0.6, 6), bodyMat);
+    spBody.position.set(0, 6.2, -2.5); // Center-left foreground
+    spBody.rotation.y = -0.03;
+    spBody.castShadow = true;
+    spBody.receiveShadow = true;
+
+    // Faceplate (Gunmetal Grey)
+    const faceMat = new THREE.MeshStandardMaterial({ color: 0x4a4d52, roughness: 0.5, metalness: 0.4 });
+    const face = new THREE.Mesh(new THREE.BoxGeometry(4.3, 0.1, 5.8), faceMat);
+    face.position.set(0, 0.35, 0);
+    spBody.add(face);
+
+    // 4 Top Knobs
+    const knobMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.3, metalness: 0.7 });
+    for (let i = 0; i < 4; i++) {
+      const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.25, 16), knobMat);
+      knob.position.set(-1.5 + i * 1.0, 0.45, -2.3);
+      spBody.add(knob);
+    }
+
+    // Circular Screen Bezel
+    const bezelMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.7 });
+    const bezel = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 0.1, 32), bezelMat);
+    bezel.position.set(0, 0.4, -1.0);
+    spBody.add(bezel);
+    
+    // Screen display (inside bezel)
+    const screenMat = new THREE.MeshStandardMaterial({ color: 0x111111, emissive: 0xffffff, emissiveIntensity: 0.5 });
+    const screen = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.12, 32), screenMat);
+    screen.position.set(0, 0.4, -1.0);
+    spBody.add(screen);
+
+    // Small buttons next to screen
+    const btnMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.6 });
+    for (let i = 0; i < 3; i++) {
+      const lBtn = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.1, 0.25), btnMat);
+      lBtn.position.set(-1.4, 0.45, -1.4 + i * 0.4);
+      spBody.add(lBtn);
+      
+      const rBtn = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.1, 0.25), btnMat);
+      rBtn.position.set(1.4, 0.45, -1.4 + i * 0.4);
+      spBody.add(rBtn);
+    }
+
+    // Small push encoder (right side)
+    const encoder = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.2, 16), knobMat);
+    encoder.position.set(1.7, 0.45, 0.0);
+    spBody.add(encoder);
+    
+    // Small function buttons row
+    for(let i=0; i < 6; i++) {
+      const rowBtn = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.1, 0.2), btnMat);
+      rowBtn.position.set(-1.5 + i * 0.55, 0.45, 0.0);
+      spBody.add(rowBtn);
+    }
+
+    // 4x4 Pad Grid (Bottom)
+    const padMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, emissive: 0x000000 });
+    for (let row = 0; row < 4; row++) {
+      for (let col = 0; col < 4; col++) {
+        const pad = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.1, 0.55), padMat);
+        pad.position.set(-1.35 + col * 0.9, 0.4, 0.8 + row * 0.65);
+        this.circuitPads.push(pad); // Add to circuitPads so they light up
+        spBody.add(pad);
+      }
+    }
+
+    this.gearGroup.add(spBody);
+  }
+
+  private buildStrat() {
+    const stratGroup = new THREE.Group();
+    
+    // Body (Birch Green)
+    const bodyMat = new THREE.MeshStandardMaterial({ color: 0xccddcc, metalness: 0.2, roughness: 0.4 });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(3.5, 5, 0.5), bodyMat);
+    stratGroup.add(body);
+
+    // Pickguard
+    const pgMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 });
+    const pg = new THREE.Mesh(new THREE.BoxGeometry(2.5, 3.5, 0.55), pgMat);
+    pg.position.set(0, -0.5, 0);
+    stratGroup.add(pg);
+
+    // Neck
+    const neckMat = new THREE.MeshStandardMaterial({ color: 0xd2b48c, roughness: 0.4 });
+    const neck = new THREE.Mesh(new THREE.BoxGeometry(0.8, 6, 0.4), neckMat);
+    neck.position.set(0, 5.5, 0);
+    stratGroup.add(neck);
+
+    // Headstock
+    const head = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2, 0.4), neckMat);
+    head.position.set(0, 9.5, 0);
+    stratGroup.add(head);
+
+    // Pickups
+    const puMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2 });
+    for (let i = 0; i < 3; i++) {
+      const pu = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.3, 0.6), puMat);
+      pu.position.set(0, -1.5 + i * 1.0, 0);
+      pu.rotation.z = i === 2 ? -0.1 : 0;
+      stratGroup.add(pu);
+    }
+
+    // Leaning against left wall
+    stratGroup.position.set(-14, 2.5, -5);
+    stratGroup.rotation.x = -0.2; 
+    stratGroup.rotation.y = 0.6;  
+    stratGroup.rotation.z = -0.15;
+    
+    stratGroup.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
+
+    this.gearGroup.add(stratGroup);
   }
 
   private buildClutter() {
@@ -655,7 +914,7 @@ export class LofiDiorama extends LitElement {
     }
 
     // Tracker screen
-    if (this.trackerScreen) {
+    if (this.trackerScreen && this.activeGear.includes('polyend')) {
       this.trackerScreen.update(amplitude, bass);
     }
 
@@ -675,9 +934,9 @@ export class LofiDiorama extends LitElement {
 
     // Tape spools
     if (bass > 0.6) {
-      this.tapeSpools.forEach(spool => spool.rotation.y -= (bass * 0.6));
+      this.tapeSpools.forEach(spool => spool.rotation.z -= (bass * 0.6));
     } else {
-      this.tapeSpools.forEach(spool => spool.rotation.y -= 0.01);
+      this.tapeSpools.forEach(spool => spool.rotation.z -= 0.01);
     }
 
     // Cloud drift
