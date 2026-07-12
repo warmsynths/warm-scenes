@@ -5,6 +5,8 @@ import './lofi-diorama';
 
 type Weather = 'sunny' | 'rainy';
 
+type Tab = 'gear' | 'environment' | 'audio';
+
 @customElement('lofi-dashboard')
 export class LofiDashboard extends LitElement {
   @state()
@@ -31,398 +33,448 @@ export class LofiDashboard extends LitElement {
   @state()
   private activeGear: string[] = ['polyend', 'circuit_tracks', 'mood', 'blooper', 'reel', 'sp404', 'strat'];
 
+  @state()
+  private activeTab: Tab = 'gear';
+
+  @state()
+  private isPanelOpen = true;
+
   private progressUpdateId: number | null = null;
 
   static styles = css`
     :host {
-      display: grid;
-      grid-template-columns: 350px 1fr;
-      grid-template-rows: 1fr;
-      gap: 24px;
+      display: block;
       width: 100%;
       height: 100vh;
-      box-sizing: border-box;
-      padding: 24px;
-      background-color: #0b090f;
-      color: #eae8f0;
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      position: relative;
+      font-family: 'Nunito', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       overflow: hidden;
+      background-color: #0b090f;
     }
 
-    /* Left Sidebar Panel - glassmorphic control console */
-    .console-panel {
-      background: rgba(20, 17, 28, 0.6);
-      backdrop-filter: blur(20px);
-      border: 1px solid rgba(255, 255, 255, 0.05);
-      border-radius: 20px;
-      padding: 24px;
+    lofi-diorama {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .floating-ui {
+      position: absolute;
+      bottom: 32px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 90%;
+      max-width: 800px;
+      max-height: 80vh;
+      background: rgba(255, 252, 248, 0.9);
+      backdrop-filter: blur(24px);
+      border-radius: 36px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15), 0 0 0 6px rgba(255, 255, 255, 0.5);
+      padding: 32px;
+      color: #5a4b41;
       display: flex;
       flex-direction: column;
       gap: 24px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-      min-height: 0;
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
       overflow-y: auto;
+      scrollbar-width: none;
+    }
+    .floating-ui::-webkit-scrollbar {
+      display: none;
     }
 
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 12px;
+    .floating-ui.hidden {
+      transform: translate(-50%, 150%);
+      opacity: 0;
+      pointer-events: none;
     }
 
-    .brand-logo {
-      width: 32px;
-      height: 32px;
-      background: linear-gradient(135deg, #f43f5e, #8b5cf6);
-      border-radius: 8px;
-      box-shadow: 0 0 15px rgba(244, 63, 94, 0.5);
+    .hide-btn {
+      position: absolute;
+      top: 24px;
+      right: 24px;
+      background: rgba(0, 0, 0, 0.05);
+      border: none;
+      width: 40px;
+      height: 40px;
+      border-radius: 20px;
+      font-size: 1.2rem;
+      cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
+      transition: all 0.2s;
+    }
+
+    .hide-btn:hover {
+      background: rgba(0, 0, 0, 0.1);
+      transform: scale(1.1);
+    }
+
+    .show-panel-btn {
+      position: absolute;
+      bottom: 32px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255, 252, 248, 0.9);
+      backdrop-filter: blur(10px);
+      border: none;
+      padding: 12px 24px;
+      border-radius: 24px;
+      font-size: 1.2rem;
       font-weight: 800;
-      font-size: 1rem;
-      color: white;
-    }
-
-    .brand-title {
-      font-size: 1.1rem;
-      font-weight: 700;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      background: linear-gradient(to right, #ffffff, #a78bfa);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-
-    .brand-subtitle {
-      font-size: 0.7rem;
-      color: rgba(255, 255, 255, 0.4);
-      margin-top: 2px;
-      font-family: 'JetBrains Mono', monospace;
-      letter-spacing: 0.1em;
-    }
-
-    /* Drag & Drop Zone */
-    .dropzone {
-      border: 2px dashed rgba(139, 92, 246, 0.3);
-      background: rgba(139, 92, 246, 0.02);
-      border-radius: 16px;
-      padding: 32px 20px;
-      text-align: center;
+      color: #8c7b6c;
       cursor: pointer;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1), 0 0 0 4px rgba(255, 255, 255, 0.5);
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      font-family: 'Nunito', sans-serif;
+      z-index: 10;
+      opacity: 0;
+      pointer-events: none;
+      transform: translate(-50%, 100px);
+    }
+
+    .show-panel-btn.visible {
+      opacity: 1;
+      pointer-events: all;
+      transform: translateX(-50%);
+    }
+
+    .show-panel-btn:hover {
+      transform: translate(-50%, -4px) scale(1.05);
+      box-shadow: 0 15px 30px rgba(0, 0, 0, 0.15), 0 0 0 4px rgba(255, 255, 255, 0.6);
+    }
+
+    .tabs {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      margin-bottom: 8px;
+    }
+
+    .tab-btn {
+      background: #f0e6d2;
+      border: none;
+      padding: 14px 28px;
+      border-radius: 24px;
+      font-size: 1.2rem;
+      font-weight: 800;
+      color: #8c7b6c;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+      font-family: 'Nunito', sans-serif;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    }
+
+    .tab-btn:hover {
+      transform: translateY(-4px) scale(1.05);
+      background: #fffdf9;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+      color: #5a4b41;
+    }
+
+    .tab-btn.active {
+      background: #ffb4a2;
+      color: white;
+      box-shadow: 0 8px 20px rgba(255, 180, 162, 0.5);
+      transform: translateY(-2px);
+    }
+
+    .tab-btn.active:hover {
+      transform: translateY(-6px) scale(1.05);
+    }
+
+    .panel-content {
+      animation: fadeIn 0.3s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Gear Tab */
+    .gear-section {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .gear-section:last-child {
+      margin-bottom: 0;
+    }
+
+    .gear-category-title {
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: #a49382;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding-left: 12px;
+    }
+
+    .gear-grid {
+      display: flex;
+      gap: 16px;
+      overflow-x: auto;
+      padding-bottom: 16px;
+      padding-left: 8px;
+      padding-top: 8px;
+      scrollbar-width: none;
+    }
+    .gear-grid::-webkit-scrollbar {
+      display: none;
+    }
+
+    .gear-card {
+      flex: 0 0 auto;
+      width: 130px;
+      height: 130px;
+      background: white;
+      border-radius: 28px;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
+      gap: 10px;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+      border: 4px solid transparent;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
+      text-align: center;
+      padding: 12px;
+      user-select: none;
+    }
+
+    .gear-card:hover {
+      transform: translateY(-8px) scale(1.05);
+      box-shadow: 0 16px 32px rgba(0, 0, 0, 0.1);
+    }
+
+    .gear-card.active {
+      border-color: #a3d9c9;
+      background: #e8f6f1;
+    }
+
+    .gear-card.active .gear-name {
+      color: #2d6a59;
+    }
+
+    .gear-icon {
+      font-size: 2.5rem;
+    }
+
+    .gear-name {
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: #8c7b6c;
+      line-height: 1.2;
+    }
+
+    /* Environment Tab */
+    .weather-grid {
+      display: flex;
+      gap: 24px;
+      justify-content: center;
+      padding: 24px 0;
+    }
+
+    .weather-card {
+      width: 180px;
+      height: 180px;
+      background: white;
+      border-radius: 36px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
+      border: 6px solid transparent;
+      user-select: none;
+    }
+
+    .weather-card:hover {
+      transform: translateY(-10px) scale(1.05);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12);
+    }
+
+    .weather-card.active {
+      border-color: #ffd670;
+      background: #fff9e6;
+    }
+
+    .weather-card.active.rainy {
+      border-color: #a0c4ff;
+      background: #eff4ff;
+    }
+
+    .weather-icon {
+      font-size: 4rem;
+    }
+
+    .weather-label {
+      font-size: 1.4rem;
+      font-weight: 800;
+      color: #5a4b41;
+    }
+
+    /* Audio Tab */
+    .audio-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      padding: 0 16px;
+    }
+
+    .dropzone {
+      border: 4px dashed #ffb4a2;
+      background: #fff5f2;
+      border-radius: 32px;
+      padding: 40px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      color: #d68c7c;
+      font-weight: 800;
+      font-size: 1.1rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
       gap: 12px;
     }
 
     .dropzone.dragover {
-      border-color: #8b5cf6;
-      background: rgba(139, 92, 246, 0.1);
-      box-shadow: 0 0 20px rgba(139, 92, 246, 0.2);
+      background: #ffb4a2;
+      color: white;
       transform: scale(1.02);
+      border-color: white;
     }
 
     .dropzone-icon {
-      font-size: 2rem;
-      color: #8b5cf6;
-      text-shadow: 0 0 10px rgba(139, 92, 246, 0.3);
+      font-size: 3rem;
     }
 
-    .dropzone-text {
-      font-size: 0.85rem;
-      color: rgba(255, 255, 255, 0.7);
-      line-height: 1.4;
-    }
-
-    .dropzone-hint {
-      font-size: 0.7rem;
-      color: rgba(255, 255, 255, 0.35);
-    }
-
-    /* Info card */
     .info-card {
-      background: rgba(255, 255, 255, 0.02);
-      border: 1px solid rgba(255, 255, 255, 0.05);
-      border-radius: 12px;
-      padding: 16px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.75rem;
+      background: white;
+      border-radius: 20px;
+      padding: 16px 24px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
       display: flex;
-      flex-direction: column;
-      gap: 8px;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 700;
+      color: #8c7b6c;
+      font-size: 1.1rem;
     }
 
     .info-title {
-      font-weight: 700;
-      color: #ebcb8b; /* Warm yellow label */
+      color: #a49382;
       text-transform: uppercase;
+      font-size: 0.9rem;
       letter-spacing: 0.05em;
-      margin-bottom: 4px;
     }
 
-    .info-row {
-      display: flex;
-      justify-content: space-between;
-    }
-
-    .info-value {
-      color: #8892b0;
-      text-align: right;
-      max-width: 180px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    /* Controls Panel */
     .controls {
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 20px;
     }
 
     .btn-group {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 10px;
+      display: flex;
+      gap: 16px;
+      justify-content: center;
     }
 
-    button {
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      color: white;
-      padding: 10px 14px;
-      border-radius: 10px;
-      font-size: 0.8rem;
-      font-weight: 600;
+    .audio-btn {
+      background: #f0e6d2;
+      border: none;
+      padding: 16px 32px;
+      border-radius: 24px;
+      font-size: 1.2rem;
+      font-weight: 800;
+      color: #8c7b6c;
       cursor: pointer;
-      transition: all 0.2s ease;
+      transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+      font-family: 'Nunito', sans-serif;
       display: flex;
       align-items: center;
-      justify-content: center;
-      gap: 6px;
+      gap: 8px;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.06);
     }
 
-    button:hover:not(:disabled) {
-      background: rgba(255, 255, 255, 0.08);
-      border-color: rgba(255, 255, 255, 0.15);
-      transform: translateY(-1px);
+    .audio-btn.play-btn {
+      background: #a3d9c9;
+      color: #1e5a49;
+      box-shadow: 0 6px 16px rgba(163, 217, 201, 0.4);
     }
 
-    button:active:not(:disabled) {
-      transform: translateY(1px);
+    .audio-btn:hover:not(:disabled) {
+      transform: translateY(-4px) scale(1.05);
+      box-shadow: 0 12px 24px rgba(0,0,0,0.1);
     }
 
-    button:disabled {
-      opacity: 0.3;
+    .audio-btn.play-btn:hover:not(:disabled) {
+      box-shadow: 0 12px 24px rgba(163, 217, 201, 0.5);
+    }
+
+    .audio-btn:disabled {
+      opacity: 0.4;
       cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
     }
 
-    /* Accent color controls */
-    button.play-btn {
-      background: linear-gradient(135deg, rgba(244, 63, 94, 0.15), rgba(139, 92, 246, 0.15));
-      border: 1px solid rgba(244, 63, 94, 0.3);
-      color: #ff7e93;
-      box-shadow: 0 4px 12px rgba(244, 63, 94, 0.05);
-    }
-
-    button.play-btn:hover:not(:disabled) {
-      background: linear-gradient(135deg, rgba(244, 63, 94, 0.25), rgba(139, 92, 246, 0.25));
-      border-color: rgba(244, 63, 94, 0.5);
-      box-shadow: 0 4px 15px rgba(244, 63, 94, 0.15);
-    }
-
-    /* Slider styling */
     .slider-container {
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 12px;
     }
 
     .time-labels {
       display: flex;
       justify-content: space-between;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.75rem;
-      color: rgba(255, 255, 255, 0.5);
+      font-weight: 800;
+      font-size: 1rem;
+      color: #a49382;
     }
 
     .scrub-slider {
       -webkit-appearance: none;
       width: 100%;
-      height: 6px;
-      border-radius: 3px;
-      background: rgba(255, 255, 255, 0.1);
+      height: 12px;
+      border-radius: 6px;
+      background: #f0e6d2;
       outline: none;
       cursor: pointer;
-      transition: background 0.3s;
     }
 
     .scrub-slider::-webkit-slider-runnable-track {
       width: 100%;
-      height: 6px;
-      border-radius: 3px;
+      height: 12px;
+      border-radius: 6px;
     }
 
     .scrub-slider::-webkit-slider-thumb {
       -webkit-appearance: none;
       appearance: none;
-      width: 14px;
-      height: 14px;
+      width: 24px;
+      height: 24px;
       border-radius: 50%;
-      background: #8b5cf6;
+      background: #ffb4a2;
       cursor: pointer;
-      box-shadow: 0 0 8px rgba(139, 92, 246, 0.8);
-      margin-top: -4px;
-      transition: transform 0.1s ease;
+      box-shadow: 0 4px 8px rgba(255, 180, 162, 0.6);
+      margin-top: -6px;
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
 
     .scrub-slider::-webkit-slider-thumb:hover {
-      transform: scale(1.2);
-    }
-
-    /* Right Main Workspace */
-    .viewport-panel {
-      position: relative;
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      min-height: 0;
-    }
-    
-    lofi-diorama {
-      flex: 1;
-      min-height: 0;
-      position: relative;
-    }
-
-    .viewport-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 12px;
-    }
-
-    .viewport-title {
-      font-size: 0.9rem;
-      font-weight: 700;
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-      color: rgba(255, 255, 255, 0.6);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .live-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background-color: #10b981;
-      box-shadow: 0 0 8px #10b981;
-      display: inline-block;
-    }
-
-    .live-dot.paused {
-      background-color: #f59e0b;
-      box-shadow: 0 0 8px #f59e0b;
-    }
-
-    .live-dot.stopped {
-      background-color: #ef4444;
-      box-shadow: 0 0 8px #ef4444;
-    }
-
-    /* Live Visualizer stats in dashboard */
-    .dashboard-metrics {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-    }
-
-    .metric-box {
-      background: rgba(255, 255, 255, 0.01);
-      border: 1px solid rgba(255, 255, 255, 0.04);
-      border-radius: 12px;
-      padding: 12px;
-      text-align: center;
-    }
-
-    .metric-value {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 1.1rem;
-      font-weight: 700;
-      color: #8b5cf6;
-      margin-top: 4px;
-      text-shadow: 0 0 10px rgba(139, 92, 246, 0.2);
-    }
-
-    .metric-label {
-      font-size: 0.65rem;
-      text-transform: uppercase;
-      color: rgba(255, 255, 255, 0.35);
-      letter-spacing: 0.05em;
-    }
-
-    /* Custom File Input trigger */
-    .file-input-label {
-      cursor: pointer;
-      color: #a78bfa;
-      text-decoration: underline;
-    }
-
-    /* Weather toggle */
-    .weather-toggle {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .weather-label {
-      font-size: 0.65rem;
-      text-transform: uppercase;
-      color: rgba(255, 255, 255, 0.35);
-      letter-spacing: 0.05em;
-    }
-
-    .weather-options {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-    }
-
-    .weather-btn {
-      padding: 8px 12px;
-      border-radius: 10px;
-      font-size: 0.75rem;
-      font-weight: 600;
-      text-align: center;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      color: rgba(255, 255, 255, 0.6);
-    }
-
-    .weather-btn:hover {
-      background: rgba(255, 255, 255, 0.08);
-    }
-
-    .weather-btn.active {
-      background: linear-gradient(135deg, rgba(244, 163, 63, 0.2), rgba(139, 92, 246, 0.15));
-      border-color: rgba(244, 163, 63, 0.5);
-      color: #ffcc77;
-      box-shadow: 0 0 10px rgba(244, 163, 63, 0.1);
-    }
-
-    .weather-btn.active.rainy {
-      background: linear-gradient(135deg, rgba(100, 140, 200, 0.2), rgba(80, 100, 160, 0.15));
-      border-color: rgba(100, 140, 200, 0.5);
-      color: #8eaacc;
-      box-shadow: 0 0 10px rgba(100, 140, 200, 0.1);
+      transform: scale(1.3);
     }
   `;
 
@@ -474,14 +526,12 @@ export class LofiDashboard extends LitElement {
       this.stopProgressLoop();
       this.currentTimeStr = '00:00';
       this.progressPercent = 0;
-      // Clear previous info to avoid stale UI/playback if decoding fails
       this.fileInfo = null;
       this.audioManager.clear();
       this.requestUpdate();
 
       const buffer = await this.audioManager.loadFile(file);
       
-      // Update metadata
       const min = Math.floor(buffer.duration / 60);
       const sec = Math.floor(buffer.duration % 60);
       this.totalTimeStr = `${this.padZero(min)}:${this.padZero(sec)}`;
@@ -529,7 +579,6 @@ export class LofiDashboard extends LitElement {
   private handlePlay() {
     if (!this.audioManager.isLoaded) return;
     this.audioManager.play(() => {
-      // Completed playback callback
       this.stopProgressLoop();
       this.currentTimeStr = '00:00';
       this.progressPercent = 0;
@@ -573,64 +622,77 @@ export class LofiDashboard extends LitElement {
     return num.toString().padStart(2, '0');
   }
 
-  // Get active status tag
-  private getStatusLabel() {
-    if (!this.audioManager.isLoaded) return 'IDLE';
-    if (this.audioManager.isPlaying) return 'PLAYING';
-    if (this.audioManager.isPaused) return 'PAUSED';
-    return 'STOPPED';
-  }
+  private renderGearTab() {
+    const samplers = [
+      { id: 'polyend', label: 'Polyend', icon: '🎛️' },
+      { id: 'sp404', label: 'SP404', icon: '🎰' },
+      { id: 'circuit_tracks', label: 'Circuit', icon: '🎹' }
+    ];
+    const effects = [
+      { id: 'mood', label: 'MOOD', icon: '🎚️' },
+      { id: 'blooper', label: 'Blooper', icon: '🔁' },
+      { id: 'reel', label: 'Tape Reel', icon: '📼' }
+    ];
+    const instruments = [
+      { id: 'strat', label: 'Stratocaster', icon: '🎸' }
+    ];
 
-  // Get live visualizer metric values
-  private getLiveMetrics() {
-    if (!this.audioManager.isLoaded) {
-      return { amplitude: '0.00', bass: '0.00' };
-    }
-    
-    let amp = 0;
-    let bass = 0;
-    
-    if (this.audioManager.isPlaying) {
-      const rt = this.audioManager.getRealTimeData();
-      amp = rt.amplitude;
-      // Extract average of low bins for bass
-      if (rt.frequencies.length > 0) {
-        let bassSum = 0;
-        const count = 4; // first 4 bins represent very low frequencies
-        for (let i = 0; i < count; i++) {
-          bassSum += rt.frequencies[i] || 0;
-        }
-        bass = (bassSum / count) / 255.0;
-      }
-    } else {
-      const time = this.audioManager.getCurrentTime();
-      const det = this.audioManager.getDeterministicData(time);
-      amp = det.amplitude;
-      bass = det.frequencies[0] || 0; // bass channel
-    }
-    
-    return {
-      amplitude: amp.toFixed(2),
-      bass: bass.toFixed(2),
-    };
-  }
-
-  render() {
-    const isLoaded = this.audioManager.isLoaded;
-    const isPlaying = this.audioManager.isPlaying;
-    const status = this.getStatusLabel();
-    const metrics = this.getLiveMetrics();
+    const renderCard = (gear: any) => html`
+      <div 
+        class="gear-card ${this.activeGear.includes(gear.id) ? 'active' : ''}"
+        @click="${() => this.toggleGear(gear.id)}"
+      >
+        <div class="gear-icon">${gear.icon}</div>
+        <div class="gear-name">${gear.label}</div>
+      </div>
+    `;
 
     return html`
-      <aside class="console-panel">
-        <div class="brand">
-          <div class="brand-logo">L</div>
-          <div>
-            <div class="brand-title">Lofi Diorama</div>
-            <div class="brand-subtitle">DET. RENDERING SYSTEM</div>
-          </div>
+      <div class="gear-section">
+        <div class="gear-category-title">Samplers & Synths</div>
+        <div class="gear-grid">
+          ${samplers.map(renderCard)}
         </div>
+      </div>
+      <div class="gear-section">
+        <div class="gear-category-title">Effects & Tape</div>
+        <div class="gear-grid">
+          ${effects.map(renderCard)}
+        </div>
+      </div>
+      <div class="gear-section">
+        <div class="gear-category-title">Instruments</div>
+        <div class="gear-grid">
+          ${instruments.map(renderCard)}
+        </div>
+      </div>
+    `;
+  }
 
+  private renderEnvironmentTab() {
+    return html`
+      <div class="weather-grid">
+        <div 
+          class="weather-card ${this.weather === 'sunny' ? 'active' : ''}"
+          @click="${() => this.weather = 'sunny'}"
+        >
+          <div class="weather-icon">☀️</div>
+          <div class="weather-label">Sunny</div>
+        </div>
+        <div 
+          class="weather-card ${this.weather === 'rainy' ? 'active rainy' : ''}"
+          @click="${() => this.weather = 'rainy'}"
+        >
+          <div class="weather-icon">🌧️</div>
+          <div class="weather-label">Rainy</div>
+        </div>
+      </div>
+    `;
+  }
+
+  private renderAudioTab(isLoaded: boolean, isPlaying: boolean) {
+    return html`
+      <div class="audio-panel">
         <div
           class="dropzone ${this.isDragOver ? 'dragover' : ''}"
           @dragover="${this.handleDragOver}"
@@ -638,11 +700,8 @@ export class LofiDashboard extends LitElement {
           @drop="${this.handleDrop}"
           @click="${() => this.shadowRoot?.getElementById('file-loader')?.click()}"
         >
-          <span class="dropzone-icon">⏏</span>
-          <div class="dropzone-text">
-            Drag & Drop a <strong class="file-input-label">.wav file</strong> or click to browse
-          </div>
-          <div class="dropzone-hint">Deterministic captured tracks only</div>
+          <div class="dropzone-icon">📼</div>
+          <div>Drag & Drop a .wav file or click to browse</div>
           <input
             type="file"
             id="file-loader"
@@ -652,142 +711,71 @@ export class LofiDashboard extends LitElement {
           />
         </div>
 
-        ${isLoaded && this.fileInfo
-          ? html`
-              <div class="info-card">
-                <div class="info-title">TRACK METADATA</div>
-                <div class="info-row">
-                  <span>File Name:</span>
-                  <span class="info-value" title="${this.fileInfo.name}">
-                    ${this.fileInfo.name}
-                  </span>
-                </div>
-                <div class="info-row">
-                  <span>Size:</span>
-                  <span class="info-value">${this.fileInfo.size}</span>
-                </div>
-                <div class="info-row">
-                  <span>Duration:</span>
-                  <span class="info-value">${this.fileInfo.duration}</span>
-                </div>
-              </div>
-            `
-          : html`
-              <div class="info-card" style="text-align: center; color: rgba(255,255,255,0.3)">
-                No audio ingested yet
-              </div>
-            `}
+        ${isLoaded && this.fileInfo ? html`
+          <div class="info-card">
+            <div>
+              <span class="info-title">Track</span><br/>
+              ${this.fileInfo.name}
+            </div>
+            <div style="text-align: right;">
+              <span class="info-title">Length</span><br/>
+              ${this.fileInfo.duration}
+            </div>
+          </div>
+        ` : ''}
 
         <div class="controls">
           <div class="btn-group">
-            <button
-              class="play-btn"
-              ?disabled="${!isLoaded || isPlaying}"
-              @click="${this.handlePlay}"
-            >
-              ▶ Play
-            </button>
-            <button
-              ?disabled="${!isLoaded || !isPlaying}"
-              @click="${this.handlePause}"
-            >
-              ⏸ Pause
-            </button>
-            <button
-              ?disabled="${!isLoaded}"
-              @click="${this.handleStop}"
-            >
-              ■ Stop
-            </button>
+            <button class="audio-btn play-btn" ?disabled="${!isLoaded || isPlaying}" @click="${this.handlePlay}">▶ Play</button>
+            <button class="audio-btn" ?disabled="${!isLoaded || !isPlaying}" @click="${this.handlePause}">⏸ Pause</button>
+            <button class="audio-btn" ?disabled="${!isLoaded}" @click="${this.handleStop}">■ Stop</button>
           </div>
-
+          
           <div class="slider-container">
-            <input
-              type="range"
-              class="scrub-slider"
-              min="0"
-              max="100"
-              step="0.1"
-              .value="${this.progressPercent.toString()}"
-              ?disabled="${!isLoaded}"
-              @input="${this.handleScrub}"
-            />
+            <input type="range" class="scrub-slider" min="0" max="100" step="0.1" .value="${this.progressPercent.toString()}" ?disabled="${!isLoaded}" @input="${this.handleScrub}" />
             <div class="time-labels">
               <span>${this.currentTimeStr}</span>
               <span>${this.totalTimeStr}</span>
             </div>
           </div>
         </div>
+      </div>
+    `;
+  }
 
-        <div class="dashboard-metrics">
-          <div class="metric-box">
-            <div class="metric-label">Amplitude</div>
-            <div class="metric-value">${metrics.amplitude}</div>
-          </div>
-          <div class="metric-box">
-            <div class="metric-label">Bass Kick</div>
-            <div class="metric-value">${metrics.bass}</div>
-          </div>
+  render() {
+    const isLoaded = this.audioManager.isLoaded;
+    const isPlaying = this.audioManager.isPlaying;
+
+    return html`
+      <lofi-diorama 
+        .audioManager="${this.audioManager}" 
+        .weather="${this.weather}"
+        .activeGear="${this.activeGear}"
+      ></lofi-diorama>
+
+      <div class="floating-ui ${this.isPanelOpen ? '' : 'hidden'}">
+        <button class="hide-btn" @click="${() => this.isPanelOpen = false}" title="Hide UI">⬇️</button>
+
+        <div class="tabs">
+          <button class="tab-btn ${this.activeTab === 'gear' ? 'active' : ''}" @click="${() => this.activeTab = 'gear'}">🎒 Gear</button>
+          <button class="tab-btn ${this.activeTab === 'environment' ? 'active' : ''}" @click="${() => this.activeTab = 'environment'}">🌤️ Environment</button>
+          <button class="tab-btn ${this.activeTab === 'audio' ? 'active' : ''}" @click="${() => this.activeTab = 'audio'}">🎵 Audio</button>
         </div>
 
-        <div class="weather-toggle">
-          <div class="weather-label">Window Weather</div>
-          <div class="weather-options">
-            <div
-              class="weather-btn ${this.weather === 'sunny' ? 'active' : ''}"
-              @click="${() => { this.weather = 'sunny'; }}"
-            >
-              ☀️ Sunny
-            </div>
-            <div
-              class="weather-btn ${this.weather === 'rainy' ? 'active rainy' : ''}"
-              @click="${() => { this.weather = 'rainy'; }}"
-            >
-              🌧️ Rainy
-            </div>
-          </div>
+        <div class="panel-content">
+          ${this.activeTab === 'gear' ? this.renderGearTab() : ''}
+          ${this.activeTab === 'environment' ? this.renderEnvironmentTab() : ''}
+          ${this.activeTab === 'audio' ? this.renderAudioTab(isLoaded, isPlaying) : ''}
         </div>
+      </div>
 
-        <div class="weather-toggle" style="margin-top: 8px;">
-          <div class="weather-label">Desk Gear</div>
-          <div style="display: flex; flex-direction: column; gap: 6px;">
-            ${[
-              { id: 'polyend', label: 'Polyend Tracker' },
-              { id: 'sp404', label: 'SP404mkII' },
-              { id: 'circuit_tracks', label: 'Circuit Tracks' },
-              { id: 'mood', label: 'CBA Mood' },
-              { id: 'blooper', label: 'CBA Blooper' },
-              { id: 'reel', label: 'Reel-to-Reel' },
-              { id: 'strat', label: 'Fender Strat' }
-            ].map(gear => html`
-              <div
-                class="weather-btn ${this.activeGear.includes(gear.id) ? 'active' : ''}"
-                style="text-align: left; padding: 6px 10px;"
-                @click="${() => this.toggleGear(gear.id)}"
-              >
-                ${this.activeGear.includes(gear.id) ? '✓' : '+'} ${gear.label}
-              </div>
-            `)}
-          </div>
-        </div>
-      </aside>
-
-      <main class="viewport-panel">
-        <header class="viewport-header">
-          <div class="viewport-title">
-            <span class="live-dot ${status.toLowerCase()}"></span>
-            Viewport: Desk View
-          </div>
-          <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: rgba(255,255,255,0.4)">
-            STATUS: ${status}
-          </div>
-        </header>
-        <lofi-diorama 
-          .audioManager="${this.audioManager}" 
-          .weather="${this.weather}"
-          .activeGear="${this.activeGear}"
-        ></lofi-diorama>
-      </main>
+      <button 
+        class="show-panel-btn ${!this.isPanelOpen ? 'visible' : ''}" 
+        @click="${() => this.isPanelOpen = true}"
+      >
+        ⚙️ Settings
+      </button>
     `;
   }
 }

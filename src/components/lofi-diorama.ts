@@ -169,13 +169,15 @@ export class LofiDiorama extends LitElement {
     // Floor
     const textureLoader = new THREE.TextureLoader();
     const floorTex = textureLoader.load('/dark_wood_floor.png');
-    floorTex.wrapS = THREE.RepeatWrapping;
-    floorTex.wrapT = THREE.RepeatWrapping;
-    floorTex.repeat.set(8, 8);
+    floorTex.wrapS = THREE.MirroredRepeatWrapping;
+    floorTex.wrapT = THREE.MirroredRepeatWrapping;
+    floorTex.repeat.set(2, 2);
     
     const floorGeo = new THREE.PlaneGeometry(120, 120);
     const floorMat = new THREE.MeshStandardMaterial({ 
-      map: floorTex, roughness: 0.6, metalness: 0.05
+      map: floorTex, 
+      roughness: 1.0, 
+      metalness: 0.0
     });
     const floor = new THREE.Mesh(floorGeo, floorMat);
     floor.rotation.x = -Math.PI / 2;
@@ -213,8 +215,8 @@ export class LofiDiorama extends LitElement {
 
     // Side walls (fading into periphery)
     const sideWallMat = new THREE.MeshStandardMaterial({ color: 0xb89878, roughness: 0.9 });
-    const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.5, 40, 30), sideWallMat);
-    leftWall.position.set(-18, 20, 0);
+    const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.5, 40, 120), sideWallMat);
+    leftWall.position.set(-18, 20, 30);
     leftWall.receiveShadow = true;
     this.scene.add(leftWall);
   }
