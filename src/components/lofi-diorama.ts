@@ -26,6 +26,9 @@ export class LofiDiorama extends LitElement {
   @property({ type: Array })
   activeGear: string[] = ['polyend', 'circuit_tracks', 'mood', 'blooper', 'sp404'];
 
+  @property({ type: Number })
+  zoom: number = 1.0;
+
   @query('.canvas-container')
   container!: HTMLDivElement;
 
@@ -127,6 +130,9 @@ export class LofiDiorama extends LitElement {
     if (changedProperties.has('activeGear') && this.scene) {
       this.updateGear();
     }
+    if (changedProperties.has('zoom') && this.camera) {
+      this.handleResize();
+    }
   }
 
   private initThreeJS() {
@@ -210,7 +216,7 @@ export class LofiDiorama extends LitElement {
     floorTex.wrapT = THREE.MirroredRepeatWrapping;
     floorTex.repeat.set(2, 2);
     
-    const floorGeo = new THREE.PlaneGeometry(120, 120);
+    const floorGeo = new THREE.PlaneGeometry(52.5, 30.5);
     const floorMat = new THREE.MeshStandardMaterial({ 
       map: floorTex, 
       roughness: 1.0, 
@@ -218,10 +224,18 @@ export class LofiDiorama extends LitElement {
     });
     const floor = new THREE.Mesh(floorGeo, floorMat);
     floor.rotation.x = -Math.PI / 2;
-    floor.position.y = 0;
+    floor.position.set(4, -5, -5);
     floor.receiveShadow = true;
     this.scene.add(floor);
     this.surfaceObjects.push(floor);
+
+    // Outside Grass
+    const grassMat = new THREE.MeshStandardMaterial({ color: 0x1a2614, roughness: 1.0 });
+    const grass = new THREE.Mesh(new THREE.PlaneGeometry(120, 60), grassMat);
+    grass.rotation.x = -Math.PI / 2;
+    grass.position.set(0, -5.1, -50); // Slightly below floor to prevent Z-fighting
+    grass.receiveShadow = true;
+    this.scene.add(grass);
 
     // Back wall (behind the window)
     const wallTex = textureLoader.load('/warm_retro_wallpaper.png');
@@ -237,44 +251,62 @@ export class LofiDiorama extends LitElement {
     
     // Wall sections around window
     // Left of window
-    const wallLeft = new THREE.Mesh(new THREE.BoxGeometry(10, 40, 0.5), wallMat);
-    wallLeft.position.set(-13, 20, -15);
+    const wallLeft = new THREE.Mesh(new THREE.BoxGeometry(13.75, 45, 0.5), wallMat);
+    wallLeft.position.set(-15.125, 17.5, -20);
     wallLeft.receiveShadow = true;
     this.scene.add(wallLeft);
     
-    // Right of window - extended to cover the entire right side
-    const wallRight = new THREE.Mesh(new THREE.BoxGeometry(40, 40, 0.5), wallMat);
-    wallRight.position.set(28, 20, -15);
+    // Right of window - ending at X=30
+    const wallRight = new THREE.Mesh(new THREE.BoxGeometry(21.75, 45, 0.5), wallMat);
+    wallRight.position.set(19.125, 17.5, -20);
     wallRight.receiveShadow = true;
     this.scene.add(wallRight);
     
     // Above window
-    const wallAbove = new THREE.Mesh(new THREE.BoxGeometry(16.5, 23.6, 0.5), wallMat);
-    wallAbove.position.set(0, 28.2, -15);
+    const wallAbove = new THREE.Mesh(new THREE.BoxGeometry(16.5, 19.6, 0.5), wallMat);
+    wallAbove.position.set(0, 30.2, -20);
     wallAbove.receiveShadow = true;
     this.scene.add(wallAbove);
     
     // Below window (window sill area)
-    const wallBelow = new THREE.Mesh(new THREE.BoxGeometry(16.5, 8.0, 0.5), wallMat);
-    wallBelow.position.set(0, 4.0, -15);
+    const wallBelow = new THREE.Mesh(new THREE.BoxGeometry(16.5, 17.0, 0.5), wallMat);
+    wallBelow.position.set(0, 3.5, -20);
     wallBelow.receiveShadow = true;
     this.scene.add(wallBelow);
 
-    // Side walls (fading into periphery)
+    // Solid Left Wall
     const sideWallTex = wallTex.clone();
-    sideWallTex.repeat.set(12, 4);
+    sideWallTex.repeat.set(4, 4);
     
     const sideWallMat = new THREE.MeshStandardMaterial({ 
       map: sideWallTex,
-      color: 0xdddddd, // slightly shadowed/dimmer for depth
+      color: 0xdddddd, 
       roughness: 0.9 
     });
-    const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.5, 40, 120), sideWallMat);
-    leftWall.position.set(-18, 20, 30);
+    const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.5, 45, 30.5), sideWallMat);
+    leftWall.position.set(-22.25, 17.5, -5);
     leftWall.receiveShadow = true;
     this.scene.add(leftWall);
+
+    // See-through inner walls (Front and Right)
+    const ghostWallMat = new THREE.MeshStandardMaterial({
+      map: wallTex,
+      transparent: true,
+      opacity: 0.15,
+      roughness: 0.85,
+      depthWrite: false,
+      side: THREE.DoubleSide
+    });
+
+    const rightWallGhost = new THREE.Mesh(new THREE.BoxGeometry(0.5, 45, 30.5), ghostWallMat);
+    rightWallGhost.position.set(30.25, 17.5, -5);
+    this.scene.add(rightWallGhost);
+
+    const frontWallGhost = new THREE.Mesh(new THREE.BoxGeometry(53, 45, 0.5), ghostWallMat);
+    frontWallGhost.position.set(4, 17.5, 10.25);
+    this.scene.add(frontWallGhost);
     
-    this.staticCollisionObjects.push(wallLeft, wallRight, wallAbove, wallBelow, leftWall);
+    this.staticCollisionObjects.push(wallLeft, wallRight, wallAbove, wallBelow, leftWall, rightWallGhost, frontWallGhost);
   }
 
   private buildDesk() {
@@ -291,7 +323,7 @@ export class LofiDiorama extends LitElement {
       roughness: 0.4, 
       metalness: 0.05 
     });
-    const deskTop = new THREE.Mesh(new THREE.BoxGeometry(22, 0.8, 14), deskMat);
+    const deskTop = new THREE.Mesh(new THREE.BoxGeometry(32, 0.8, 20), deskMat);
     deskTop.position.set(0, 5.6, -7);
     deskTop.castShadow = true;
     deskTop.receiveShadow = true;
@@ -300,8 +332,8 @@ export class LofiDiorama extends LitElement {
 
     // Desk legs
     const legMat = new THREE.MeshStandardMaterial({ color: 0x3a2518, roughness: 0.5 });
-    const legGeo = new THREE.BoxGeometry(0.8, 5.6, 0.8);
-    const legPositions = [[-10, 2.8, -1], [10, 2.8, -1], [-10, 2.8, -13], [10, 2.8, -13]];
+    const legGeo = new THREE.BoxGeometry(0.8, 10.6, 0.8);
+    const legPositions = [[-15, 0.3, 1.5], [15, 0.3, 1.5], [-15, 0.3, -15.5], [15, 0.3, -15.5]];
     for (const pos of legPositions) {
       const leg = new THREE.Mesh(legGeo, legMat);
       leg.position.set(pos[0], pos[1], pos[2]);
@@ -926,28 +958,28 @@ export class LofiDiorama extends LitElement {
     
     // Outer frame
     const frameTop = new THREE.Mesh(new THREE.BoxGeometry(16.5, 0.8, 1), frameMat);
-    frameTop.position.set(0, 16.4, -14.8);
+    frameTop.position.set(0, 20.4, -19.8);
     this.scene.add(frameTop);
     
     const frameBottom = new THREE.Mesh(new THREE.BoxGeometry(16.5, 0.8, 1.5), frameMat);
-    frameBottom.position.set(0, 8.0, -14.6);
+    frameBottom.position.set(0, 12.0, -19.6);
     this.scene.add(frameBottom);
     
     const frameL = new THREE.Mesh(new THREE.BoxGeometry(0.8, 9, 1), frameMat);
-    frameL.position.set(-8, 12.2, -14.8);
+    frameL.position.set(-8, 16.2, -19.8);
     this.scene.add(frameL);
     
     const frameR = new THREE.Mesh(new THREE.BoxGeometry(0.8, 9, 1), frameMat);
-    frameR.position.set(8, 12.2, -14.8);
+    frameR.position.set(8, 16.2, -19.8);
     this.scene.add(frameR);
     
     // Center cross dividers
     const frameMidH = new THREE.Mesh(new THREE.BoxGeometry(15.5, 0.5, 0.8), frameMat);
-    frameMidH.position.set(0, 12.2, -14.8);
+    frameMidH.position.set(0, 16.2, -19.8);
     this.scene.add(frameMidH);
     
     const frameMidV = new THREE.Mesh(new THREE.BoxGeometry(0.5, 9, 0.8), frameMat);
-    frameMidV.position.set(0, 12.2, -14.8);
+    frameMidV.position.set(0, 16.2, -19.8);
     this.scene.add(frameMidV);
 
     // Window sill
@@ -956,7 +988,7 @@ export class LofiDiorama extends LitElement {
       roughness: 0.5 
     });
     const sill = new THREE.Mesh(new THREE.BoxGeometry(17, 0.4, 2), sillMat);
-    sill.position.set(0, 8.4, -14);
+    sill.position.set(0, 12.4, -19);
     sill.castShadow = true;
     this.scene.add(sill);
 
@@ -969,14 +1001,14 @@ export class LofiDiorama extends LitElement {
     this.skyMat = new THREE.MeshBasicMaterial({ color: skyColor, fog: false });
     const skyGeo = new THREE.PlaneGeometry(40, 20);
     const sky = new THREE.Mesh(skyGeo, this.skyMat);
-    sky.position.set(0, 12.2, -20);
+    sky.position.set(0, 16.2, -25);
     sky.name = 'sky';
     this.scene.add(sky);
 
     // Sun glow
     const sunMat = new THREE.MeshBasicMaterial({ color: 0xffffcc, transparent: true, opacity: 0.9 });
     this.sunGlow = new THREE.Mesh(new THREE.CircleGeometry(2.5, 32), sunMat);
-    this.sunGlow.position.set(4, 14, -19.5);
+    this.sunGlow.position.set(4, 18, -24.5);
     this.sunGlow.name = 'sunGlow';
     this.sunGlow.visible = this.weather === 'sunny';
     this.scene.add(this.sunGlow);
@@ -984,7 +1016,7 @@ export class LofiDiorama extends LitElement {
     // Sun halo
     const haloMat = new THREE.MeshBasicMaterial({ color: 0xffeedd, transparent: true, opacity: 0.3 });
     const halo = new THREE.Mesh(new THREE.CircleGeometry(4.5, 32), haloMat);
-    halo.position.set(4, 14, -19.6);
+    halo.position.set(4, 18, -24.6);
     halo.name = 'sunHalo';
     halo.visible = this.weather === 'sunny';
     this.scene.add(halo);
@@ -996,8 +1028,8 @@ export class LofiDiorama extends LitElement {
     });
     
     const cloudPositions = [
-      [-6, 14.5, -19], [2, 15, -19], [8, 14, -19],
-      [-3, 13.5, -18.5], [6, 15.5, -18.5]
+      [-6, 18.5, -24], [2, 19, -24], [8, 18, -24],
+      [-3, 17.5, -23.5], [6, 19.5, -23.5]
     ];
     
     for (const pos of cloudPositions) {
@@ -1022,8 +1054,8 @@ export class LofiDiorama extends LitElement {
     const rainPositions = new Float32Array(rainCount * 3);
     for (let i = 0; i < rainCount; i++) {
       rainPositions[i * 3] = (Math.random() - 0.5) * 16;
-      rainPositions[i * 3 + 1] = Math.random() * 10 + 8;
-      rainPositions[i * 3 + 2] = -15 + Math.random() * 3;
+      rainPositions[i * 3 + 1] = Math.random() * 10 + 12;
+      rainPositions[i * 3 + 2] = -20 + Math.random() * 3;
     }
     rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPositions, 3));
     
@@ -1093,7 +1125,8 @@ export class LofiDiorama extends LitElement {
     if (width === 0 || height === 0) return;
 
     const aspect = width / height;
-    const d = 14;
+    const baseD = 14;
+    const d = baseD / (this.zoom || 1.0);
     this.camera.left = -d * aspect;
     this.camera.right = d * aspect;
     this.camera.top = d;
@@ -1180,8 +1213,8 @@ export class LofiDiorama extends LitElement {
       const positions = this.rainDrops.geometry.attributes.position.array as Float32Array;
       for (let i = 0; i < positions.length / 3; i++) {
         positions[i * 3 + 1] -= 0.15;
-        if (positions[i * 3 + 1] < 8) {
-          positions[i * 3 + 1] = 18;
+        if (positions[i * 3 + 1] < 12) {
+          positions[i * 3 + 1] = 22;
           positions[i * 3] = (Math.random() - 0.5) * 16;
         }
       }
@@ -1202,6 +1235,18 @@ export class LofiDiorama extends LitElement {
     if (this.dragObject) {
       this.raycaster.ray.intersectPlane(this.dragPlane, this.intersectionPoint);
       const newPos = this.intersectionPoint.clone().sub(this.dragOffset);
+      
+      // Clamp to desk bounds to prevent dragging off the table or through walls
+      const deskWidth = 32;
+      const deskDepth = 20;
+      const deskCenterZ = -7;
+      
+      const margin = 1.0;
+      const halfW = (deskWidth / 2) - margin;
+      const halfD = (deskDepth / 2) - margin;
+      
+      newPos.x = Math.max(-halfW, Math.min(halfW, newPos.x));
+      newPos.z = Math.max(deskCenterZ - halfD, Math.min(deskCenterZ + halfD, newPos.z));
       
       const oldPos = this.dragObject.position.clone();
       this.dragObject.position.x = newPos.x;
@@ -1291,9 +1336,8 @@ export class LofiDiorama extends LitElement {
       const raycaster = new THREE.Raycaster();
       this.dragObject.updateMatrixWorld(true);
       
-      // Compute the height of the object (to know how much to offset its Y position)
+      // Compute the bounds to align the bottom properly
       const box = new THREE.Box3().setFromObject(this.dragObject);
-      const objectHeight = box.max.y - box.min.y;
       
       // Raycast downwards from the center of the bounding box
       const center = new THREE.Vector3();
@@ -1305,10 +1349,12 @@ export class LofiDiorama extends LitElement {
       if (intersects.length > 0) {
         // Find the topmost surface intersected
         const topIntersect = intersects[0];
-        // The object's Y position should be the surface's Y point plus half the object's height
-        const newY = topIntersect.point.y + (objectHeight / 2);
         
-        this.dragObject.position.y = newY;
+        // Align the bottom of the bounding box with the surface
+        const currentMinY = box.min.y;
+        const offset = topIntersect.point.y - currentMinY;
+        
+        this.dragObject.position.y += offset;
         this.dragObject.updateMatrixWorld(true);
       }
       

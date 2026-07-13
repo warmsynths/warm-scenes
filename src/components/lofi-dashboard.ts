@@ -34,6 +34,9 @@ export class LofiDashboard extends LitElement {
   private activeGear: string[] = ['polyend', 'circuit_tracks', 'mood', 'blooper', 'sp404'];
 
   @state()
+  private zoom: number = 1.0;
+
+  @state()
   private activeTab: Tab = 'gear';
 
   @state()
@@ -325,6 +328,22 @@ export class LofiDashboard extends LitElement {
       color: #5a4b41;
     }
 
+    .zoom-slider-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      margin-top: 24px;
+      padding: 0 40px;
+    }
+
+    .zoom-slider-container label {
+      font-weight: 800;
+      color: #d0c0b0;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
     /* Audio Tab */
     .audio-panel {
       display: flex;
@@ -508,10 +527,24 @@ export class LofiDashboard extends LitElement {
     }
   `;
 
+  connectedCallback() {
+    super.connectedCallback();
+    window.addEventListener('wheel', this.handleWheel, { passive: false });
+  }
+
   disconnectedCallback() {
     super.disconnectedCallback();
     this.stopProgressLoop();
+    window.removeEventListener('wheel', this.handleWheel);
   }
+
+  private handleWheel = (e: WheelEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      const zoomDelta = e.deltaY > 0 ? -0.05 : 0.05;
+      this.zoom = Math.max(0.5, Math.min(2.0, this.zoom + zoomDelta));
+    }
+  };
 
   private toggleGear(gear: string) {
     if (gear === 'strat' || gear === 'reel') return;
@@ -711,6 +744,18 @@ export class LofiDashboard extends LitElement {
           <div class="weather-label">Rainy</div>
         </div>
       </div>
+      <div class="zoom-slider-container">
+        <label>Camera Zoom</label>
+        <input 
+          type="range" 
+          class="scrub-slider" 
+          min="0.5" 
+          max="2.0" 
+          step="0.05" 
+          .value="${this.zoom.toString()}" 
+          @input="${(e: Event) => this.zoom = parseFloat((e.target as HTMLInputElement).value)}" 
+        />
+      </div>
     `;
   }
 
@@ -786,6 +831,7 @@ export class LofiDashboard extends LitElement {
         .audioManager="${this.audioManager}" 
         .weather="${this.weather}"
         .activeGear="${this.activeGear}"
+        .zoom="${this.zoom}"
         @toggle-settings="${this.handleToggleSettings}"
       ></lofi-diorama>
 
