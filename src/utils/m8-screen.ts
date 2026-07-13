@@ -27,7 +27,7 @@ export class M8Screen {
     this.update(0, 0, new Array(8).fill(0));
   }
 
-  update(amplitude: number, bass: number, freqs: number[]) {
+  update(_amplitude: number, bass: number, freqs: number[]) {
     const { ctx, width, height } = this;
     const now = Date.now();
 
