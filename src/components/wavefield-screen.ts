@@ -198,7 +198,7 @@ export class WavefieldScreen extends LitElement {
           if (object.geometry) object.geometry.dispose();
           if (object.material) {
             if (Array.isArray(object.material)) {
-              object.material.forEach(material => material.dispose());
+              object.material.forEach((material: any) => material.dispose());
             } else {
               object.material.dispose();
             }
@@ -430,7 +430,7 @@ export class WavefieldScreen extends LitElement {
     let volumeRipple = 0;
 
     if (this.audioInitialized && this.isPlaying) {
-      this.analyser.getByteFrequencyData(this.dataArray);
+      this.analyser.getByteFrequencyData(this.dataArray as any);
       
       // Isolate low-end bass frequencies (first few bins)
       let bassSum = 0;

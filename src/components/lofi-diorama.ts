@@ -5,6 +5,15 @@ import * as THREE from 'three';
 import { AudioManager } from '../utils/audio-manager';
 import { TrackerScreen } from '../utils/tracker-screen';
 
+const MM_TO_UNITS = 0.0285;
+const GET_GEAR_SIZE = (wMm: number, dMm: number, hMm: number) => {
+  return {
+    w: wMm * MM_TO_UNITS,
+    d: dMm * MM_TO_UNITS,
+    h: hMm * MM_TO_UNITS
+  };
+};
+
 @customElement('lofi-diorama')
 export class LofiDiorama extends LitElement {
   @property({ type: Object })
@@ -320,9 +329,9 @@ export class LofiDiorama extends LitElement {
     // Box faces: right, left, top, bottom, front, back
     const trackerMats = [sideMat, sideMat, topMat, sideMat, sideMat, sideMat];
     
-    // Adjusted dimensions to match landscape aspect ratio (roughly 11x8 ratio)
-    const trackerBody = new THREE.Mesh(new THREE.BoxGeometry(8.5, 0.5, 6.2), trackerMats);
-    trackerBody.position.set(-3, 6.2, -8);
+    const tSize = GET_GEAR_SIZE(282, 207, 33); // 28.2 cm W x 20.7 cm D x 3.3 cm H
+    const trackerBody = new THREE.Mesh(new THREE.BoxGeometry(tSize.w, tSize.h, tSize.d), trackerMats);
+    trackerBody.position.set(-3.5, 6.2, -8);
     trackerBody.rotation.y = 0.05;
     trackerBody.castShadow = true;
     trackerBody.receiveShadow = true;
@@ -336,10 +345,13 @@ export class LofiDiorama extends LitElement {
       transparent: true,
       opacity: 0.85
     });
-    const screenOverlay = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 2.0), screenMat);
+
+    const wFactor = tSize.w / 8.5;
+    const dFactor = tSize.d / 6.2;
+    const screenOverlay = new THREE.Mesh(new THREE.PlaneGeometry(3.6 * wFactor, 2.0 * dFactor), screenMat);
     screenOverlay.rotation.x = -Math.PI / 2;
     // Positioned over the screen area in the photo
-    screenOverlay.position.set(-1.8, 0.252, -1.2);
+    screenOverlay.position.set(-1.8 * wFactor, tSize.h / 2 + 0.002, -1.2 * dFactor);
     trackerBody.add(screenOverlay);
     
     this.gearGroup.add(trackerBody);
@@ -361,8 +373,9 @@ export class LofiDiorama extends LitElement {
     });
 
     const ctMats = [sideMat, sideMat, topMat, sideMat, sideMat, sideMat];
-    const ctBody = new THREE.Mesh(new THREE.BoxGeometry(8, 0.5, 7.5), ctMats);
-    ctBody.position.set(6, 6.2, -6);
+    const ctSize = GET_GEAR_SIZE(240, 210, 30); // 24.0 cm W x 21.0 cm D x 3.0 cm H
+    const ctBody = new THREE.Mesh(new THREE.BoxGeometry(ctSize.w, ctSize.h, ctSize.d), ctMats);
+    ctBody.position.set(3.5, 6.2, -4);
     ctBody.rotation.y = -0.08;
     ctBody.castShadow = true;
     ctBody.receiveShadow = true;
@@ -376,14 +389,17 @@ export class LofiDiorama extends LitElement {
       blending: THREE.AdditiveBlending
     });
 
+    const wFactor = ctSize.w / 5.5;
+    const dFactor = ctSize.d / 5.1;
+
     // Pads (4x8 Grid)
     for (let row = 0; row < 4; row++) {
       for (let col = 0; col < 8; col++) {
         // Clone material so each pad animates uniquely
-        const padOverlay = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.6), padMatBase.clone());
+        const padOverlay = new THREE.Mesh(new THREE.PlaneGeometry(0.5 * wFactor, 0.42 * dFactor), padMatBase.clone());
         padOverlay.rotation.x = -Math.PI / 2;
         // Positioned perfectly over the bottom half pad grid
-        padOverlay.position.set(-2.8 + col * 0.8, 0.252, 0.2 + row * 0.85);
+        padOverlay.position.set((-1.925 + col * 0.55) * wFactor, ctSize.h / 2 + 0.002, (0.14 + row * 0.58) * dFactor);
         this.circuitPads.push(padOverlay); // Adds back dynamic lighting capability
         ctBody.add(padOverlay);
       }
@@ -421,41 +437,46 @@ export class LofiDiorama extends LitElement {
     pedal.position.set(x, 6.6, z); // Sits properly on the desk now
     pedal.rotation.y = rotY;
 
+    const pSize = GET_GEAR_SIZE(64, 124, 60); // 64mm W x 124mm D x 60mm H
     const pedalMat = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.3, metalness: 0.4 });
-    const body = new THREE.Mesh(new THREE.BoxGeometry(2, 1.2, 3), pedalMat);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(pSize.w, pSize.h, pSize.d), pedalMat);
     body.castShadow = true;
     body.receiveShadow = true;
     pedal.add(body);
+
+    const wFactor = pSize.w / 2;
+    const dFactor = pSize.d / 3;
+    const hFactor = pSize.h / 1.2;
     
     // Silver metallic knobs
     const knobMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.8, roughness: 0.3 });
     for (let i = 0; i < 3; i++) {
-      const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.25, 16), knobMat);
-      knob.position.set(-0.6 + i * 0.6, 0.725, -1.0);
+      const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.2 * wFactor, 0.2 * wFactor, 0.25 * hFactor, 16), knobMat);
+      knob.position.set((-0.6 + i * 0.6) * wFactor, pSize.h / 2 + 0.125 * hFactor, -1.0 * dFactor);
       pedal.add(knob);
     }
     for (let i = 0; i < 3; i++) {
-      const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.25, 16), knobMat);
-      knob.position.set(-0.6 + i * 0.6, 0.725, -0.4);
+      const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.2 * wFactor, 0.2 * wFactor, 0.25 * hFactor, 16), knobMat);
+      knob.position.set((-0.6 + i * 0.6) * wFactor, pSize.h / 2 + 0.125 * hFactor, -0.4 * dFactor);
       pedal.add(knob);
     }
 
     // 3 small toggle switches
     const toggleMat = new THREE.MeshStandardMaterial({ color: 0xeeeeee, metalness: 1.0 });
     for(let i = 0; i < 3; i++) {
-      const tog = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.25), toggleMat);
-      tog.position.set(-0.6 + i * 0.6, 0.725, 0.1);
+      const tog = new THREE.Mesh(new THREE.CylinderGeometry(0.04 * wFactor, 0.04 * wFactor, 0.25 * hFactor), toggleMat);
+      tog.position.set((-0.6 + i * 0.6) * wFactor, pSize.h / 2 + 0.125 * hFactor, 0.1 * dFactor);
       pedal.add(tog);
     }
 
     // Footswitches
     const switchMat = new THREE.MeshStandardMaterial({ color: 0xdddddd, metalness: 0.9, roughness: 0.1 });
-    const fs1 = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.3, 16), switchMat);
-    fs1.position.set(-0.6, 0.75, 1.15);
+    const fs1 = new THREE.Mesh(new THREE.CylinderGeometry(0.18 * wFactor, 0.18 * wFactor, 0.3 * hFactor, 16), switchMat);
+    fs1.position.set(-0.6 * wFactor, pSize.h / 2 + 0.15 * hFactor, 1.15 * dFactor);
     pedal.add(fs1);
 
-    const fs2 = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.3, 16), switchMat);
-    fs2.position.set(0.6, 0.75, 1.15);
+    const fs2 = new THREE.Mesh(new THREE.CylinderGeometry(0.18 * wFactor, 0.18 * wFactor, 0.3 * hFactor, 16), switchMat);
+    fs2.position.set(0.6 * wFactor, pSize.h / 2 + 0.15 * hFactor, 1.15 * dFactor);
     pedal.add(fs2);
 
     return pedal;
@@ -549,8 +570,9 @@ export class LofiDiorama extends LitElement {
 
     const spMats = [sideMat, sideMat, topMat, sideMat, sideMat, sideMat];
     // Adjusted dimensions to match SP-404 aspect ratio
-    const spBody = new THREE.Mesh(new THREE.BoxGeometry(4.5, 0.6, 7), spMats);
-    spBody.position.set(0, 6.2, -2.5); // Center-left foreground
+    const spSize = GET_GEAR_SIZE(177.5, 275.8, 70.5); // 17.75 cm W x 27.58 cm D x 7.05 cm H
+    const spBody = new THREE.Mesh(new THREE.BoxGeometry(spSize.w, spSize.h, spSize.d), spMats);
+    spBody.position.set(-3.5, 6.2, -2.5); // Moved left to align below Polyend Tracker
     spBody.rotation.y = -0.03;
     spBody.castShadow = true;
     spBody.receiveShadow = true;
@@ -563,13 +585,16 @@ export class LofiDiorama extends LitElement {
       opacity: 0.7,
       blending: THREE.AdditiveBlending
     });
+
+    const wFactor = spSize.w / 4.5;
+    const dFactor = spSize.d / 7.0;
     
     for (let row = 0; row < 4; row++) {
       for (let col = 0; col < 4; col++) {
         // Clone material so each pad animates uniquely
-        const padOverlay = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.55), padMatBase.clone());
+        const padOverlay = new THREE.Mesh(new THREE.PlaneGeometry(0.7 * wFactor, 0.55 * dFactor), padMatBase.clone());
         padOverlay.rotation.x = -Math.PI / 2;
-        padOverlay.position.set(-1.35 + col * 0.9, 0.302, 0.5 + row * 0.7);
+        padOverlay.position.set((-1.35 + col * 0.9) * wFactor, spSize.h / 2 + 0.002, (0.5 + row * 0.7) * dFactor);
         this.circuitPads.push(padOverlay); // Add back dynamic lighting capability
         spBody.add(padOverlay);
       }
@@ -662,7 +687,7 @@ export class LofiDiorama extends LitElement {
     // Coffee mug
     const mugMat = new THREE.MeshStandardMaterial({ color: 0xf0f0f0, roughness: 0.3 });
     const mug = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.4, 1.0, 32), mugMat);
-    mug.position.set(3, 6.5, -3);
+    mug.position.set(-7.5, 6.5, -3);
     mug.castShadow = true;
     this.scene.add(mug);
     this.clickableObjects.push(mug);
@@ -671,14 +696,14 @@ export class LofiDiorama extends LitElement {
     const coffeeMat = new THREE.MeshStandardMaterial({ color: 0x3a2010, roughness: 0.2 });
     const coffee = new THREE.Mesh(new THREE.CircleGeometry(0.45, 32), coffeeMat);
     coffee.rotation.x = -Math.PI / 2;
-    coffee.position.set(3, 7.0, -3);
+    coffee.position.set(-7.5, 7.0, -3);
     this.scene.add(coffee);
     this.clickableObjects.push(coffee);
 
     // Small plant on right side of desk
     const potMat = new THREE.MeshStandardMaterial({ color: 0xcc6633, roughness: 0.85 });
     const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.4, 1.0, 16), potMat);
-    pot.position.set(9.5, 6.5, -3.5);
+    pot.position.set(11.5, 6.5, -4);
     pot.castShadow = true;
     this.scene.add(pot);
 
@@ -686,7 +711,7 @@ export class LofiDiorama extends LitElement {
     const soilMat = new THREE.MeshStandardMaterial({ color: 0x3a2a1a, roughness: 0.9 });
     const soil = new THREE.Mesh(new THREE.CircleGeometry(0.55, 16), soilMat);
     soil.rotation.x = -Math.PI / 2;
-    soil.position.set(9.5, 7.0, -3.5);
+    soil.position.set(11.5, 7.0, -4);
     this.scene.add(soil);
 
     // Little plant leaves
@@ -695,9 +720,9 @@ export class LofiDiorama extends LitElement {
       const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 8), leafMat);
       leaf.scale.set(1, 0.2, 1.2);
       leaf.position.set(
-        9.5 + (Math.random() - 0.5) * 0.5,
+        11.5 + (Math.random() - 0.5) * 0.5,
         7.4 + Math.random() * 0.6,
-        -3.5 + (Math.random() - 0.5) * 0.5
+        -4 + (Math.random() - 0.5) * 0.5
       );
       leaf.rotation.set(Math.random(), Math.random(), Math.random());
       this.scene.add(leaf);
@@ -707,7 +732,7 @@ export class LofiDiorama extends LitElement {
     const hpMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.3, metalness: 0.5 });
     // Headband arc
     const headband = new THREE.Mesh(new THREE.TorusGeometry(1.0, 0.12, 8, 32, Math.PI), hpMat);
-    headband.position.set(7.5, 6.6, -2);
+    headband.position.set(9.5, 6.6, -2);
     headband.rotation.x = Math.PI / 2;
     headband.rotation.z = 0.3;
     headband.castShadow = true;
@@ -715,12 +740,12 @@ export class LofiDiorama extends LitElement {
     // Ear cups
     const cupMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.4 });
     const cup1 = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.3, 16), cupMat);
-    cup1.position.set(6.6, 6.3, -2.2);
+    cup1.position.set(8.6, 6.3, -2.2);
     cup1.rotation.x = Math.PI / 2;
     cup1.castShadow = true;
     this.scene.add(cup1);
     const cup2 = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.3, 16), cupMat);
-    cup2.position.set(8.4, 6.3, -1.5);
+    cup2.position.set(10.4, 6.3, -1.5);
     cup2.rotation.x = Math.PI / 2;
     cup2.castShadow = true;
     this.scene.add(cup2);

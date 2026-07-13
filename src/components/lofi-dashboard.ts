@@ -73,7 +73,7 @@ export class LofiDashboard extends LitElement {
       border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: 32px;
       box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
-      padding: 24px 32px;
+      padding: 12px 24px;
       color: #eaeaea;
       display: flex;
       flex-direction: column;
@@ -226,6 +226,35 @@ export class LofiDashboard extends LitElement {
       color: #ffffff;
       box-shadow: 0 0 12px rgba(163, 217, 201, 0.2);
     }
+    .carousel-container {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+    }
+
+    .carousel-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: white;
+      width: 40px;
+      height: 90px;
+      border-radius: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+
+    .carousel-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+      transform: scale(1.05);
+    }
+    
+    .carousel-btn:active {
+      transform: scale(0.95);
     }
 
     .gear-icon {
@@ -588,19 +617,22 @@ export class LofiDashboard extends LitElement {
     return num.toString().padStart(2, '0');
   }
 
+  private scrollCarousel(id: string, dir: number) {
+    const el = this.shadowRoot?.getElementById(id);
+    if (el) {
+      el.scrollBy({ left: dir * 200, behavior: 'smooth' });
+    }
+  }
+
   private renderGearTab() {
-    const samplers = [
-      { id: 'polyend', label: 'Polyend', icon: '🎛️' },
-      { id: 'sp404', label: 'SP404', icon: '🎰' },
-      { id: 'circuit_tracks', label: 'Circuit', icon: '🎹' }
-    ];
-    const effects = [
-      { id: 'mood', label: 'MOOD', icon: '🎚️' },
-      { id: 'blooper', label: 'Blooper', icon: '🔁' },
-      { id: 'reel', label: 'Tape Reel', icon: '📼' }
-    ];
-    const instruments = [
-      { id: 'strat', label: 'Stratocaster', icon: '🎸' }
+    const allGear = [
+      { id: 'polyend', label: 'Polyend', icon: '🎛️', cat: 'Seq' },
+      { id: 'circuit_tracks', label: 'Circuit', icon: '🎹', cat: 'Seq' },
+      { id: 'sp404', label: 'SP404', icon: '🎰', cat: 'Sampler' },
+      { id: 'mood', label: 'MOOD', icon: '🎚️', cat: 'Pedal' },
+      { id: 'blooper', label: 'Blooper', icon: '🔁', cat: 'Pedal' },
+      { id: 'reel', label: 'Tape Reel', icon: '📼', cat: 'Tape' },
+      { id: 'strat', label: 'Strat', icon: '🎸', cat: 'Inst' }
     ];
 
     const renderCard = (gear: any) => html`
@@ -610,27 +642,17 @@ export class LofiDashboard extends LitElement {
       >
         <div class="gear-icon">${gear.icon}</div>
         <div class="gear-name">${gear.label}</div>
+        <div style="font-size: 0.65rem; color: rgba(255,255,255,0.4); text-transform: uppercase;">${gear.cat}</div>
       </div>
     `;
 
     return html`
-      <div class="gear-section">
-        <div class="gear-category-title">Samplers & Synths</div>
-        <div class="gear-grid">
-          ${samplers.map(renderCard)}
+      <div class="carousel-container" style="padding-top: 4px;">
+        <button class="carousel-btn" @click="${() => this.scrollCarousel('all-gear-grid', -1)}">❮</button>
+        <div class="gear-grid" id="all-gear-grid" style="width: 100%;">
+          ${allGear.map(renderCard)}
         </div>
-      </div>
-      <div class="gear-section">
-        <div class="gear-category-title">Effects & Tape</div>
-        <div class="gear-grid">
-          ${effects.map(renderCard)}
-        </div>
-      </div>
-      <div class="gear-section">
-        <div class="gear-category-title">Instruments</div>
-        <div class="gear-grid">
-          ${instruments.map(renderCard)}
-        </div>
+        <button class="carousel-btn" @click="${() => this.scrollCarousel('all-gear-grid', 1)}">❯</button>
       </div>
     `;
   }
