@@ -229,11 +229,11 @@ export class LofiDiorama extends LitElement {
     this.scene.add(floor);
     this.surfaceObjects.push(floor);
 
-    // Outside Grass
-    const grassMat = new THREE.MeshStandardMaterial({ color: 0x1a2614, roughness: 1.0 });
-    const grass = new THREE.Mesh(new THREE.PlaneGeometry(120, 60), grassMat);
+    // Outside Grass (Infinite world)
+    const grassMat = new THREE.MeshStandardMaterial({ color: 0x4a7c29, roughness: 1.0, metalness: 0.1 });
+    const grass = new THREE.Mesh(new THREE.PlaneGeometry(2000, 2000), grassMat);
     grass.rotation.x = -Math.PI / 2;
-    grass.position.set(0, -5.1, -50); // Slightly below floor to prevent Z-fighting
+    grass.position.set(0, -5.1, 0); // Slightly below floor to prevent Z-fighting
     grass.receiveShadow = true;
     this.scene.add(grass);
 
@@ -973,15 +973,6 @@ export class LofiDiorama extends LitElement {
     frameR.position.set(8, 16.2, -19.8);
     this.scene.add(frameR);
     
-    // Center cross dividers
-    const frameMidH = new THREE.Mesh(new THREE.BoxGeometry(15.5, 0.5, 0.8), frameMat);
-    frameMidH.position.set(0, 16.2, -19.8);
-    this.scene.add(frameMidH);
-    
-    const frameMidV = new THREE.Mesh(new THREE.BoxGeometry(0.5, 9, 0.8), frameMat);
-    frameMidV.position.set(0, 16.2, -19.8);
-    this.scene.add(frameMidV);
-
     // Window sill
     const sillMat = new THREE.MeshStandardMaterial({ 
       map: frameTex, 
@@ -992,16 +983,15 @@ export class LofiDiorama extends LitElement {
     sill.castShadow = true;
     this.scene.add(sill);
 
-    this.staticCollisionObjects.push(frameTop, frameBottom, frameL, frameR, frameMidH, frameMidV, sill);
+    this.staticCollisionObjects.push(frameTop, frameBottom, frameL, frameR, sill);
   }
 
   private buildWeather() {
-    // Sky backdrop behind the window
+    // Large sky sphere
     const skyColor = this.weather === 'sunny' ? 0x87ceeb : 0x6b7b8d;
-    this.skyMat = new THREE.MeshBasicMaterial({ color: skyColor, fog: false });
-    const skyGeo = new THREE.PlaneGeometry(40, 20);
+    this.skyMat = new THREE.MeshBasicMaterial({ color: skyColor, fog: false, side: THREE.BackSide });
+    const skyGeo = new THREE.SphereGeometry(1000, 32, 32);
     const sky = new THREE.Mesh(skyGeo, this.skyMat);
-    sky.position.set(0, 16.2, -25);
     sky.name = 'sky';
     this.scene.add(sky);
 
@@ -1049,13 +1039,13 @@ export class LofiDiorama extends LitElement {
     }
 
     // Rain particles (hidden if sunny)
-    const rainCount = 500;
+    const rainCount = 1000;
     const rainGeo = new THREE.BufferGeometry();
     const rainPositions = new Float32Array(rainCount * 3);
     for (let i = 0; i < rainCount; i++) {
-      rainPositions[i * 3] = (Math.random() - 0.5) * 16;
-      rainPositions[i * 3 + 1] = Math.random() * 10 + 12;
-      rainPositions[i * 3 + 2] = -20 + Math.random() * 3;
+      rainPositions[i * 3] = (Math.random() - 0.5) * 40;
+      rainPositions[i * 3 + 1] = Math.random() * 25 - 5;
+      rainPositions[i * 3 + 2] = -15 + Math.random() * 15;
     }
     rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPositions, 3));
     
@@ -1213,9 +1203,9 @@ export class LofiDiorama extends LitElement {
       const positions = this.rainDrops.geometry.attributes.position.array as Float32Array;
       for (let i = 0; i < positions.length / 3; i++) {
         positions[i * 3 + 1] -= 0.15;
-        if (positions[i * 3 + 1] < 12) {
+        if (positions[i * 3 + 1] < -5) {
           positions[i * 3 + 1] = 22;
-          positions[i * 3] = (Math.random() - 0.5) * 16;
+          positions[i * 3] = (Math.random() - 0.5) * 40;
         }
       }
       this.rainDrops.geometry.attributes.position.needsUpdate = true;
