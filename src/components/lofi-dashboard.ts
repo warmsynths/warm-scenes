@@ -2,6 +2,7 @@ import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { AudioManager } from '../utils/audio-manager';
 import './lofi-diorama';
+import './gear-preview';
 
 type Weather = 'sunny' | 'rainy';
 
@@ -31,10 +32,7 @@ export class LofiDashboard extends LitElement {
   private weather: Weather = 'sunny';
 
   @state()
-  private activeGear: string[] = ['polyend', 'circuit_tracks', 'mood', 'blooper', 'sp404'];
-
-  @state()
-  private zoom: number = 1.0;
+  private activeGear: string[] = ['polyend', 'circuit_tracks', 'mood', 'blooper', 'sp404', 'm8'];
 
   @state()
   private activeTab: Tab = 'gear';
@@ -268,7 +266,9 @@ export class LofiDashboard extends LitElement {
     }
 
     .gear-icon {
-      font-size: 2.5rem;
+      width: 64px;
+      height: 64px;
+      margin: 0 auto 8px;
     }
 
     .gear-name {
@@ -326,22 +326,6 @@ export class LofiDashboard extends LitElement {
       font-size: 1.4rem;
       font-weight: 800;
       color: #5a4b41;
-    }
-
-    .zoom-slider-container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 12px;
-      margin-top: 24px;
-      padding: 0 40px;
-    }
-
-    .zoom-slider-container label {
-      font-weight: 800;
-      color: #d0c0b0;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
     }
 
     /* Audio Tab */
@@ -529,22 +513,12 @@ export class LofiDashboard extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
-    window.addEventListener('wheel', this.handleWheel, { passive: false });
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
     this.stopProgressLoop();
-    window.removeEventListener('wheel', this.handleWheel);
   }
-
-  private handleWheel = (e: WheelEvent) => {
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      const zoomDelta = e.deltaY > 0 ? -0.05 : 0.05;
-      this.zoom = Math.max(0.5, Math.min(2.0, this.zoom + zoomDelta));
-    }
-  };
 
   private toggleGear(gear: string) {
     if (gear === 'strat' || gear === 'reel') return;
@@ -698,6 +672,7 @@ export class LofiDashboard extends LitElement {
       { id: 'polyend', label: 'Polyend', icon: '🎛️', cat: 'Seq' },
       { id: 'circuit_tracks', label: 'Circuit', icon: '🎹', cat: 'Seq' },
       { id: 'sp404', label: 'SP404', icon: '🎰', cat: 'Sampler' },
+      { id: 'm8', label: 'M8', icon: '📱', cat: 'Tracker' },
       { id: 'mood', label: 'MOOD', icon: '🎚️', cat: 'Pedal' },
       { id: 'blooper', label: 'Blooper', icon: '🔁', cat: 'Pedal' },
       { id: 'reel', label: 'Tape Reel', icon: '📼', cat: 'Tape', disabled: true },
@@ -709,7 +684,7 @@ export class LofiDashboard extends LitElement {
         class="gear-card ${this.activeGear.includes(gear.id) ? 'active' : ''} ${gear.disabled ? 'disabled' : ''}"
         @click="${() => !gear.disabled && this.toggleGear(gear.id)}"
       >
-        <div class="gear-icon">${gear.icon}</div>
+        <div class="gear-icon"><gear-preview gear="${gear.id}"></gear-preview></div>
         <div class="gear-name">${gear.label}</div>
         <div style="font-size: 0.65rem; color: rgba(255,255,255,0.4); text-transform: uppercase;">${gear.cat}</div>
       </div>
@@ -744,17 +719,6 @@ export class LofiDashboard extends LitElement {
           <div class="weather-label">Rainy</div>
         </div>
       </div>
-      <div class="zoom-slider-container">
-        <label>Camera Zoom</label>
-        <input 
-          type="range" 
-          class="scrub-slider" 
-          min="0.5" 
-          max="2.0" 
-          step="0.05" 
-          .value="${this.zoom.toString()}" 
-          @input="${(e: Event) => this.zoom = parseFloat((e.target as HTMLInputElement).value)}" 
-        />
       </div>
     `;
   }
@@ -831,7 +795,6 @@ export class LofiDashboard extends LitElement {
         .audioManager="${this.audioManager}" 
         .weather="${this.weather}"
         .activeGear="${this.activeGear}"
-        .zoom="${this.zoom}"
         @toggle-settings="${this.handleToggleSettings}"
       ></lofi-diorama>
 

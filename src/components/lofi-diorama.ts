@@ -2,9 +2,11 @@ import { LitElement, html, css } from 'lit';
 import { customElement, property, query } from 'lit/decorators.js';
 import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 import { AudioManager } from '../utils/audio-manager';
 import { TrackerScreen } from '../utils/tracker-screen';
+import { M8Screen } from '../utils/m8-screen';
 
 const MM_TO_UNITS = 0.0285;
 const GET_GEAR_SIZE = (wMm: number, dMm: number, hMm: number) => {
@@ -24,10 +26,7 @@ export class LofiDiorama extends LitElement {
   weather: 'sunny' | 'rainy' = 'sunny';
 
   @property({ type: Array })
-  activeGear: string[] = ['polyend', 'circuit_tracks', 'mood', 'blooper', 'sp404'];
-
-  @property({ type: Number })
-  zoom: number = 1.0;
+  activeGear: string[] = ['polyend', 'circuit_tracks', 'mood', 'blooper', 'sp404', 'm8'];
 
   @query('.canvas-container')
   container!: HTMLDivElement;
@@ -42,6 +41,7 @@ export class LofiDiorama extends LitElement {
   
   // Scene targets
   private trackerScreen!: TrackerScreen;
+  private m8Screen!: M8Screen;
   private tapeSpools: THREE.Object3D[] = [];
   private circuitPads: THREE.Mesh[] = [];
   private lampBulb!: THREE.Mesh;
@@ -56,6 +56,8 @@ export class LofiDiorama extends LitElement {
   private dragOffset: THREE.Vector3 = new THREE.Vector3();
   private dragPlane: THREE.Plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private intersectionPoint: THREE.Vector3 = new THREE.Vector3();
+  
+  private controls!: OrbitControls;
 
   private raycaster = new THREE.Raycaster();
   private mouse = new THREE.Vector2();
@@ -96,6 +98,28 @@ export class LofiDiorama extends LitElement {
       width: 100% !important;
       height: 100% !important;
     }
+
+    .recenter-btn {
+      position: absolute;
+      bottom: 24px;
+      right: 24px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      color: white;
+      padding: 8px 16px;
+      font-family: inherit;
+      font-size: 14px;
+      cursor: pointer;
+      backdrop-filter: blur(4px);
+      transition: all 0.2s ease;
+      z-index: 10;
+    }
+
+    .recenter-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+      border-color: rgba(255, 255, 255, 0.4);
+    }
   `;
 
   firstUpdated() {
@@ -120,6 +144,7 @@ export class LofiDiorama extends LitElement {
       const ext = gl.getExtension('WEBGL_lose_context');
       if (ext) ext.loseContext();
     }
+    if (this.controls) this.controls.dispose();
     if (this.scene) this.scene.clear();
   }
 
@@ -129,9 +154,6 @@ export class LofiDiorama extends LitElement {
     }
     if (changedProperties.has('activeGear') && this.scene) {
       this.updateGear();
-    }
-    if (changedProperties.has('zoom') && this.camera) {
-      this.handleResize();
     }
   }
 
@@ -145,10 +167,10 @@ export class LofiDiorama extends LitElement {
 
     // Orthographic camera — Isometric view
     const aspect = width / height;
-    const d = 14;
+    const d = 18;
     this.camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 0.1, 1000);
-    this.camera.position.set(20, 25, 13);
-    this.camera.lookAt(0, 5, -7);
+    this.camera.position.set(20, 25.6, 13);
+    this.camera.lookAt(0, 5.6, -7);
 
     // Crisp, clean renderer — Pixar-style
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
@@ -159,6 +181,16 @@ export class LofiDiorama extends LitElement {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.2;
     this.container.appendChild(this.renderer.domElement);
+    
+    // Add OrbitControls for standard 3D interaction (zoom, pan, rotate)
+    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.controls.enableDamping = true;
+    this.controls.dampingFactor = 0.05;
+    this.controls.target.set(0, 5.6, -7);
+    // Limit panning/zooming slightly to keep them from getting lost
+    this.controls.minZoom = 0.5;
+    this.controls.maxZoom = 4.0;
+    this.controls.maxPolarAngle = Math.PI / 2 + 0.1; // Don't go completely under the floor
     
     // Bind pointer events for clickable elements
     this.renderer.domElement.addEventListener('pointermove', this.boundOnPointerMove);
@@ -214,9 +246,9 @@ export class LofiDiorama extends LitElement {
     const floorTex = textureLoader.load('/dark_wood_floor.png');
     floorTex.wrapS = THREE.MirroredRepeatWrapping;
     floorTex.wrapT = THREE.MirroredRepeatWrapping;
-    floorTex.repeat.set(2, 2);
+    floorTex.repeat.set(3.5, 3.5);
     
-    const floorGeo = new THREE.PlaneGeometry(52.5, 30.5);
+    const floorGeo = new THREE.PlaneGeometry(72.5, 65.5);
     const floorMat = new THREE.MeshStandardMaterial({ 
       map: floorTex, 
       roughness: 1.0, 
@@ -224,7 +256,7 @@ export class LofiDiorama extends LitElement {
     });
     const floor = new THREE.Mesh(floorGeo, floorMat);
     floor.rotation.x = -Math.PI / 2;
-    floor.position.set(4, -5, -5);
+    floor.position.set(14, -5, 12.5);
     floor.receiveShadow = true;
     this.scene.add(floor);
     this.surfaceObjects.push(floor);
@@ -256,9 +288,9 @@ export class LofiDiorama extends LitElement {
     wallLeft.receiveShadow = true;
     this.scene.add(wallLeft);
     
-    // Right of window - ending at X=30
-    const wallRight = new THREE.Mesh(new THREE.BoxGeometry(21.75, 45, 0.5), wallMat);
-    wallRight.position.set(19.125, 17.5, -20);
+    // Right of window - ending at X=50
+    const wallRight = new THREE.Mesh(new THREE.BoxGeometry(41.75, 45, 0.5), wallMat);
+    wallRight.position.set(29.125, 17.5, -20);
     wallRight.receiveShadow = true;
     this.scene.add(wallRight);
     
@@ -283,8 +315,8 @@ export class LofiDiorama extends LitElement {
       color: 0xdddddd, 
       roughness: 0.9 
     });
-    const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.5, 45, 30.5), sideWallMat);
-    leftWall.position.set(-22.25, 17.5, -5);
+    const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.5, 45, 65.5), sideWallMat);
+    leftWall.position.set(-22.25, 17.5, 12.5);
     leftWall.receiveShadow = true;
     this.scene.add(leftWall);
 
@@ -298,12 +330,12 @@ export class LofiDiorama extends LitElement {
       side: THREE.DoubleSide
     });
 
-    const rightWallGhost = new THREE.Mesh(new THREE.BoxGeometry(0.5, 45, 30.5), ghostWallMat);
-    rightWallGhost.position.set(30.25, 17.5, -5);
+    const rightWallGhost = new THREE.Mesh(new THREE.BoxGeometry(0.5, 45, 65.5), ghostWallMat);
+    rightWallGhost.position.set(50.25, 17.5, 12.5);
     this.scene.add(rightWallGhost);
 
-    const frontWallGhost = new THREE.Mesh(new THREE.BoxGeometry(53, 45, 0.5), ghostWallMat);
-    frontWallGhost.position.set(4, 17.5, 10.25);
+    const frontWallGhost = new THREE.Mesh(new THREE.BoxGeometry(73, 45, 0.5), ghostWallMat);
+    frontWallGhost.position.set(14, 17.5, 45.25);
     this.scene.add(frontWallGhost);
     
     this.staticCollisionObjects.push(wallLeft, wallRight, wallAbove, wallBelow, leftWall, rightWallGhost, frontWallGhost);
@@ -436,6 +468,7 @@ export class LofiDiorama extends LitElement {
     if (this.activeGear.includes('reel')) this.buildReel();
     if (this.activeGear.includes('sp404')) this.buildSP404();
     if (this.activeGear.includes('strat')) this.buildStrat();
+    if (this.activeGear.includes('m8')) this.buildM8();
   }
 
   private buildPolyend() {
@@ -740,6 +773,117 @@ export class LofiDiorama extends LitElement {
   private stratModel: THREE.Group | null = null;
   private stratLoading = false;
 
+  private buildM8() {
+    const m8Group = new THREE.Group();
+    m8Group.rotation.y = 0.15;
+    this.loadOrPlaceObject(m8Group, 'm8', -8.5, 6.43, -2.5);
+
+    // M8 Dimensions: 96mm × 133mm × 20mm
+    const mSize = GET_GEAR_SIZE(96, 133, 20);
+    const wFactor = mSize.w;
+    const dFactor = mSize.d;
+    const hFactor = mSize.h;
+    
+    // Main Body
+    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x18181a, roughness: 0.8, metalness: 0.2 });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(wFactor, hFactor, dFactor), bodyMat);
+    body.castShadow = true;
+    body.receiveShadow = true;
+    m8Group.add(body);
+
+    // Screen Base
+    const screenW = wFactor * 0.90;
+    const screenD = dFactor * 0.44;
+    const screenMat = new THREE.MeshStandardMaterial({ color: 0x050508, roughness: 0.2, metalness: 0.8 });
+    const screen = new THREE.Mesh(new THREE.PlaneGeometry(screenW, screenD), screenMat);
+    screen.rotation.x = -Math.PI / 2;
+    screen.position.set(0, hFactor / 2 + 0.001, -dFactor * 0.23);
+    m8Group.add(screen);
+
+    // Screen UI (Dynamic Canvas)
+    this.m8Screen = new M8Screen();
+    const uiMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      emissive: 0xffffff,
+      emissiveIntensity: 1.0,
+      map: this.m8Screen.texture,
+      emissiveMap: this.m8Screen.texture,
+      transparent: true,
+      opacity: 0.9,
+    });
+    const uiMesh = new THREE.Mesh(new THREE.PlaneGeometry(screenW, screenD), uiMat);
+    uiMesh.rotation.x = -Math.PI / 2;
+    uiMesh.position.set(0, hFactor / 2 + 0.002, -dFactor * 0.23);
+    m8Group.add(uiMesh);
+
+    // M8 Logo
+    const logoCanvas = document.createElement('canvas');
+    logoCanvas.width = 128;
+    logoCanvas.height = 64;
+    const lctx = logoCanvas.getContext('2d')!;
+    lctx.fillStyle = '#ffffff';
+    lctx.font = 'bold 44px "Arial", sans-serif';
+    lctx.fillText('M8', 30, 55);
+    lctx.fillRect(30, 10, 22, 10);
+    lctx.fillRect(56, 10, 22, 10);
+    const logoTex = new THREE.CanvasTexture(logoCanvas);
+    const logoMat = new THREE.MeshStandardMaterial({
+      map: logoTex,
+      transparent: true,
+      roughness: 0.8,
+      metalness: 0.1
+    });
+    const logoMesh = new THREE.Mesh(new THREE.PlaneGeometry(wFactor * 0.20, wFactor * 0.10), logoMat);
+    logoMesh.rotation.x = -Math.PI / 2;
+    logoMesh.position.set(-0.35 * wFactor, hFactor / 2 + 0.001, 0.08 * dFactor);
+    m8Group.add(logoMesh);
+
+    // Keys
+    const keyMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.7, metalness: 0.1 });
+    const kw = wFactor * 0.16;
+    const kd = dFactor * 0.115;
+    const kh = hFactor * 0.25;
+    const keyGeo = new THREE.BoxGeometry(kw, kh, kd);
+    
+    // Grid: 5 columns, 3 rows
+    const colX = [-0.36, -0.18, 0.00, 0.18, 0.36];
+    const rowZ = [0.09, 0.23, 0.39];
+    
+    const keyPositions = [
+      { x: colX[1], z: rowZ[0] }, // UP
+      { x: colX[3], z: rowZ[0] }, // OPT
+      { x: colX[4], z: rowZ[0] }, // EDIT
+      { x: colX[0], z: rowZ[1] }, // LT
+      { x: colX[1], z: rowZ[1] }, // DN
+      { x: colX[2], z: rowZ[1] }, // RT
+      { x: colX[1], z: rowZ[2] }, // SHIFT
+      { x: colX[2], z: rowZ[2] }, // PLAY
+    ];
+
+    keyPositions.forEach(pos => {
+      const key = new THREE.Mesh(keyGeo, keyMat);
+      key.position.set(pos.x * wFactor, hFactor / 2 + kh / 2, pos.z * dFactor);
+      key.castShadow = true;
+      m8Group.add(key);
+    });
+
+    // Speaker Grills
+    const grillMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.9 });
+    const grillGeo = new THREE.PlaneGeometry(kw * 0.7, kd * 1.2);
+    
+    const leftGrill = new THREE.Mesh(grillGeo, grillMat);
+    leftGrill.rotation.x = -Math.PI / 2;
+    leftGrill.position.set(colX[0] * wFactor, hFactor / 2 + 0.001, rowZ[2] * dFactor);
+    m8Group.add(leftGrill);
+    
+    const rightGrill = new THREE.Mesh(grillGeo, grillMat);
+    rightGrill.rotation.x = -Math.PI / 2;
+    rightGrill.position.set(colX[4] * wFactor, hFactor / 2 + 0.001, rowZ[2] * dFactor);
+    m8Group.add(rightGrill);
+
+    this.gearGroup.add(m8Group);
+  }
+
   private buildStrat() {
     // Prevent duplicate loading from hot-reloads or fast property changes
     if (this.stratModel) {
@@ -942,6 +1086,8 @@ export class LofiDiorama extends LitElement {
     this.loadOrPlaceObject(hpGroup, 'headphones', 9.5, 6.0, -1.5);
   }
 
+
+
   private buildWindow() {
     // Window frame
     const textureLoader = new THREE.TextureLoader();
@@ -1115,8 +1261,7 @@ export class LofiDiorama extends LitElement {
     if (width === 0 || height === 0) return;
 
     const aspect = width / height;
-    const baseD = 14;
-    const d = baseD / (this.zoom || 1.0);
+    const d = 14;
     this.camera.left = -d * aspect;
     this.camera.right = d * aspect;
     this.camera.top = d;
@@ -1169,6 +1314,10 @@ export class LofiDiorama extends LitElement {
       this.trackerScreen.update(amplitude, bass);
     }
 
+    if (this.m8Screen && this.activeGear.includes('m8')) {
+      this.m8Screen.update(amplitude, bass, freqs);
+    }
+
     // Circuit pad LEDs
     this.circuitPads.forEach((pad, index) => {
       const mat = pad.material as THREE.MeshStandardMaterial;
@@ -1209,6 +1358,10 @@ export class LofiDiorama extends LitElement {
         }
       }
       this.rainDrops.geometry.attributes.position.needsUpdate = true;
+    }
+
+    if (this.controls) {
+      this.controls.update();
     }
 
     this.renderer.render(this.scene, this.camera);
@@ -1304,6 +1457,9 @@ export class LofiDiorama extends LitElement {
       if (dragTarget && this.draggableObjects.includes(dragTarget)) {
         this.dragObject = dragTarget;
         
+        // Disable orbit controls while dragging
+        if (this.controls) this.controls.enabled = false;
+        
         // Lift the object slightly into the air to feel like dragging
         const liftHeight = Math.max(dragTarget.position.y + 0.5, 7.5);
         this.dragPlane.constant = -liftHeight;
@@ -1354,10 +1510,27 @@ export class LofiDiorama extends LitElement {
       this.saveLayout();
     }
 
+    // Re-enable orbit controls
+    if (this.controls) this.controls.enabled = true;
+
     this.dragObject = null;
   }
 
+  private recenterCamera() {
+    if (!this.camera || !this.controls) return;
+    
+    // Snap back to original position (centered on desk)
+    this.camera.position.set(20, 25.6, 13);
+    this.camera.zoom = 1;
+    this.camera.updateProjectionMatrix();
+    
+    this.controls.target.set(0, 5.6, -7);
+    this.controls.update();
+  }
+
   render() {
-    return html`<div class="canvas-container"></div>`;
+    return html`
+      <div class="canvas-container" @dblclick=${this.recenterCamera}></div>
+    `;
   }
 }
