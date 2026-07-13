@@ -4,7 +4,7 @@ import { AudioManager } from '../utils/audio-manager';
 import './lofi-diorama';
 import './gear-preview';
 
-type Weather = 'sunny' | 'rainy';
+type Weather = 'sunny' | 'rainy' | 'thunderstorm';
 
 type Tab = 'gear' | 'environment' | 'audio';
 
@@ -717,6 +717,13 @@ export class LofiDashboard extends LitElement {
         >
           <div class="weather-icon">🌧️</div>
           <div class="weather-label">Rainy</div>
+        </div>
+        <div 
+          class="weather-card ${this.weather === 'thunderstorm' ? 'active rainy' : ''}"
+          @click="${() => this.weather = 'thunderstorm'}"
+        >
+          <div class="weather-icon">⛈️</div>
+          <div class="weather-label">Stormy</div>
         </div>
       </div>
       </div>

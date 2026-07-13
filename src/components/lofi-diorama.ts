@@ -23,7 +23,7 @@ export class LofiDiorama extends LitElement {
   audioManager: AudioManager | null = null;
 
   @property({ type: String })
-  weather: 'sunny' | 'rainy' = 'sunny';
+  weather: 'sunny' | 'rainy' | 'thunderstorm' = 'sunny';
 
   @property({ type: Array })
   activeGear: string[] = ['polyend', 'circuit_tracks', 'mood', 'blooper', 'sp404', 'm8'];
@@ -70,6 +70,12 @@ export class LofiDiorama extends LitElement {
   private clouds: THREE.Mesh[] = [];
   private sunGlow!: THREE.Mesh;
   private skyMat!: THREE.MeshBasicMaterial;
+  private lightningLight!: THREE.PointLight;
+  private targetLightningIntensity: number = 0;
+  private currentLightningIntensity: number = 0;
+  
+  // Yard
+  private yardGroup!: THREE.Group;
 
   static styles = css`
     :host {
@@ -1191,7 +1197,7 @@ export class LofiDiorama extends LitElement {
     for (let i = 0; i < rainCount; i++) {
       rainPositions[i * 3] = (Math.random() - 0.5) * 40;
       rainPositions[i * 3 + 1] = Math.random() * 25 - 5;
-      rainPositions[i * 3 + 2] = -15 + Math.random() * 15;
+      rainPositions[i * 3 + 2] = -40 + Math.random() * 20; // Z from -40 to -20 (outside)
     }
     rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPositions, 3));
     
@@ -1203,16 +1209,98 @@ export class LofiDiorama extends LitElement {
     });
     
     this.rainDrops = new THREE.Points(rainGeo, rainMat);
-    this.rainDrops.visible = this.weather === 'rainy';
+    this.rainDrops.visible = this.weather === 'rainy' || this.weather === 'thunderstorm';
     this.scene.add(this.rainDrops);
+
+    // Lightning light
+    this.lightningLight = new THREE.PointLight(0xffffff, 0, 200);
+    this.lightningLight.position.set(0, 30, -10);
+    this.scene.add(this.lightningLight);
+
+    // Yard (Grass, Fence, Trees)
+    this.yardGroup = new THREE.Group();
+    this.scene.add(this.yardGroup);
+
+    // Ground plane
+    const grassMat = new THREE.MeshStandardMaterial({ color: 0x3b5e2b, roughness: 1.0, metalness: 0.0 });
+    const groundGeo = new THREE.PlaneGeometry(100, 60);
+    const ground = new THREE.Mesh(groundGeo, grassMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.set(0, -5.2, -45);
+    ground.receiveShadow = true;
+    this.yardGroup.add(ground);
+
+    // Fence
+    const woodMat = new THREE.MeshStandardMaterial({ color: 0x5c4033, roughness: 0.9, metalness: 0.1 });
+    const fenceZ = -23;
+    for (let i = -30; i <= 30; i += 2) {
+      const picket = new THREE.Mesh(new THREE.BoxGeometry(0.5, 4, 0.2), woodMat);
+      picket.position.set(i, -3, fenceZ);
+      picket.castShadow = true;
+      picket.receiveShadow = true;
+      this.yardGroup.add(picket);
+    }
+    const beam1 = new THREE.Mesh(new THREE.BoxGeometry(62, 0.3, 0.3), woodMat);
+    beam1.position.set(0, -2, fenceZ + 0.15);
+    beam1.castShadow = true;
+    this.yardGroup.add(beam1);
+    const beam2 = new THREE.Mesh(new THREE.BoxGeometry(62, 0.3, 0.3), woodMat);
+    beam2.position.set(0, -4, fenceZ + 0.15);
+    beam2.castShadow = true;
+    this.yardGroup.add(beam2);
+
+    // Pine Trees
+    const leafMat = new THREE.MeshStandardMaterial({ color: 0x2e4c23, roughness: 0.9, metalness: 0.0 });
+    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a3728, roughness: 1.0, metalness: 0.0 });
+
+    const treePositions = [
+      [-12, -26], [-18, -32], [-8, -36], [10, -28], [16, -24], 
+      [5, -34], [-2, -40], [12, -42], [-22, -25], [20, -30]
+    ];
+
+    treePositions.forEach(pos => {
+      const treeGroup = new THREE.Group();
+      
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.6, 2, 8), trunkMat);
+      trunk.position.y = -4;
+      trunk.castShadow = true;
+      trunk.receiveShadow = true;
+      treeGroup.add(trunk);
+
+      const leaves1 = new THREE.Mesh(new THREE.ConeGeometry(3, 4, 8), leafMat);
+      leaves1.position.y = -1.5;
+      leaves1.castShadow = true;
+      leaves1.receiveShadow = true;
+      treeGroup.add(leaves1);
+
+      const leaves2 = new THREE.Mesh(new THREE.ConeGeometry(2.2, 3, 8), leafMat);
+      leaves2.position.y = 0.5;
+      leaves2.castShadow = true;
+      leaves2.receiveShadow = true;
+      treeGroup.add(leaves2);
+
+      const leaves3 = new THREE.Mesh(new THREE.ConeGeometry(1.5, 2, 8), leafMat);
+      leaves3.position.y = 2;
+      leaves3.castShadow = true;
+      leaves3.receiveShadow = true;
+      treeGroup.add(leaves3);
+
+      treeGroup.position.set(pos[0], 0, pos[1]);
+      treeGroup.rotation.y = Math.random() * Math.PI;
+      const scale = 0.7 + Math.random() * 0.6;
+      treeGroup.scale.set(scale, scale, scale);
+      
+      this.yardGroup.add(treeGroup);
+    });
   }
 
   private updateWeather() {
     const isSunny = this.weather === 'sunny';
+    const isRainy = this.weather === 'rainy' || this.weather === 'thunderstorm';
     
     // Sky color
     if (this.skyMat) {
-      this.skyMat.color.setHex(isSunny ? 0x87ceeb : 0x6b7b8d);
+      this.skyMat.color.setHex(isSunny ? 0x87ceeb : (this.weather === 'thunderstorm' ? 0x222233 : 0x6b7b8d));
     }
     
     // Sun visibility
@@ -1227,7 +1315,7 @@ export class LofiDiorama extends LitElement {
       cloud.traverse((child) => {
         if ((child as THREE.Mesh).isMesh) {
           const mat = (child as THREE.Mesh).material as THREE.MeshBasicMaterial;
-          mat.color.setHex(isSunny ? 0xffffff : 0x555566);
+          mat.color.setHex(isSunny ? 0xffffff : (this.weather === 'thunderstorm' ? 0x333344 : 0x555566));
           mat.opacity = isSunny ? 0.7 : 0.85;
         }
       });
@@ -1235,21 +1323,21 @@ export class LofiDiorama extends LitElement {
     
     // Rain visibility
     if (this.rainDrops) {
-      this.rainDrops.visible = !isSunny;
+      this.rainDrops.visible = isRainy;
     }
 
     // Update ambient tone
     this.scene.traverse((obj) => {
       if (obj instanceof THREE.AmbientLight) {
-        obj.color.setHex(isSunny ? 0xfff0e0 : 0xc0c0d0);
-        obj.intensity = isSunny ? 0.5 : 0.35;
+        obj.color.setHex(isSunny ? 0xfff0e0 : (this.weather === 'thunderstorm' ? 0x606070 : 0xc0c0d0));
+        obj.intensity = isSunny ? 0.5 : (this.weather === 'thunderstorm' ? 0.15 : 0.35);
       }
       if (obj instanceof THREE.HemisphereLight) {
-        obj.color.setHex(isSunny ? 0x87ceeb : 0x556677);
+        obj.color.setHex(isSunny ? 0x87ceeb : (this.weather === 'thunderstorm' ? 0x223344 : 0x556677));
       }
       if (obj instanceof THREE.DirectionalLight) {
-        obj.intensity = isSunny ? 1.5 : 0.6;
-        obj.color.setHex(isSunny ? 0xffffff : 0x8899aa);
+        obj.intensity = isSunny ? 1.5 : (this.weather === 'thunderstorm' ? 0.1 : 0.6);
+        obj.color.setHex(isSunny ? 0xffffff : (this.weather === 'thunderstorm' ? 0x667788 : 0x8899aa));
       }
     });
   }
@@ -1358,6 +1446,21 @@ export class LofiDiorama extends LitElement {
         }
       }
       this.rainDrops.geometry.attributes.position.needsUpdate = true;
+    }
+
+    // Lightning animation
+    if (this.weather === 'thunderstorm' && this.lightningLight) {
+      if (Math.random() < 0.015) {
+        this.targetLightningIntensity = 80 + Math.random() * 100;
+      } else {
+        this.targetLightningIntensity = 0;
+      }
+      this.currentLightningIntensity += (this.targetLightningIntensity - this.currentLightningIntensity) * 0.4;
+      this.lightningLight.intensity = this.currentLightningIntensity;
+    } else if (this.lightningLight) {
+      this.lightningLight.intensity = 0;
+      this.targetLightningIntensity = 0;
+      this.currentLightningIntensity = 0;
     }
 
     if (this.controls) {
