@@ -14,6 +14,18 @@ export class AudioManager {
   private pausedTime = 0;
   private playState: 'stopped' | 'playing' | 'paused' = 'stopped';
   private onEndedCallback: (() => void) | null = null;
+  private isLooping = false;
+
+  get loop(): boolean {
+    return this.isLooping;
+  }
+
+  set loop(value: boolean) {
+    this.isLooping = value;
+    if (this.source) {
+      this.source.loop = value;
+    }
+  }
 
   constructor() {
     // AudioContext will be initialized on first user interaction
@@ -82,6 +94,7 @@ export class AudioManager {
     // Create source
     this.source = context.createBufferSource();
     this.source.buffer = this.buffer;
+    this.source.loop = this.isLooping;
 
     // Create real-time analyser
     this.analyser = context.createAnalyser();
@@ -177,7 +190,11 @@ export class AudioManager {
    */
   getCurrentTime(): number {
     if (this.playState === 'playing' && this.ctx) {
-      return this.ctx.currentTime - this.playbackStartTime;
+      const elapsed = this.ctx.currentTime - this.playbackStartTime;
+      if (this.isLooping && this.buffer) {
+        return elapsed % this.buffer.duration;
+      }
+      return elapsed;
     }
     return this.pausedTime;
   }

@@ -37,7 +37,7 @@ export class LofiDashboard extends LitElement {
   private activeTab: Tab = 'gear';
 
   @state()
-  private isPanelOpen = true;
+  private isPanelOpen = false;
 
   private progressUpdateId: number | null = null;
 
@@ -62,27 +62,24 @@ export class LofiDashboard extends LitElement {
 
     .floating-ui {
       position: absolute;
-      bottom: 32px;
+      bottom: 24px;
       left: 50%;
       transform: translateX(-50%);
       width: 90%;
-      max-width: 800px;
-      max-height: 80vh;
-      background: rgba(255, 252, 248, 0.9);
+      max-width: 760px;
+      background: rgba(25, 20, 25, 0.65);
       backdrop-filter: blur(24px);
-      border-radius: 36px;
-      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15), 0 0 0 6px rgba(255, 255, 255, 0.5);
-      padding: 32px;
-      color: #5a4b41;
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 32px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+      padding: 24px 32px;
+      color: #eaeaea;
       display: flex;
       flex-direction: column;
-      gap: 24px;
-      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-      overflow-y: auto;
-      scrollbar-width: none;
-    }
-    .floating-ui::-webkit-scrollbar {
-      display: none;
+      gap: 16px;
+      transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+      z-index: 100;
     }
 
     .floating-ui.hidden {
@@ -93,13 +90,14 @@ export class LofiDashboard extends LitElement {
 
     .hide-btn {
       position: absolute;
-      top: 24px;
-      right: 24px;
-      background: rgba(0, 0, 0, 0.05);
-      border: none;
-      width: 40px;
-      height: 40px;
-      border-radius: 20px;
+      top: 20px;
+      right: 20px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: white;
+      width: 36px;
+      height: 36px;
+      border-radius: 18px;
       font-size: 1.2rem;
       cursor: pointer;
       display: flex;
@@ -109,81 +107,48 @@ export class LofiDashboard extends LitElement {
     }
 
     .hide-btn:hover {
-      background: rgba(0, 0, 0, 0.1);
+      background: rgba(255, 255, 255, 0.2);
       transform: scale(1.1);
     }
 
-    .show-panel-btn {
-      position: absolute;
-      bottom: 32px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(255, 252, 248, 0.9);
-      backdrop-filter: blur(10px);
-      border: none;
-      padding: 12px 24px;
-      border-radius: 24px;
-      font-size: 1.2rem;
-      font-weight: 800;
-      color: #8c7b6c;
-      cursor: pointer;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1), 0 0 0 4px rgba(255, 255, 255, 0.5);
-      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-      font-family: 'Nunito', sans-serif;
-      z-index: 10;
-      opacity: 0;
-      pointer-events: none;
-      transform: translate(-50%, 100px);
-    }
-
-    .show-panel-btn.visible {
-      opacity: 1;
-      pointer-events: all;
-      transform: translateX(-50%);
-    }
-
-    .show-panel-btn:hover {
-      transform: translate(-50%, -4px) scale(1.05);
-      box-shadow: 0 15px 30px rgba(0, 0, 0, 0.15), 0 0 0 4px rgba(255, 255, 255, 0.6);
+    .audio-btn.active-loop {
+      background: #ffb4a2;
+      color: white;
+      box-shadow: 0 6px 16px rgba(255, 180, 162, 0.4);
     }
 
     .tabs {
       display: flex;
       justify-content: center;
       gap: 16px;
-      margin-bottom: 8px;
+      margin-bottom: 4px;
     }
 
     .tab-btn {
-      background: #f0e6d2;
-      border: none;
-      padding: 14px 28px;
-      border-radius: 24px;
-      font-size: 1.2rem;
-      font-weight: 800;
-      color: #8c7b6c;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 10px 24px;
+      border-radius: 20px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #b0b0b0;
       cursor: pointer;
       transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
       font-family: 'Nunito', sans-serif;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
     }
 
     .tab-btn:hover {
-      transform: translateY(-4px) scale(1.05);
-      background: #fffdf9;
-      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
-      color: #5a4b41;
+      transform: translateY(-2px);
+      background: rgba(255, 255, 255, 0.15);
+      color: #ffffff;
     }
 
     .tab-btn.active {
-      background: #ffb4a2;
+      background: rgba(255, 180, 162, 0.8);
       color: white;
-      box-shadow: 0 8px 20px rgba(255, 180, 162, 0.5);
+      border-color: rgba(255, 180, 162, 0.9);
+      box-shadow: 0 0 16px rgba(255, 180, 162, 0.3);
       transform: translateY(-2px);
-    }
-
-    .tab-btn.active:hover {
-      transform: translateY(-6px) scale(1.05);
     }
 
     .panel-content {
@@ -200,16 +165,16 @@ export class LofiDashboard extends LitElement {
       display: flex;
       flex-direction: column;
       gap: 12px;
-      margin-bottom: 24px;
+      margin-bottom: 16px;
     }
     .gear-section:last-child {
       margin-bottom: 0;
     }
 
     .gear-category-title {
-      font-size: 1.1rem;
-      font-weight: 800;
-      color: #a49382;
+      font-size: 1.0rem;
+      font-weight: 700;
+      color: #d0c0b0;
       text-transform: uppercase;
       letter-spacing: 0.05em;
       padding-left: 12px;
@@ -219,7 +184,7 @@ export class LofiDashboard extends LitElement {
       display: flex;
       gap: 16px;
       overflow-x: auto;
-      padding-bottom: 16px;
+      padding-bottom: 8px;
       padding-left: 8px;
       padding-top: 8px;
       scrollbar-width: none;
@@ -230,36 +195,37 @@ export class LofiDashboard extends LitElement {
 
     .gear-card {
       flex: 0 0 auto;
-      width: 130px;
-      height: 130px;
-      background: white;
-      border-radius: 28px;
+      width: 110px;
+      height: 110px;
+      background: rgba(0, 0, 0, 0.4);
+      border-radius: 20px;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 10px;
+      gap: 8px;
       cursor: pointer;
       transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-      border: 4px solid transparent;
-      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
+      border: 2px solid rgba(255, 255, 255, 0.05);
       text-align: center;
-      padding: 12px;
+      padding: 10px;
       user-select: none;
+      color: #a0a0a0;
     }
 
     .gear-card:hover {
-      transform: translateY(-8px) scale(1.05);
-      box-shadow: 0 16px 32px rgba(0, 0, 0, 0.1);
+      transform: translateY(-4px) scale(1.05);
+      background: rgba(0, 0, 0, 0.6);
+      border-color: rgba(255, 255, 255, 0.2);
+      color: white;
     }
 
     .gear-card.active {
-      border-color: #a3d9c9;
-      background: #e8f6f1;
+      border-color: rgba(163, 217, 201, 0.8);
+      background: rgba(45, 106, 89, 0.4);
+      color: #ffffff;
+      box-shadow: 0 0 12px rgba(163, 217, 201, 0.2);
     }
-
-    .gear-card.active .gear-name {
-      color: #2d6a59;
     }
 
     .gear-icon {
@@ -517,8 +483,8 @@ export class LofiDashboard extends LitElement {
   }
 
   private async processAudioFile(file: File) {
-    if (!file.name.endsWith('.wav')) {
-      alert('Only .wav audio files are supported for high-fidelity lofi capture!');
+    if (!file.type.startsWith('audio/') && !file.type.startsWith('video/')) {
+      alert('Please select a valid audio file.');
       return;
     }
 
@@ -544,7 +510,7 @@ export class LofiDashboard extends LitElement {
       this.requestUpdate();
     } catch (err) {
       console.error(err);
-      alert('Error decoding audio file. Ensure it is a valid .wav file.');
+      alert('Error decoding audio file. Ensure it is a valid audio file.');
       this.fileInfo = null;
       this.requestUpdate();
     }
@@ -701,11 +667,11 @@ export class LofiDashboard extends LitElement {
           @click="${() => this.shadowRoot?.getElementById('file-loader')?.click()}"
         >
           <div class="dropzone-icon">📼</div>
-          <div>Drag & Drop a .wav file or click to browse</div>
+          <div>Drag & Drop an audio file or click to browse</div>
           <input
             type="file"
             id="file-loader"
-            accept=".wav"
+            accept="audio/*"
             style="display: none"
             @change="${this.handleFileSelect}"
           />
@@ -729,6 +695,7 @@ export class LofiDashboard extends LitElement {
             <button class="audio-btn play-btn" ?disabled="${!isLoaded || isPlaying}" @click="${this.handlePlay}">▶ Play</button>
             <button class="audio-btn" ?disabled="${!isLoaded || !isPlaying}" @click="${this.handlePause}">⏸ Pause</button>
             <button class="audio-btn" ?disabled="${!isLoaded}" @click="${this.handleStop}">■ Stop</button>
+            <button class="audio-btn ${this.audioManager.loop ? 'active-loop' : ''}" ?disabled="${!isLoaded}" @click="${this.toggleLoop}">🔁 Loop</button>
           </div>
           
           <div class="slider-container">
@@ -743,6 +710,15 @@ export class LofiDashboard extends LitElement {
     `;
   }
 
+  private handleToggleSettings() {
+    this.isPanelOpen = !this.isPanelOpen;
+  }
+
+  private toggleLoop() {
+    this.audioManager.loop = !this.audioManager.loop;
+    this.requestUpdate();
+  }
+
   render() {
     const isLoaded = this.audioManager.isLoaded;
     const isPlaying = this.audioManager.isPlaying;
@@ -752,6 +728,7 @@ export class LofiDashboard extends LitElement {
         .audioManager="${this.audioManager}" 
         .weather="${this.weather}"
         .activeGear="${this.activeGear}"
+        @toggle-settings="${this.handleToggleSettings}"
       ></lofi-diorama>
 
       <div class="floating-ui ${this.isPanelOpen ? '' : 'hidden'}">
@@ -769,13 +746,6 @@ export class LofiDashboard extends LitElement {
           ${this.activeTab === 'audio' ? this.renderAudioTab(isLoaded, isPlaying) : ''}
         </div>
       </div>
-
-      <button 
-        class="show-panel-btn ${!this.isPanelOpen ? 'visible' : ''}" 
-        @click="${() => this.isPanelOpen = true}"
-      >
-        ⚙️ Settings
-      </button>
     `;
   }
 }

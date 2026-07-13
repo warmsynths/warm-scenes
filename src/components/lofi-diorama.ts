@@ -34,6 +34,13 @@ export class LofiDiorama extends LitElement {
   private lampBulb!: THREE.Mesh;
   private deskLight!: THREE.PointLight;
   
+  // Click/raycasting properties
+  private clickableObjects: THREE.Object3D[] = [];
+  private raycaster = new THREE.Raycaster();
+  private mouse = new THREE.Vector2();
+  private boundOnPointerMove = this.onPointerMove.bind(this);
+  private boundOnPointerDown = this.onPointerDown.bind(this);
+  
   // Weather
   private rainDrops!: THREE.Points;
   private clouds: THREE.Mesh[] = [];
@@ -81,6 +88,10 @@ export class LofiDiorama extends LitElement {
     if (this.resizeObserver) this.resizeObserver.disconnect();
     if (this.animationFrameId !== null) cancelAnimationFrame(this.animationFrameId);
     if (this.renderer) {
+      if (this.renderer.domElement) {
+        this.renderer.domElement.removeEventListener('pointermove', this.boundOnPointerMove);
+        this.renderer.domElement.removeEventListener('pointerdown', this.boundOnPointerDown);
+      }
       this.renderer.dispose();
       const gl = this.renderer.getContext();
       const ext = gl.getExtension('WEBGL_lose_context');
@@ -122,6 +133,10 @@ export class LofiDiorama extends LitElement {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.2;
     this.container.appendChild(this.renderer.domElement);
+    
+    // Bind pointer events for clickable elements
+    this.renderer.domElement.addEventListener('pointermove', this.boundOnPointerMove);
+    this.renderer.domElement.addEventListener('pointerdown', this.boundOnPointerDown);
 
     // Lighting — warm and clear
     const ambient = new THREE.AmbientLight(0xfff0e0, 0.5);
@@ -287,9 +302,13 @@ export class LofiDiorama extends LitElement {
   }
 
   private buildPolyend() {
+    this.trackerScreen = new TrackerScreen();
     const textureLoader = new THREE.TextureLoader();
     const topTex = textureLoader.load('/tracker_ref.png');
     topTex.colorSpace = THREE.SRGBColorSpace;
+    // Crop white border out using UVs
+    topTex.repeat.set(0.92, 0.92); // Zoom in 8%
+    topTex.offset.set(0.04, 0.04); // Shift to center
 
     const sideMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.8 });
     const topMat = new THREE.MeshStandardMaterial({ 
@@ -308,51 +327,65 @@ export class LofiDiorama extends LitElement {
     trackerBody.castShadow = true;
     trackerBody.receiveShadow = true;
     
+    // Tracker Screen Overlay (Dynamic)
+    const screenMat = new THREE.MeshStandardMaterial({
+      map: this.trackerScreen.texture, 
+      emissiveMap: this.trackerScreen.texture,
+      emissive: 0xffffff, 
+      emissiveIntensity: 1.5,
+      transparent: true,
+      opacity: 0.85
+    });
+    const screenOverlay = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 2.0), screenMat);
+    screenOverlay.rotation.x = -Math.PI / 2;
+    // Positioned over the screen area in the photo
+    screenOverlay.position.set(-1.8, 0.252, -1.2);
+    trackerBody.add(screenOverlay);
+    
     this.gearGroup.add(trackerBody);
   }
 
   private buildCircuitTracks() {
-    // Matte black body
-    const ctBodyMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8, metalness: 0.2 });
-    const ctBody = new THREE.Mesh(new THREE.BoxGeometry(8, 0.5, 6.5), ctBodyMat);
+    const textureLoader = new THREE.TextureLoader();
+    const topTex = textureLoader.load('/circuit_ref.png');
+    topTex.colorSpace = THREE.SRGBColorSpace;
+    // Crop white border out using UVs
+    topTex.repeat.set(0.92, 0.92); // Zoom in 8%
+    topTex.offset.set(0.04, 0.04); // Shift to center
+
+    const sideMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8, metalness: 0.2 });
+    const topMat = new THREE.MeshStandardMaterial({ 
+      map: topTex, 
+      roughness: 0.3, 
+      metalness: 0.1 
+    });
+
+    const ctMats = [sideMat, sideMat, topMat, sideMat, sideMat, sideMat];
+    const ctBody = new THREE.Mesh(new THREE.BoxGeometry(8, 0.5, 7.5), ctMats);
     ctBody.position.set(6, 6.2, -6);
     ctBody.rotation.y = -0.08;
     ctBody.castShadow = true;
     ctBody.receiveShadow = true;
 
-    // Knobs (10 Knobs: Master Vol, 4x2 Macro, Master Filter)
-    const ctKnobMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.3, metalness: 0.5 });
-    const knobGeo = new THREE.CylinderGeometry(0.25, 0.25, 0.3, 16);
-    
-    // Master Vol
-    const mVol = new THREE.Mesh(knobGeo, ctKnobMat);
-    mVol.position.set(-3.2, 0.35, -2.2);
-    ctBody.add(mVol);
-    
-    // Master Filter
-    const mFilt = new THREE.Mesh(knobGeo, ctKnobMat);
-    mFilt.position.set(3.2, 0.35, -2.2);
-    ctBody.add(mFilt);
-
-    // 4x2 Macro Knobs (Staggered)
-    for (let col = 0; col < 4; col++) {
-      const topKnob = new THREE.Mesh(knobGeo, ctKnobMat);
-      topKnob.position.set(-1.8 + col * 1.2, 0.35, -2.6);
-      ctBody.add(topKnob);
-      
-      const botKnob = new THREE.Mesh(knobGeo, ctKnobMat);
-      botKnob.position.set(-1.8 + col * 1.2, 0.35, -1.6);
-      ctBody.add(botKnob);
-    }
+    // Circuit Tracks Pads Overlay (Dynamic Additive Blending)
+    const padMatBase = new THREE.MeshStandardMaterial({ 
+      color: 0x000000, 
+      emissive: 0x000000,
+      transparent: true,
+      opacity: 0.7,
+      blending: THREE.AdditiveBlending
+    });
 
     // Pads (4x8 Grid)
     for (let row = 0; row < 4; row++) {
       for (let col = 0; col < 8; col++) {
-        const padMat = new THREE.MeshStandardMaterial({ color: 0x151515, emissive: 0x000000 });
-        const pad = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.1, 0.65), padMat);
-        pad.position.set(-2.8 + col * 0.8, 0.3, 0.0 + row * 0.8);
-        this.circuitPads.push(pad);
-        ctBody.add(pad);
+        // Clone material so each pad animates uniquely
+        const padOverlay = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.6), padMatBase.clone());
+        padOverlay.rotation.x = -Math.PI / 2;
+        // Positioned perfectly over the bottom half pad grid
+        padOverlay.position.set(-2.8 + col * 0.8, 0.252, 0.2 + row * 0.85);
+        this.circuitPads.push(padOverlay); // Adds back dynamic lighting capability
+        ctBody.add(padOverlay);
       }
     }
     this.gearGroup.add(ctBody);
@@ -503,6 +536,9 @@ export class LofiDiorama extends LitElement {
     const textureLoader = new THREE.TextureLoader();
     const topTex = textureLoader.load('/sp404_ref.png');
     topTex.colorSpace = THREE.SRGBColorSpace;
+    // Crop white border out using UVs
+    topTex.repeat.set(0.9, 0.9); // Zoom in 10%
+    topTex.offset.set(0.05, 0.05); // Shift to center
 
     const sideMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.8 });
     const topMat = new THREE.MeshStandardMaterial({ 
@@ -518,6 +554,26 @@ export class LofiDiorama extends LitElement {
     spBody.rotation.y = -0.03;
     spBody.castShadow = true;
     spBody.receiveShadow = true;
+
+    // SP-404 Pads Overlay (Dynamic Additive Blending)
+    const padMatBase = new THREE.MeshStandardMaterial({ 
+      color: 0x000000, 
+      emissive: 0x000000,
+      transparent: true,
+      opacity: 0.7,
+      blending: THREE.AdditiveBlending
+    });
+    
+    for (let row = 0; row < 4; row++) {
+      for (let col = 0; col < 4; col++) {
+        // Clone material so each pad animates uniquely
+        const padOverlay = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.55), padMatBase.clone());
+        padOverlay.rotation.x = -Math.PI / 2;
+        padOverlay.position.set(-1.35 + col * 0.9, 0.302, 0.5 + row * 0.7);
+        this.circuitPads.push(padOverlay); // Add back dynamic lighting capability
+        spBody.add(padOverlay);
+      }
+    }
 
     this.gearGroup.add(spBody);
   }
@@ -573,29 +629,35 @@ export class LofiDiorama extends LitElement {
   }
 
   private buildClutter() {
+    this.clickableObjects = []; // Reset on rebuild
+
     // Desk lamp — left side
     const brassMat = new THREE.MeshStandardMaterial({ color: 0xb5a642, metalness: 0.8, roughness: 0.2 });
     const lampBase = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, 0.3, 32), brassMat);
     lampBase.position.set(-8.5, 6.15, -11);
     lampBase.castShadow = true;
     this.scene.add(lampBase);
+    this.clickableObjects.push(lampBase);
     
     const lampArm = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 6, 8), brassMat);
     lampArm.position.set(-8.5, 9.2, -11);
     lampArm.rotation.z = -0.15;
     lampArm.castShadow = true;
     this.scene.add(lampArm);
+    this.clickableObjects.push(lampArm);
     
     const lampHead = new THREE.Mesh(new THREE.ConeGeometry(1.2, 1.8, 32), brassMat);
     lampHead.position.set(-8.0, 12.2, -11);
     lampHead.rotation.z = Math.PI + 0.3;
     lampHead.castShadow = true;
     this.scene.add(lampHead);
+    this.clickableObjects.push(lampHead);
 
     const bulbMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffcc77, emissiveIntensity: 2.0 });
     this.lampBulb = new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 16), bulbMat);
     this.lampBulb.position.set(-8.0, 11.2, -11);
     this.scene.add(this.lampBulb);
+    this.clickableObjects.push(this.lampBulb);
 
     // Coffee mug
     const mugMat = new THREE.MeshStandardMaterial({ color: 0xf0f0f0, roughness: 0.3 });
@@ -603,12 +665,15 @@ export class LofiDiorama extends LitElement {
     mug.position.set(3, 6.5, -3);
     mug.castShadow = true;
     this.scene.add(mug);
+    this.clickableObjects.push(mug);
+    
     // Coffee surface
     const coffeeMat = new THREE.MeshStandardMaterial({ color: 0x3a2010, roughness: 0.2 });
     const coffee = new THREE.Mesh(new THREE.CircleGeometry(0.45, 32), coffeeMat);
     coffee.rotation.x = -Math.PI / 2;
     coffee.position.set(3, 7.0, -3);
     this.scene.add(coffee);
+    this.clickableObjects.push(coffee);
 
     // Small plant on right side of desk
     const potMat = new THREE.MeshStandardMaterial({ color: 0xcc6633, roughness: 0.85 });
@@ -938,6 +1003,36 @@ export class LofiDiorama extends LitElement {
     }
 
     this.renderer.render(this.scene, this.camera);
+  }
+
+  private onPointerMove(event: PointerEvent) {
+    if (!this.renderer) return;
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    this.raycaster.setFromCamera(this.mouse, this.camera);
+    const intersects = this.raycaster.intersectObjects(this.clickableObjects, true);
+
+    if (intersects.length > 0) {
+      this.renderer.domElement.style.cursor = 'pointer';
+    } else {
+      this.renderer.domElement.style.cursor = 'default';
+    }
+  }
+
+  private onPointerDown(event: PointerEvent) {
+    if (!this.renderer) return;
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    this.raycaster.setFromCamera(this.mouse, this.camera);
+    const intersects = this.raycaster.intersectObjects(this.clickableObjects, true);
+
+    if (intersects.length > 0) {
+      this.dispatchEvent(new CustomEvent('toggle-settings', { bubbles: true, composed: true }));
+    }
   }
 
   render() {
