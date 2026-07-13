@@ -1,6 +1,7 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property, query } from 'lit/decorators.js';
 import * as THREE from 'three';
+import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 
 import { AudioManager } from '../utils/audio-manager';
 import { TrackerScreen } from '../utils/tracker-screen';
@@ -23,7 +24,7 @@ export class LofiDiorama extends LitElement {
   weather: 'sunny' | 'rainy' = 'sunny';
 
   @property({ type: Array })
-  activeGear: string[] = ['polyend', 'circuit_tracks', 'mood', 'blooper', 'reel', 'sp404', 'strat'];
+  activeGear: string[] = ['polyend', 'circuit_tracks', 'mood', 'blooper', 'sp404'];
 
   @query('.canvas-container')
   container!: HTMLDivElement;
@@ -503,38 +504,44 @@ export class LofiDiorama extends LitElement {
   }
 
   private buildMood() {
-    const pGroup = this.buildBasePedal(0xffa07a, -7.5, -5, 0.1, 'mood'); // Salmon Peach
-    
-    // MOOD Red Stripe
-    const redMat = new THREE.MeshStandardMaterial({ color: 0xcc2222, roughness: 0.5 });
-    const redStripe = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 0.7), redMat);
-    redStripe.rotation.x = -Math.PI / 2;
-    redStripe.position.set(0, 0.61, 0.4); 
-    pGroup.add(redStripe);
-    
-    // MOOD Blue Stripe (Bottom)
-    const blueMat = new THREE.MeshStandardMaterial({ color: 0x1a2b4c, roughness: 0.5 });
-    const blueStripe = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 0.75), blueMat);
-    blueStripe.rotation.x = -Math.PI / 2;
-    blueStripe.position.set(0, 0.61, 1.125); 
-    pGroup.add(blueStripe);
-    
+    const pGroup = this.buildBasePedal(0xffa07a, -7.5, -5, 0.1, 'mood', '/mood_texture.png'); // Salmon Peach
     this.gearGroup.add(pGroup);
   }
 
   private buildBlooper() {
-    const pGroup = this.buildBasePedal(0xa4c8e1, -9.5, -5, -0.05, 'blooper'); // Pastel Blue
+    const pGroup = this.buildBasePedal(0xa4c8e1, -9.5, -5, -0.05, 'blooper', '/blooper_texture.png'); // Pastel Blue
     this.gearGroup.add(pGroup);
   }
 
-  private buildBasePedal(colorHex: number, x: number, z: number, rotY: number, name: string) {
+  private buildBasePedal(colorHex: number, x: number, z: number, rotY: number, name: string, topTexturePath?: string) {
     const pedal = new THREE.Group();
     pedal.rotation.y = rotY;
     this.loadOrPlaceObject(pedal, name, x, 6.86, z); // Sits exactly on the desk (Y=6.0)
 
     const pSize = GET_GEAR_SIZE(64, 124, 60); // 64mm W x 124mm D x 60mm H
-    const pedalMat = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.3, metalness: 0.4 });
-    const body = new THREE.Mesh(new THREE.BoxGeometry(pSize.w, pSize.h, pSize.d), pedalMat);
+    const sideMat = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.3, metalness: 0.4 });
+    let bodyMat: THREE.Material | THREE.Material[] = sideMat;
+
+    if (topTexturePath) {
+      const textureLoader = new THREE.TextureLoader();
+      const topTex = textureLoader.load(topTexturePath);
+      topTex.colorSpace = THREE.SRGBColorSpace;
+      
+      // Let's set some default cropping for Chase Bliss pedal texture (which has grey margins).
+      // Zooming in slightly and centering crops out the jacks and background border:
+      topTex.repeat.set(0.92, 0.95);
+      topTex.offset.set(0.04, 0.025);
+      
+      const topMat = new THREE.MeshStandardMaterial({ 
+        map: topTex, 
+        roughness: 0.25, 
+        metalness: 0.3 
+      });
+      // Box faces order: right, left, top, bottom, front, back
+      bodyMat = [sideMat, sideMat, topMat, sideMat, sideMat, sideMat];
+    }
+
+    const body = new THREE.Mesh(new THREE.BoxGeometry(pSize.w, pSize.h, pSize.d), bodyMat);
     body.castShadow = true;
     body.receiveShadow = true;
     pedal.add(body);
@@ -698,54 +705,99 @@ export class LofiDiorama extends LitElement {
     this.gearGroup.add(spBody);
   }
 
+  private stratModel: THREE.Group | null = null;
+  private stratLoading = false;
+
   private buildStrat() {
-    const stratGroup = new THREE.Group();
-    
-    // Body (Birch Green)
-    const bodyMat = new THREE.MeshStandardMaterial({ color: 0xccddcc, metalness: 0.2, roughness: 0.4 });
-    const body = new THREE.Mesh(new THREE.BoxGeometry(3.5, 5, 0.5), bodyMat);
-    stratGroup.add(body);
-
-    // Pickguard
-    const pgMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 });
-    const pg = new THREE.Mesh(new THREE.BoxGeometry(2.5, 3.5, 0.55), pgMat);
-    pg.position.set(0, -0.5, 0);
-    stratGroup.add(pg);
-
-    // Neck
-    const neckMat = new THREE.MeshStandardMaterial({ color: 0xd2b48c, roughness: 0.4 });
-    const neck = new THREE.Mesh(new THREE.BoxGeometry(0.8, 6, 0.4), neckMat);
-    neck.position.set(0, 5.5, 0);
-    stratGroup.add(neck);
-
-    // Headstock
-    const head = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2, 0.4), neckMat);
-    head.position.set(0, 9.5, 0);
-    stratGroup.add(head);
-
-    // Pickups
-    const puMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2 });
-    for (let i = 0; i < 3; i++) {
-      const pu = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.3, 0.6), puMat);
-      pu.position.set(0, -1.5 + i * 1.0, 0);
-      pu.rotation.z = i === 2 ? -0.1 : 0;
-      stratGroup.add(pu);
-    }
-
-    // Leaning against left wall
-    stratGroup.rotation.x = -0.2; 
-    stratGroup.rotation.y = 0.6;  
-    stratGroup.rotation.z = -0.15;
-    this.loadOrPlaceObject(stratGroup, 'strat', -14, 2.5, -5);
-    
-    stratGroup.traverse((child) => {
-      if ((child as THREE.Mesh).isMesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
+    // Prevent duplicate loading from hot-reloads or fast property changes
+    if (this.stratModel) {
+      if (!this.gearGroup.children.includes(this.stratModel)) {
+        this.loadOrPlaceObject(this.stratModel, 'strat', -14, 12, -5);
+        this.gearGroup.add(this.stratModel);
       }
-    });
+      return;
+    }
+    if (this.stratLoading) return;
+    this.stratLoading = true;
 
-    this.gearGroup.add(stratGroup);
+    const loader = new FBXLoader();
+    loader.load('/guitar/stratocaster.FBX', (object) => {
+      this.stratLoading = false;
+
+      // Normalize scale (950mm real world length)
+      const MM_TO_UNITS = 0.0285;
+      const targetLength = 950 * MM_TO_UNITS;
+      const box = new THREE.Box3().setFromObject(object);
+      const size = box.getSize(new THREE.Vector3());
+      const maxDim = Math.max(size.x, size.y, size.z);
+      
+      const scale = targetLength / maxDim;
+      object.scale.setScalar(scale);
+
+      // Center the object geometry relative to its pivot
+      box.setFromObject(object);
+      const center = box.getCenter(new THREE.Vector3());
+      object.position.sub(center);
+
+      const stratGroup = new THREE.Group();
+      stratGroup.add(object);
+
+      object.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh) {
+          const mesh = child as THREE.Mesh;
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+          
+          if (mesh.material) {
+            const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+            materials.forEach((mat: any) => {
+              if (mat.color) {
+                const hsl = { h: 0, s: 0, l: 0 };
+                mat.color.getHSL(hsl);
+                
+                if (!mat.map) {
+                  // Dark parts -> Body (Birch Green, High Gloss Polyurethane)
+                  if (hsl.l < 0.15) {
+                    mat.color.setHex(0xccddcc);
+                    mat.metalness = 0.1;
+                    mat.roughness = 0.15; 
+                  }
+                  // White parts -> Pickguard (Glossy Plastic)
+                  else if (hsl.s < 0.1 && hsl.l > 0.6) {
+                    mat.metalness = 0.05;
+                    mat.roughness = 0.3;
+                  }
+                  // Grey parts -> Hardware, Bridge, Tuners (Chrome)
+                  else if (hsl.s < 0.1 && hsl.l >= 0.15 && hsl.l <= 0.6) {
+                    mat.metalness = 0.9;
+                    mat.roughness = 0.2;
+                  }
+                } else {
+                  // Textured parts (e.g. Wood Neck) shouldn't be too shiny
+                  mat.roughness = 0.6;
+                  mat.metalness = 0.05;
+                }
+              }
+            });
+          }
+        }
+      });
+
+      // Leaning against left wall
+      stratGroup.rotation.x = -0.2; 
+      stratGroup.rotation.y = 0.6;  
+      stratGroup.rotation.z = -0.15;
+      
+      this.stratModel = stratGroup;
+      
+      if (this.activeGear.includes('strat')) {
+        this.loadOrPlaceObject(stratGroup, 'strat', -14, 12, -5);
+        this.gearGroup.add(stratGroup);
+      }
+    }, undefined, (error) => {
+      this.stratLoading = false;
+      console.error('Error loading stratocaster model:', error);
+    });
   }
 
   private buildClutter() {

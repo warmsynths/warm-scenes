@@ -31,7 +31,7 @@ export class LofiDashboard extends LitElement {
   private weather: Weather = 'sunny';
 
   @state()
-  private activeGear: string[] = ['polyend', 'circuit_tracks', 'mood', 'blooper', 'reel', 'sp404', 'strat'];
+  private activeGear: string[] = ['polyend', 'circuit_tracks', 'mood', 'blooper', 'sp404'];
 
   @state()
   private activeTab: Tab = 'gear';
@@ -225,6 +225,13 @@ export class LofiDashboard extends LitElement {
       background: rgba(45, 106, 89, 0.4);
       color: #ffffff;
       box-shadow: 0 0 12px rgba(163, 217, 201, 0.2);
+    }
+
+    .gear-card.disabled {
+      opacity: 0.35;
+      filter: grayscale(1);
+      cursor: not-allowed;
+      pointer-events: none;
     }
     .carousel-container {
       display: flex;
@@ -471,6 +478,34 @@ export class LofiDashboard extends LitElement {
     .scrub-slider::-webkit-slider-thumb:hover {
       transform: scale(1.3);
     }
+
+    .settings-trigger-btn {
+      position: absolute;
+      top: 24px;
+      left: 24px;
+      background: rgba(25, 20, 25, 0.65);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: white;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 1.5rem;
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      z-index: 99;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+
+    .settings-trigger-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+      transform: scale(1.1) rotate(45deg);
+      border-color: rgba(255, 255, 255, 0.25);
+    }
   `;
 
   disconnectedCallback() {
@@ -479,6 +514,7 @@ export class LofiDashboard extends LitElement {
   }
 
   private toggleGear(gear: string) {
+    if (gear === 'strat' || gear === 'reel') return;
     if (this.activeGear.includes(gear)) {
       this.activeGear = this.activeGear.filter(g => g !== gear);
     } else {
@@ -631,14 +667,14 @@ export class LofiDashboard extends LitElement {
       { id: 'sp404', label: 'SP404', icon: '🎰', cat: 'Sampler' },
       { id: 'mood', label: 'MOOD', icon: '🎚️', cat: 'Pedal' },
       { id: 'blooper', label: 'Blooper', icon: '🔁', cat: 'Pedal' },
-      { id: 'reel', label: 'Tape Reel', icon: '📼', cat: 'Tape' },
-      { id: 'strat', label: 'Strat', icon: '🎸', cat: 'Inst' }
+      { id: 'reel', label: 'Tape Reel', icon: '📼', cat: 'Tape', disabled: true },
+      { id: 'strat', label: 'Strat', icon: '🎸', cat: 'Inst', disabled: true }
     ];
 
     const renderCard = (gear: any) => html`
       <div 
-        class="gear-card ${this.activeGear.includes(gear.id) ? 'active' : ''}"
-        @click="${() => this.toggleGear(gear.id)}"
+        class="gear-card ${this.activeGear.includes(gear.id) ? 'active' : ''} ${gear.disabled ? 'disabled' : ''}"
+        @click="${() => !gear.disabled && this.toggleGear(gear.id)}"
       >
         <div class="gear-icon">${gear.icon}</div>
         <div class="gear-name">${gear.label}</div>
@@ -752,6 +788,8 @@ export class LofiDashboard extends LitElement {
         .activeGear="${this.activeGear}"
         @toggle-settings="${this.handleToggleSettings}"
       ></lofi-diorama>
+
+      <button class="settings-trigger-btn" @click="${this.handleToggleSettings}" title="Settings">⚙️</button>
 
       <div class="floating-ui ${this.isPanelOpen ? '' : 'hidden'}">
         <button class="hide-btn" @click="${() => this.isPanelOpen = false}" title="Hide UI">⬇️</button>
