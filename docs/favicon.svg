@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="100%" height="100%">
+  <defs>
+    <!-- Lamp Glow Gradient -->
+    <radialGradient id="lampGlow" cx="22" cy="14" r="24" fx="22" fy="14" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#fff3b0" stop-opacity="0.95"/>
+      <stop offset="40%" stop-color="#ffd166" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#ffd166" stop-opacity="0"/>
+    </radialGradient>
+    
+    <!-- Floor Shadow Gradient -->
+    <radialGradient id="floorShadow" cx="32" cy="38" r="26" fx="32" fy="38" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#000000" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Floor Shadow -->
+  <ellipse cx="32" cy="39" rx="24" ry="12" fill="url(#floorShadow)" />
+
+  <!-- Room Base Structure -->
+  <!-- Floor -->
+  <polygon points="32,24 10,35 32,46 54,35" fill="#a06a50" />
+  
+  <!-- Left Wall -->
+  <polygon points="32,24 10,35 10,17 32,6" fill="#3a3250" />
+  
+  <!-- Right Wall -->
+  <polygon points="32,24 54,35 54,17 32,6" fill="#473e61" />
+
+  <!-- Corner Seam Line -->
+  <line x1="32" y1="24" x2="32" y2="6" stroke="#2c253f" stroke-width="0.75" opacity="0.5" />
+
+  <!-- Window on Right Wall -->
+  <!-- Window Background (Night Sky) -->
+  <polygon points="38,12 48,17 48,25 38,20" fill="#151226" />
+  <!-- Moon inside window -->
+  <circle cx="44" cy="17" r="2" fill="#ffd166" />
+  <circle cx="42.5" cy="16.5" r="2" fill="#151226" />
+  <!-- Star dots -->
+  <circle cx="40" cy="15" r="0.3" fill="#ffffff" />
+  <circle cx="46" cy="21" r="0.3" fill="#ffffff" />
+  <!-- Window Frame -->
+  <polygon points="38,12 48,17 48,25 38,20" fill="none" stroke="#2c253f" stroke-width="1" />
+  <!-- Window Dividers -->
+  <line x1="43" y1="14.5" x2="43" y2="22.5" stroke="#2c253f" stroke-width="0.5" />
+  <line x1="38" y1="16" x2="48" y2="21" stroke="#2c253f" stroke-width="0.5" />
+
+  <!-- Shelf on Left Wall -->
+  <polygon points="15,16 23,12 23,13 15,17" fill="#6d4c41" />
+  <!-- Shelf Books -->
+  <!-- Book 1 Red -->
+  <polygon points="17,15.5 17,12.5 18,12 18,15" fill="#e63946" />
+  <!-- Book 2 Blue -->
+  <polygon points="19,14.5 19,11.5 20,11 20,14" fill="#457b9d" />
+  <!-- Book 3 Yellow (Leaning) -->
+  <polygon points="21,13.5 22,11.5 22.8,11.9 21.8,13.9" fill="#e9c46a" />
+
+  <!-- Desk (Left Aligned) -->
+  <!-- Desk Legs -->
+  <line x1="14" y1="25" x2="14" y2="33" stroke="#5d4037" stroke-width="1.5" stroke-linecap="round" />
+  <line x1="24" y1="20" x2="24" y2="28" stroke="#5d4037" stroke-width="1.5" stroke-linecap="round" />
+  <line x1="26" y1="31" x2="26" y2="39" stroke="#5d4037" stroke-width="1.5" stroke-linecap="round" />
+  <line x1="36" y1="26" x2="36" y2="34" stroke="#5d4037" stroke-width="1.5" stroke-linecap="round" />
+  <!-- Desk Skirt/Frame -->
+  <polygon points="14,25 26,31 26,33 14,27" fill="#6d4c41" />
+  <polygon points="26,31 36,26 36,28 26,33" fill="#5d4037" />
+  <!-- Desk Top -->
+  <polygon points="14,25 26,31 36,26 24,20" fill="#eed7c5" />
+  <!-- Desk Top Highlight Line -->
+  <polygon points="14,25 26,31 36,26 24,20" fill="none" stroke="#ffffff" stroke-width="0.5" opacity="0.3" />
+
+  <!-- Keyboard/Synth on Desk -->
+  <!-- Synth Base -->
+  <polygon points="17,25.5 23,28.5 23,29.5 17,26.5" fill="#d9534f" />
+  <polygon points="23,28.5 27,26.5 27,25.5 23,27.5" fill="#c9302c" />
+  <!-- Synth Top -->
+  <polygon points="17,25.5 23,28.5 27,26.5 21,23.5" fill="#f97f7f" />
+  <!-- Keys -->
+  <path d="M 18.5 26.25 L 18.5 27.25 M 20 27 L 20 28 M 21.5 27.75 L 21.5 28.75" stroke="#ffffff" stroke-width="0.75" />
+  <!-- Knobs (colored dots) -->
+  <circle cx="21" cy="25" r="0.6" fill="#ffd166" />
+  <circle cx="24" cy="26" r="0.6" fill="#118ab2" />
+
+  <!-- SP404 Sampler on Desk -->
+  <!-- Base -->
+  <polygon points="28,24.5 32,22.5 32,24 28,26" fill="#2d2d2d" />
+  <polygon points="32,22.5 34,23.5 34,25 32,24" fill="#1f1f1f" />
+  <!-- Top -->
+  <polygon points="28,24.5 32,22.5 34,23.5 30,25.5" fill="#3d3d3d" />
+  <!-- Pads (orange glow dots) -->
+  <circle cx="30" cy="24.2" r="0.4" fill="#ff7043" />
+  <circle cx="31.2" cy="24.8" r="0.4" fill="#ff7043" />
+  <circle cx="32.4" cy="24.2" r="0.4" fill="#ff7043" />
+  <!-- Screen (blue glow) -->
+  <ellipse cx="31" cy="23.5" rx="1.2" ry="0.6" fill="#00b4d8" />
+
+  <!-- Desk Lamp -->
+  <!-- Base -->
+  <ellipse cx="21" cy="21.5" rx="1.5" ry="0.75" fill="#424242" />
+  <!-- Stem -->
+  <path d="M 21 21.5 Q 21 16 23 15" fill="none" stroke="#424242" stroke-width="1" />
+  <!-- Shade -->
+  <polygon points="21,15 25,15 27,12 23,12" fill="#d9534f" />
+  <!-- Bulb -->
+  <circle cx="24" cy="14" r="1.2" fill="#fff3b0" />
+
+  <!-- Lamp Light Cone -->
+  <polygon points="24,14 6,36 34,32" fill="url(#lampGlow)" />
+
+  <!-- Potted Plant on Floor -->
+  <!-- Pot -->
+  <polygon points="43,38 47,36 46,41 42,43" fill="#d07a56" />
+  <polygon points="47,36 49,37 48,42 46,41" fill="#b3623d" />
+  <!-- Plant Base Stem -->
+  <line x1="45" y1="37" x2="45" y2="34" stroke="#2d6a4f" stroke-width="0.75" />
+  <!-- Leaves -->
+  <circle cx="45" cy="34" r="3" fill="#40916c" />
+  <circle cx="42.5" cy="32.5" r="2.5" fill="#52b788" />
+  <circle cx="47.5" cy="32.5" r="2.5" fill="#74c69d" />
+  <circle cx="45" cy="30.5" r="2" fill="#95d5b2" />
+</svg>
