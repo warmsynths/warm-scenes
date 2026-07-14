@@ -446,6 +446,7 @@ export class LofiDiorama extends LitElement {
     mattress.castShadow = true;
     mattress.receiveShadow = true;
     bedGroup.add(mattress);
+    this.surfaceObjects.push(mattress);
     
     // Pillow
     const pillowMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1.0 });
@@ -584,11 +585,13 @@ export class LofiDiorama extends LitElement {
     shelf1.position.set(0, 1, 0);
     shelf1.castShadow = true;
     shelfGroup.add(shelf1);
+    this.surfaceObjects.push(shelf1);
     
     const shelf2 = new THREE.Mesh(shelfGeo, woodMat);
     shelf2.position.set(0, -3.5, 0);
     shelf2.castShadow = true;
     shelfGroup.add(shelf2);
+    this.surfaceObjects.push(shelf2);
 
     // Brackets
     const bracketGeo = new THREE.BoxGeometry(0.2, 6, 0.2);
@@ -672,6 +675,18 @@ export class LofiDiorama extends LitElement {
         const {x, y, z} = JSON.parse(saved);
         obj.position.set(x, y, z);
         obj.updateMatrixWorld(true);
+        
+        // Restore headphone rotation based on proximity to hook
+        if (name === 'headphones') {
+          const hookPos = new THREE.Vector3(16.6, 4.9, -5);
+          const dist2D = Math.sqrt(Math.pow(x - hookPos.x, 2) + Math.pow(z - hookPos.z, 2));
+          if (dist2D > 1.0) {
+            obj.rotation.set(0, 0, 0);
+          } else {
+            obj.rotation.set(0, Math.PI / 2, 0);
+          }
+          obj.updateMatrixWorld(true);
+        }
       } catch (e) {
         console.error('Failed to load position', e);
       }
@@ -1644,6 +1659,7 @@ export class LofiDiorama extends LitElement {
     sill.position.set(0, 12.4, -19);
     sill.castShadow = true;
     this.scene.add(sill);
+    this.surfaceObjects.push(sill);
 
     this.staticCollisionObjects.push(frameTop, frameBottom, frameL, frameR, sill);
   }
@@ -2042,6 +2058,37 @@ export class LofiDiorama extends LitElement {
       this.dragObject.position.x = newPos.x;
       this.dragObject.position.z = newPos.z;
       
+      let snapped = false;
+      if (this.dragObject.name === 'headphones') {
+        const hookPos = new THREE.Vector3(16.6, 4.9, -5);
+        const dist2D = Math.sqrt(Math.pow(newPos.x - hookPos.x, 2) + Math.pow(newPos.z - hookPos.z, 2));
+        if (dist2D < 2.0) {
+          this.dragObject.position.copy(hookPos);
+          this.dragObject.rotation.set(0, Math.PI / 2, 0);
+          snapped = true;
+        } else {
+          this.dragObject.rotation.set(0, 0, 0);
+        }
+      }
+
+      // Dynamically hover the object above the surface directly under it
+      if (!snapped && this.scene) {
+        this.scene.updateMatrixWorld(true);
+        const hoverRaycaster = new THREE.Raycaster();
+        hoverRaycaster.set(new THREE.Vector3(newPos.x, 30, newPos.z), new THREE.Vector3(0, -1, 0));
+        const intersects = hoverRaycaster.intersectObjects(this.surfaceObjects, false);
+        if (intersects.length > 0) {
+          const topIntersect = intersects[0];
+          this.dragObject.updateMatrixWorld(true);
+          const box = new THREE.Box3().setFromObject(this.dragObject, true);
+          if (!box.isEmpty()) {
+            const currentMinY = box.min.y;
+            const offset = (topIntersect.point.y + 0.5) - currentMinY;
+            this.dragObject.position.y += offset;
+          }
+        }
+      }
+      
       // Update matrices to ensure bounding boxes are perfectly accurate
       this.dragObject.updateMatrixWorld(true);
       const updatedBox = new THREE.Box3().setFromObject(this.dragObject, true);
@@ -2176,11 +2223,15 @@ export class LofiDiorama extends LitElement {
   }
 
   private dropToSurface(obj: THREE.Object3D) {
+    if (!this.scene) return;
+    this.scene.updateMatrixWorld(true);
+
     const raycaster = new THREE.Raycaster();
     obj.updateMatrixWorld(true);
     
     // Compute the bounds to align the bottom properly
     const box = new THREE.Box3().setFromObject(obj, true);
+    if (box.isEmpty()) return;
     
     // Raycast downwards from the center of the bounding box
     const center = new THREE.Vector3();
@@ -2204,10 +2255,23 @@ export class LofiDiorama extends LitElement {
 
   private onPointerUp() {
     if (this.dragObject) {
-      this.dropToSurface(this.dragObject);
-      
-      // If dropped onto another object, bounce it to the nearest free space
-      this.resolveOverlap(this.dragObject);
+      let snapped = false;
+      if (this.dragObject.name === 'headphones') {
+        const hookPos = new THREE.Vector3(16.6, 4.9, -5);
+        const dist2D = Math.sqrt(Math.pow(this.dragObject.position.x - hookPos.x, 2) + Math.pow(this.dragObject.position.z - hookPos.z, 2));
+        if (dist2D < 2.0) {
+          this.dragObject.position.copy(hookPos);
+          this.dragObject.rotation.set(0, Math.PI / 2, 0);
+          this.dragObject.updateMatrixWorld(true);
+          snapped = true;
+        }
+      }
+
+      if (!snapped) {
+        this.dropToSurface(this.dragObject);
+        // If dropped onto another object, bounce it to the nearest free space
+        this.resolveOverlap(this.dragObject);
+      }
       
       this.saveLayout();
     }

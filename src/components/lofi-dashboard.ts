@@ -78,6 +78,10 @@ export class LofiDashboard extends LitElement {
       top: 88px;
       left: 24px;
       width: 540px;
+      max-height: calc(100vh - 110px);
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
       display: flex;
       flex-direction: column;
       gap: 16px;
@@ -85,6 +89,20 @@ export class LofiDashboard extends LitElement {
       z-index: 100;
       opacity: 1;
       pointer-events: auto;
+      padding-right: 8px;
+    }
+
+    .frameless-top-panel::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .frameless-top-panel::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .frameless-top-panel::-webkit-scrollbar-thumb {
+      background-color: rgba(255, 255, 255, 0.25);
+      border-radius: 3px;
     }
 
     .frameless-top-panel.hidden {
