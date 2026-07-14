@@ -5,6 +5,7 @@ import './lofi-diorama';
 import './gear-preview';
 
 type Weather = 'sunny' | 'rainy' | 'thunderstorm';
+type TimeOfDay = 'day' | 'sunset' | 'night';
 
 @customElement('lofi-dashboard')
 export class LofiDashboard extends LitElement {
@@ -28,6 +29,18 @@ export class LofiDashboard extends LitElement {
 
   @state()
   private weather: Weather = 'sunny';
+
+  @state()
+  private timeOfDay: TimeOfDay = 'day';
+
+  @state()
+  private celestialPosition: number = 50;
+
+  @state()
+  private rainIntensity: number = 50;
+
+  @state()
+  private lightningIntensity: number = 50;
 
   @state()
   private activeGear: string[] = ['polyend', 'circuit_tracks', 'mood', 'blooper', 'sp404', 'm8'];
@@ -692,32 +705,85 @@ export class LofiDashboard extends LitElement {
 
   private renderEnvironmentTab() {
     return html`
-      <div class="carousel-container" style="padding-top: 4px;">
-        <button class="carousel-btn" @click="${() => this.scrollCarousel('all-weather-grid', -1)}">❮</button>
-        <div class="weather-grid" id="all-weather-grid">
-          <div 
-            class="weather-card ${this.weather === 'sunny' ? 'active' : ''}"
-            @click="${() => this.weather = 'sunny'}"
-          >
-            <div class="weather-icon">☀️</div>
-            <div class="weather-label">Sunny</div>
-          </div>
-          <div 
-            class="weather-card ${this.weather === 'rainy' ? 'active' : ''}"
-            @click="${() => this.weather = 'rainy'}"
-          >
-            <div class="weather-icon">🌧️</div>
-            <div class="weather-label">Rainy</div>
-          </div>
-          <div 
-            class="weather-card ${this.weather === 'thunderstorm' ? 'active' : ''}"
-            @click="${() => this.weather = 'thunderstorm'}"
-          >
-            <div class="weather-icon">⛈️</div>
-            <div class="weather-label">Stormy</div>
+      <div class="gear-section">
+        <div class="gear-category-title">Time of Day</div>
+        <div class="carousel-container" style="padding-top: 4px;">
+          <div class="weather-grid" style="width: auto;">
+            <div 
+              class="weather-card ${this.timeOfDay === 'day' ? 'active' : ''}"
+              @click="${() => this.timeOfDay = 'day'}"
+            >
+              <div class="weather-icon">☀️</div>
+              <div class="weather-label">Day</div>
+            </div>
+            <div 
+              class="weather-card ${this.timeOfDay === 'sunset' ? 'active' : ''}"
+              @click="${() => this.timeOfDay = 'sunset'}"
+            >
+              <div class="weather-icon">🌅</div>
+              <div class="weather-label">Sunset</div>
+            </div>
+            <div 
+              class="weather-card ${this.timeOfDay === 'night' ? 'active' : ''}"
+              @click="${() => this.timeOfDay = 'night'}"
+            >
+              <div class="weather-icon">🌙</div>
+              <div class="weather-label">Night</div>
+            </div>
           </div>
         </div>
-        <button class="carousel-btn" @click="${() => this.scrollCarousel('all-weather-grid', 1)}">❯</button>
+      </div>
+
+      <div class="gear-section">
+        <div class="gear-category-title">Weather</div>
+        <div class="carousel-container" style="padding-top: 4px;">
+          <div class="weather-grid" style="width: auto;">
+            <div 
+              class="weather-card ${this.weather === 'sunny' ? 'active' : ''}"
+              @click="${() => this.weather = 'sunny'}"
+            >
+              <div class="weather-icon">🌤️</div>
+              <div class="weather-label">Clear</div>
+            </div>
+            <div 
+              class="weather-card ${this.weather === 'rainy' ? 'active' : ''}"
+              @click="${() => this.weather = 'rainy'}"
+            >
+              <div class="weather-icon">🌧️</div>
+              <div class="weather-label">Rainy</div>
+            </div>
+            <div 
+              class="weather-card ${this.weather === 'thunderstorm' ? 'active' : ''}"
+              @click="${() => this.weather = 'thunderstorm'}"
+            >
+              <div class="weather-icon">⛈️</div>
+              <div class="weather-label">Stormy</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="gear-section" style="padding: 12px; max-width: 300px;">
+        <div class="gear-category-title" style="padding-left: 0; margin-bottom: 8px;">Controls</div>
+        
+        <div class="slider-container" style="margin-bottom: 12px;">
+          <div style="font-size: 0.85rem; color: #a49382; font-weight: 700;">Sun/Moon Position</div>
+          <input type="range" class="scrub-slider" min="0" max="100" .value="${this.celestialPosition.toString()}" @input="${(e: Event) => this.celestialPosition = parseFloat((e.target as HTMLInputElement).value)}" />
+        </div>
+
+        ${this.weather === 'rainy' || this.weather === 'thunderstorm' ? html`
+          <div class="slider-container" style="margin-bottom: 12px;">
+            <div style="font-size: 0.85rem; color: #a49382; font-weight: 700;">Rain Amount</div>
+            <input type="range" class="scrub-slider" min="0" max="100" .value="${this.rainIntensity.toString()}" @input="${(e: Event) => this.rainIntensity = parseFloat((e.target as HTMLInputElement).value)}" />
+          </div>
+        ` : ''}
+
+        ${this.weather === 'thunderstorm' ? html`
+          <div class="slider-container" style="margin-bottom: 12px;">
+            <div style="font-size: 0.85rem; color: #a49382; font-weight: 700;">Lightning Frequency</div>
+            <input type="range" class="scrub-slider" min="0" max="100" .value="${this.lightningIntensity.toString()}" @input="${(e: Event) => this.lightningIntensity = parseFloat((e.target as HTMLInputElement).value)}" />
+          </div>
+        ` : ''}
       </div>
     `;
   }
@@ -802,6 +868,10 @@ export class LofiDashboard extends LitElement {
       <lofi-diorama 
         .audioManager="${this.audioManager}" 
         .weather="${this.weather}"
+        .timeOfDay="${this.timeOfDay}"
+        .celestialPosition="${this.celestialPosition}"
+        .rainIntensity="${this.rainIntensity}"
+        .lightningIntensity="${this.lightningIntensity}"
         .activeGear="${this.activeGear}"
         @toggle-settings="${() => this.togglePanel('gear')}"
       ></lofi-diorama>

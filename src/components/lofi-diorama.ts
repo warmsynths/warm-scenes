@@ -1,5 +1,5 @@
 import { LitElement, html, css } from 'lit';
-import { customElement, property, query } from 'lit/decorators.js';
+import { customElement, property, state, query } from 'lit/decorators.js';
 import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -30,11 +30,32 @@ export class LofiDiorama extends LitElement {
   @property({ type: String })
   weather: 'sunny' | 'rainy' | 'thunderstorm' = 'sunny';
 
+  @property({ type: String })
+  timeOfDay: 'day' | 'sunset' | 'night' = 'day';
+
+  @property({ type: Number })
+  celestialPosition: number = 50;
+
+  @property({ type: Number })
+  rainIntensity: number = 50;
+
+  @property({ type: Number })
+  lightningIntensity: number = 50;
+
   @property({ type: Array })
   activeGear: string[] = ['polyend', 'circuit_tracks', 'mood', 'blooper', 'sp404', 'm8'];
 
   @query('.canvas-container')
   container!: HTMLDivElement;
+
+  @state()
+  private hoveredSynth: THREE.Object3D | null = null;
+  
+  @state()
+  private hoverPosX: number = 0;
+  
+  @state()
+  private hoverPosY: number = 0;
 
   private scene!: THREE.Scene;
   private camera!: THREE.PerspectiveCamera;
@@ -52,6 +73,7 @@ export class LofiDiorama extends LitElement {
   private circuitPads: THREE.Mesh[] = [];
   private lampBulb!: THREE.Mesh;
   private deskLight!: THREE.PointLight;
+  private windowLight!: THREE.DirectionalLight;
   
   // Click/raycasting properties
   private clickableObjects: THREE.Object3D[] = [];
@@ -135,6 +157,35 @@ export class LofiDiorama extends LitElement {
       background: rgba(255, 255, 255, 0.2);
       border-color: rgba(255, 255, 255, 0.4);
     }
+
+    .stand-toggle {
+      position: absolute;
+      background: rgba(0, 0, 0, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 50%;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      cursor: pointer;
+      transform: translate(-50%, -50%);
+      backdrop-filter: blur(4px);
+      transition: background 0.2s, transform 0.1s;
+      z-index: 20;
+    }
+    
+    .stand-toggle:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: translate(-50%, -50%) scale(1.1);
+    }
+    
+    .stand-toggle svg {
+      width: 16px;
+      height: 16px;
+      fill: currentColor;
+    }
   `;
 
   firstUpdated() {
@@ -165,8 +216,12 @@ export class LofiDiorama extends LitElement {
   }
 
   updated(changedProperties: Map<string, unknown>) {
-    if (changedProperties.has('weather') && this.scene) {
-      this.updateWeather();
+    if ((changedProperties.has('weather') || 
+         changedProperties.has('timeOfDay') || 
+         changedProperties.has('celestialPosition') || 
+         changedProperties.has('rainIntensity') || 
+         changedProperties.has('lightningIntensity')) && this.scene) {
+      this.updateEnvironment();
     }
     if (changedProperties.has('activeGear') && this.scene) {
       this.updateGear();
@@ -249,17 +304,17 @@ export class LofiDiorama extends LitElement {
     this.deskLight.shadow.bias = -0.001;
 
     // Window daylight
-    const windowLight = new THREE.DirectionalLight(0xffffff, 1.5);
-    windowLight.position.set(0, 20, -30);
-    windowLight.castShadow = true;
-    windowLight.shadow.mapSize.width = 2048;
-    windowLight.shadow.mapSize.height = 2048;
-    windowLight.shadow.camera.left = -20;
-    windowLight.shadow.camera.right = 20;
-    windowLight.shadow.camera.top = 20;
-    windowLight.shadow.camera.bottom = -10;
-    windowLight.shadow.bias = -0.0005;
-    this.scene.add(windowLight);
+    this.windowLight = new THREE.DirectionalLight(0xffffff, 1.5);
+    this.windowLight.position.set(0, 20, -30);
+    this.windowLight.castShadow = true;
+    this.windowLight.shadow.mapSize.width = 2048;
+    this.windowLight.shadow.mapSize.height = 2048;
+    this.windowLight.shadow.camera.left = -20;
+    this.windowLight.shadow.camera.right = 20;
+    this.windowLight.shadow.camera.top = 20;
+    this.windowLight.shadow.camera.bottom = -10;
+    this.windowLight.shadow.bias = -0.0005;
+    this.scene.add(this.windowLight);
 
     // Build scene
     this.buildRoom();
@@ -574,6 +629,24 @@ export class LofiDiorama extends LitElement {
     this.scene.add(deskTop);
     this.surfaceObjects.push(deskTop);
 
+    // Desk Shelf (Tier)
+    const shelfTop = new THREE.Mesh(new RoundedBoxGeometry(32, 0.8, 8, 4, 0.1), deskMat);
+    shelfTop.position.set(0, 7.5, -13);
+    shelfTop.castShadow = true;
+    shelfTop.receiveShadow = true;
+    this.scene.add(shelfTop);
+    this.surfaceObjects.push(shelfTop);
+
+    // Shelf legs
+    const shelfLegGeo = new RoundedBoxGeometry(0.8, 1.1, 0.8, 4, 0.1);
+    const shelfLegPositions = [[-14, 6.55, -10], [14, 6.55, -10], [-14, 6.55, -16], [14, 6.55, -16]];
+    for (const pos of shelfLegPositions) {
+      const leg = new THREE.Mesh(shelfLegGeo, deskMat);
+      leg.position.set(pos[0], pos[1], pos[2]);
+      leg.castShadow = true;
+      this.scene.add(leg);
+    }
+
     // Desk legs
     const legMat = new THREE.MeshStandardMaterial({ color: 0x3a2518, roughness: 0.5 });
     const legGeo = new RoundedBoxGeometry(0.8, 10.6, 0.8, 4, 0.1);
@@ -607,11 +680,116 @@ export class LofiDiorama extends LitElement {
       this.resolveOverlap(obj);
     }
     
+    // Check and apply stand state
+    const savedStand = localStorage.getItem(`lofi_stand_${name}`);
+    if (savedStand) {
+      obj.userData.hasStand = JSON.parse(savedStand);
+      this.applySynthStand(obj, obj.userData.hasStand);
+    }
+    
+    // Always ensure synths are flush on a surface on load, 
+    // fixing any bad cached Y coordinates from previous bugs.
+    if (this.activeGear.includes(name)) {
+      this.dropToSurface(obj);
+    }
+    
     this.draggableObjects.push(obj);
   }
 
+  private applySynthStand(synth: THREE.Object3D, hasStand: boolean) {
+    if (hasStand) {
+      const tiltAngle = 0.3; // tilt forward (positive X rotation tilts top towards viewer)
+      
+      if (!synth.getObjectByName('standBracketLeft')) {
+        // Reset all rotations temporarily to get accurate local dimensions
+        const oldRot = synth.rotation.clone();
+        synth.rotation.set(0, 0, 0);
+        synth.updateMatrixWorld(true);
+        
+        const box = new THREE.Box3().setFromObject(synth, true);
+        const size = new THREE.Vector3();
+        box.getSize(size);
+        
+        // Find local Y minimum so we place the top of the bracket perfectly flush
+        const worldCenter = new THREE.Vector3();
+        box.getCenter(worldCenter);
+        const bottomWorld = new THREE.Vector3(worldCenter.x, box.min.y, worldCenter.z);
+        const bottomLocal = synth.worldToLocal(bottomWorld);
+        const localMinY = bottomLocal.y;
+        
+        // Restore original rotation and apply tilt
+        synth.rotation.copy(oldRot);
+        synth.rotation.x = tiltAngle;
+        synth.updateMatrixWorld(true);
+        
+        // Calculate wedge dimensions so the bottom sits perfectly flat on the desk
+        const bracketLength = size.z * 0.8;
+        const baseThickness = 0.3; // Extra thickness to clear the synth's front overhang
+        const slopeHeight = bracketLength * Math.tan(tiltAngle);
+        const backHeight = baseThickness + slopeHeight;
+        
+        // Create a wedge: flat top, sloped bottom with a front lip thickness
+        const shape = new THREE.Shape();
+        shape.moveTo(0, 0); // bottom back
+        shape.lineTo(0, backHeight); // top back
+        shape.lineTo(bracketLength, backHeight); // top front
+        shape.lineTo(bracketLength, backHeight - baseThickness); // bottom front
+        shape.lineTo(0, 0);
+        
+        const extrudeSettings = { depth: 0.2, bevelEnabled: false };
+        const geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+        
+        // Center the wedge: align top to y=0, center length on origin, center thickness
+        geo.translate(-bracketLength / 2, -backHeight, -0.1);
+        geo.rotateY(-Math.PI / 2);
+        geo.computeBoundingBox();
+        geo.computeBoundingSphere();
+        
+        const mat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 });
+        
+        // Place brackets on the left and right underside of the synth
+        // We use localMinY to get to the true bottom of the synth mesh.
+        
+        const bracketL = new THREE.Mesh(geo, mat);
+        bracketL.name = 'standBracketLeft';
+        bracketL.position.set(-size.x/2 + 0.5, localMinY, 0);
+        synth.add(bracketL);
+        
+        const bracketR = new THREE.Mesh(geo, mat);
+        bracketR.name = 'standBracketRight';
+        bracketR.position.set(size.x/2 - 0.5, localMinY, 0);
+        synth.add(bracketR);
+      }
+      // Ensure rotation order prevents roll when panning
+      synth.rotation.order = 'YXZ';
+    } else {
+      synth.rotation.x = 0;
+      const bracketL = synth.getObjectByName('standBracketLeft');
+      const bracketR = synth.getObjectByName('standBracketRight');
+      if (bracketL) {
+        bracketL.removeFromParent();
+      }
+      if (bracketR) {
+        bracketR.removeFromParent();
+      }
+    }
+  }
+
+  private toggleHoveredStand() {
+    if (!this.hoveredSynth) return;
+    
+    const hasStand = !this.hoveredSynth.userData.hasStand;
+    this.hoveredSynth.userData.hasStand = hasStand;
+    localStorage.setItem(`lofi_stand_${this.hoveredSynth.name}`, JSON.stringify(hasStand));
+    
+    this.applySynthStand(this.hoveredSynth, hasStand);
+    this.dropToSurface(this.hoveredSynth);
+    
+    this.requestUpdate();
+  }
+
   private resolveOverlap(obj: THREE.Object3D) {
-    const box = new THREE.Box3().setFromObject(obj);
+    const box = new THREE.Box3().setFromObject(obj, true);
     let radius = 0;
     let angle = 0;
     const defaultX = obj.position.x;
@@ -626,7 +804,7 @@ export class LofiDiorama extends LitElement {
       for (const other of allColliders) {
         if (other !== obj && other.visible) {
           other.updateMatrixWorld(true);
-          const otherBox = new THREE.Box3().setFromObject(other);
+          const otherBox = new THREE.Box3().setFromObject(other, true);
           // Shrink slightly to avoid false positives from touching edges
           otherBox.expandByScalar(-0.1);
           box.expandByScalar(-0.1);
@@ -647,7 +825,7 @@ export class LofiDiorama extends LitElement {
         obj.position.x = defaultX + Math.cos(angle) * radius;
         obj.position.z = defaultZ + Math.sin(angle) * radius;
         obj.updateMatrixWorld(true);
-        box.setFromObject(obj);
+        box.setFromObject(obj, true);
       }
     }
   }
@@ -1400,6 +1578,15 @@ export class LofiDiorama extends LitElement {
 
     hpInner.add(cupRGroup);
     
+    // Headphone hook on the right side of the desk
+    const hookGeo = new THREE.BoxGeometry(1.2, 0.1, 0.6);
+    const hookMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.6 });
+    const hook = new THREE.Mesh(hookGeo, hookMat);
+    hook.position.set(16 + 0.6, 5.8 - 0.2 - 0.05, -5); // right side of desk (16), just below desk surface
+    hook.castShadow = true;
+    hook.receiveShadow = true;
+    this.scene.add(hook);
+    
     // Cable
     const cableGeo = new THREE.CylinderGeometry(0.04, 0.04, 2, 8);
     const cable = new THREE.Mesh(cableGeo, plasticMat);
@@ -1408,12 +1595,11 @@ export class LofiDiorama extends LitElement {
     cable.castShadow = true;
     hpInner.add(cable);
 
-    hpGroup.rotation.x = -Math.PI / 2 + 0.1; // Lie flat, slightly tilted
-    hpGroup.rotation.z = -0.4;
-    hpGroup.rotation.y = 0.2;
+    // Hang vertically on the hook
+    hpGroup.rotation.set(0, Math.PI / 2, 0);
 
     this.scene.add(hpGroup);
-    this.loadOrPlaceObject(hpGroup, 'headphones', 9.5, 6.0, -1.5);
+    this.loadOrPlaceObject(hpGroup, 'headphones', 16.6, 4.9, -5);
   }
 
 
@@ -1600,50 +1786,100 @@ export class LofiDiorama extends LitElement {
     });
   }
 
-  private updateWeather() {
+  private updateEnvironment() {
     const isSunny = this.weather === 'sunny';
     const isRainy = this.weather === 'rainy' || this.weather === 'thunderstorm';
-    
-    // Sky color
+    const isStormy = this.weather === 'thunderstorm';
+
+    // Sky colors based on time of day and weather
+    let skyColorHex = 0x87ceeb; // Day
+    if (this.timeOfDay === 'sunset') skyColorHex = 0xffa07a;
+    if (this.timeOfDay === 'night') skyColorHex = 0x0a1020;
+    if (isStormy) skyColorHex = this.timeOfDay === 'night' ? 0x050510 : 0x222233;
+    else if (this.weather === 'rainy') skyColorHex = this.timeOfDay === 'night' ? 0x101a2a : 0x6b7b8d;
+
     if (this.skyMat) {
-      this.skyMat.color.setHex(isSunny ? 0x87ceeb : (this.weather === 'thunderstorm' ? 0x222233 : 0x6b7b8d));
+      this.skyMat.color.setHex(skyColorHex);
     }
-    
-    // Sun visibility
-    this.scene.traverse((obj) => {
-      if (obj.name === 'sunGlow' || obj.name === 'sunHalo') {
-        obj.visible = isSunny;
-      }
-    });
     
     // Cloud color
     this.clouds.forEach((cloud) => {
       cloud.traverse((child) => {
         if ((child as THREE.Mesh).isMesh) {
           const mat = (child as THREE.Mesh).material as THREE.MeshBasicMaterial;
-          mat.color.setHex(isSunny ? 0xffffff : (this.weather === 'thunderstorm' ? 0x333344 : 0x555566));
+          let cloudColor = 0xffffff;
+          if (this.timeOfDay === 'sunset') cloudColor = 0xffd0b0;
+          if (this.timeOfDay === 'night') cloudColor = 0x222233;
+          if (isStormy) cloudColor = this.timeOfDay === 'night' ? 0x111118 : 0x333344;
+          else if (this.weather === 'rainy') cloudColor = this.timeOfDay === 'night' ? 0x1a2a3a : 0x555566;
+          
+          mat.color.setHex(cloudColor);
           mat.opacity = isSunny ? 0.7 : 0.85;
         }
       });
     });
     
-    // Rain visibility
+    // Rain visibility and intensity
     if (this.rainDrops) {
       this.rainDrops.visible = isRainy;
+      const mat = this.rainDrops.material as THREE.PointsMaterial;
+      mat.opacity = (this.rainIntensity / 100) * 0.9;
     }
 
-    // Update ambient tone
+    // Celestial body position (Arc from left to right)
+    if (this.windowLight) {
+      const p = this.celestialPosition / 100; // 0 to 1
+      const x = -40 + (p * 80);
+      const y = 5 + (25 * Math.sin(p * Math.PI));
+      this.windowLight.position.set(x, y, -30);
+      
+      // Window Light color and intensity
+      let lightColor = 0xffffff;
+      let lightIntensity = 1.5;
+      
+      if (this.timeOfDay === 'sunset') {
+        lightColor = 0xffaa55;
+        lightIntensity = 1.0;
+      } else if (this.timeOfDay === 'night') {
+        lightColor = 0x4466aa;
+        lightIntensity = 0.4;
+      }
+      
+      if (isStormy) {
+        lightIntensity *= 0.1;
+        lightColor = 0x667788;
+      } else if (isRainy) {
+        lightIntensity *= 0.4;
+        lightColor = 0x8899aa;
+      }
+      
+      this.windowLight.color.setHex(lightColor);
+      this.windowLight.intensity = lightIntensity;
+    }
+
+    // Ambient/Hemisphere lighting
     this.scene.traverse((obj) => {
       if (obj instanceof THREE.AmbientLight) {
-        obj.color.setHex(isSunny ? 0xfff0e0 : (this.weather === 'thunderstorm' ? 0x606070 : 0xc0c0d0));
-        obj.intensity = isSunny ? 0.5 : (this.weather === 'thunderstorm' ? 0.15 : 0.35);
+        let ambColor = 0xfff0e0;
+        let ambIntensity = 0.5;
+        if (this.timeOfDay === 'sunset') { ambColor = 0xffe0c0; ambIntensity = 0.4; }
+        if (this.timeOfDay === 'night') { ambColor = 0x203050; ambIntensity = 0.2; }
+        
+        if (isStormy) { ambColor = 0x606070; ambIntensity *= 0.3; }
+        else if (isRainy) { ambColor = 0xc0c0d0; ambIntensity *= 0.7; }
+        
+        obj.color.setHex(ambColor);
+        obj.intensity = ambIntensity;
       }
       if (obj instanceof THREE.HemisphereLight) {
-        obj.color.setHex(isSunny ? 0x87ceeb : (this.weather === 'thunderstorm' ? 0x223344 : 0x556677));
-      }
-      if (obj instanceof THREE.DirectionalLight) {
-        obj.intensity = isSunny ? 1.5 : (this.weather === 'thunderstorm' ? 0.1 : 0.6);
-        obj.color.setHex(isSunny ? 0xffffff : (this.weather === 'thunderstorm' ? 0x667788 : 0x8899aa));
+        let hemiColor = 0x87ceeb;
+        if (this.timeOfDay === 'sunset') hemiColor = 0xffaa77;
+        if (this.timeOfDay === 'night') hemiColor = 0x102040;
+        
+        if (isStormy) hemiColor = 0x223344;
+        else if (isRainy) hemiColor = 0x556677;
+        
+        obj.color.setHex(hemiColor);
       }
     });
   }
@@ -1753,7 +1989,9 @@ export class LofiDiorama extends LitElement {
 
     // Lightning animation
     if (this.weather === 'thunderstorm' && this.lightningLight) {
-      if (Math.random() < 0.015) {
+      // 0 to 100 maps to 0.002 to 0.04 probability per frame
+      const probability = 0.002 + (this.lightningIntensity / 100) * 0.038;
+      if (Math.random() < probability) {
         this.targetLightningIntensity = 80 + Math.random() * 100;
       } else {
         this.targetLightningIntensity = 0;
@@ -1791,17 +2029,14 @@ export class LofiDiorama extends LitElement {
       this.raycaster.ray.intersectPlane(this.dragPlane, this.intersectionPoint);
       const newPos = this.intersectionPoint.clone().sub(this.dragOffset);
       
-      // Clamp to desk bounds to prevent dragging off the table or through walls
-      const deskWidth = 32;
-      const deskDepth = 20;
-      const deskCenterZ = -7;
-      
+      // Clamp to room bounds to prevent dragging through walls
+      // Floor is 72.5 x 40 centered at x=14, z=0
+      const floorHalfW = 72.5 / 2;
+      const floorHalfD = 40 / 2;
       const margin = 1.0;
-      const halfW = (deskWidth / 2) - margin;
-      const halfD = (deskDepth / 2) - margin;
       
-      newPos.x = Math.max(-halfW, Math.min(halfW, newPos.x));
-      newPos.z = Math.max(deskCenterZ - halfD, Math.min(deskCenterZ + halfD, newPos.z));
+      newPos.x = Math.max(14 - floorHalfW + margin, Math.min(14 + floorHalfW - margin, newPos.x));
+      newPos.z = Math.max(-floorHalfD + margin, Math.min(floorHalfD - margin, newPos.z));
       
       const oldPos = this.dragObject.position.clone();
       this.dragObject.position.x = newPos.x;
@@ -1809,7 +2044,7 @@ export class LofiDiorama extends LitElement {
       
       // Update matrices to ensure bounding boxes are perfectly accurate
       this.dragObject.updateMatrixWorld(true);
-      const updatedBox = new THREE.Box3().setFromObject(this.dragObject);
+      const updatedBox = new THREE.Box3().setFromObject(this.dragObject, true);
       
       let collision = false;
       const allColliders = [
@@ -1821,7 +2056,7 @@ export class LofiDiorama extends LitElement {
       for (const other of allColliders) {
         if (other !== this.dragObject && other.visible) {
           other.updateMatrixWorld(true);
-          const otherBox = new THREE.Box3().setFromObject(other);
+          const otherBox = new THREE.Box3().setFromObject(other, true);
           
           // Shrink bounding boxes slightly to allow adjacent placement without snagging
           updatedBox.expandByScalar(-0.2);
@@ -1843,8 +2078,48 @@ export class LofiDiorama extends LitElement {
     const intersects = this.raycaster.intersectObjects([...this.clickableObjects, ...this.draggableObjects], true);
     if (intersects.length > 0) {
       this.renderer.domElement.style.cursor = 'pointer';
+      
+      const object = intersects[0].object;
+      let target: THREE.Object3D | null = object;
+      while (target && !this.draggableObjects.includes(target) && target !== this.scene) {
+        target = target.parent;
+      }
+      
+      if (target && this.draggableObjects.includes(target) && this.activeGear.includes(target.name)) {
+        this.hoveredSynth = target;
+        
+        const center = new THREE.Vector3();
+        new THREE.Box3().setFromObject(target).getCenter(center);
+        center.y += 1.0; // Place icon closer to the synth
+        
+        center.project(this.camera);
+        this.hoverPosX = (center.x * 0.5 + 0.5) * rect.width;
+        this.hoverPosY = (-(center.y * 0.5) + 0.5) * rect.height;
+      } else {
+        if (this.hoveredSynth) {
+          // If we move off the synth, keep UI active if we are moving towards the button
+          const mouseX = event.clientX - rect.left;
+          const mouseY = event.clientY - rect.top;
+          const dx = mouseX - this.hoverPosX;
+          const dy = mouseY - this.hoverPosY;
+          if (dx*dx + dy*dy > 8100) { // ~90px radius leeway
+            this.hoveredSynth = null;
+          }
+        }
+      }
     } else {
       this.renderer.domElement.style.cursor = 'default';
+      
+      // Also check distance when hitting nothing (e.g. background)
+      if (this.hoveredSynth) {
+        const mouseX = event.clientX - rect.left;
+        const mouseY = event.clientY - rect.top;
+        const dx = mouseX - this.hoverPosX;
+        const dy = mouseY - this.hoverPosY;
+        if (dx*dx + dy*dy > 8100) {
+          this.hoveredSynth = null;
+        }
+      }
     }
   }
 
@@ -1900,33 +2175,36 @@ export class LofiDiorama extends LitElement {
     }
   }
 
+  private dropToSurface(obj: THREE.Object3D) {
+    const raycaster = new THREE.Raycaster();
+    obj.updateMatrixWorld(true);
+    
+    // Compute the bounds to align the bottom properly
+    const box = new THREE.Box3().setFromObject(obj, true);
+    
+    // Raycast downwards from the center of the bounding box
+    const center = new THREE.Vector3();
+    box.getCenter(center);
+    raycaster.set(center, new THREE.Vector3(0, -1, 0));
+    
+    const intersects = raycaster.intersectObjects(this.surfaceObjects, false);
+    
+    if (intersects.length > 0) {
+      // Find the topmost surface intersected
+      const topIntersect = intersects[0];
+      
+      // Align the bottom of the bounding box with the surface
+      const currentMinY = box.min.y;
+      const offset = topIntersect.point.y - currentMinY;
+      
+      obj.position.y += offset;
+      obj.updateMatrixWorld(true);
+    }
+  }
+
   private onPointerUp() {
     if (this.dragObject) {
-      // Cast a ray straight down from the object's center to find the surface (Desk or Floor)
-      const raycaster = new THREE.Raycaster();
-      this.dragObject.updateMatrixWorld(true);
-      
-      // Compute the bounds to align the bottom properly
-      const box = new THREE.Box3().setFromObject(this.dragObject);
-      
-      // Raycast downwards from the center of the bounding box
-      const center = new THREE.Vector3();
-      box.getCenter(center);
-      raycaster.set(center, new THREE.Vector3(0, -1, 0));
-      
-      const intersects = raycaster.intersectObjects(this.surfaceObjects, false);
-      
-      if (intersects.length > 0) {
-        // Find the topmost surface intersected
-        const topIntersect = intersects[0];
-        
-        // Align the bottom of the bounding box with the surface
-        const currentMinY = box.min.y;
-        const offset = topIntersect.point.y - currentMinY;
-        
-        this.dragObject.position.y += offset;
-        this.dragObject.updateMatrixWorld(true);
-      }
+      this.dropToSurface(this.dragObject);
       
       // If dropped onto another object, bounce it to the nearest free space
       this.resolveOverlap(this.dragObject);
@@ -2012,6 +2290,22 @@ export class LofiDiorama extends LitElement {
   render() {
     return html`
       <div class="canvas-container" @dblclick=${this.recenterCamera}></div>
+      ${this.hoveredSynth ? html`
+        <div 
+          class="stand-toggle" 
+          style="left: ${this.hoverPosX}px; top: ${this.hoverPosY}px;"
+          @click=${this.toggleHoveredStand}
+          title="Toggle Stand"
+        >
+          ${this.hoveredSynth.userData.hasStand ? html`
+            <!-- Flat Icon (Level) -->
+            <svg viewBox="0 0 24 24"><path d="M22,12 L2,12" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
+          ` : html`
+            <!-- Angled Icon (Tilt) -->
+            <svg viewBox="0 0 24 24"><path d="M22,8 L2,16" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
+          `}
+        </div>
+      ` : ''}
     `;
   }
 }
