@@ -1,6 +1,8 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
 import * as THREE from 'three';
+import ufoPosterImg from '../assets/posters/iwanttobelieve_.jpg';
+import tr808PosterImg from '../assets/posters/tr808.png';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
@@ -70,6 +72,7 @@ export class LofiDiorama extends LitElement {
   private trackerScreen!: TrackerScreen;
   private m8Screen!: M8Screen;
   private tapeSpools: THREE.Object3D[] = [];
+  private posters: THREE.Object3D[] = [];
   private circuitPads: THREE.Mesh[] = [];
   private lampBulb!: THREE.Mesh;
   private deskLight!: THREE.PointLight;
@@ -320,6 +323,7 @@ export class LofiDiorama extends LitElement {
     this.buildRoom();
     this.buildDesk();
     this.buildFurniture();
+    this.buildPosters();
     
     this.gearGroup = new THREE.Group();
     this.scene.add(this.gearGroup);
@@ -413,6 +417,85 @@ export class LofiDiorama extends LitElement {
     
     this.staticCollisionObjects.push(wallLeft, wallRight, wallAbove, wallBelow, leftWall);
   }
+
+  private buildPosters() {
+    const textureLoader = new THREE.TextureLoader();
+    
+    // Poster 1: I Want to Believe
+    textureLoader.load(ufoPosterImg, (tex) => {
+      tex.colorSpace = THREE.SRGBColorSpace;
+      const aspect = tex.image.width / tex.image.height;
+      const height = 12;
+      const width = height * aspect;
+      this.createPosterObject(tex, width, height, 'left', -22.05, 20, 0, 'poster_believe');
+    });
+
+    // Poster 2: TR808
+    textureLoader.load(tr808PosterImg, (tex) => {
+      tex.colorSpace = THREE.SRGBColorSpace;
+      const aspect = tex.image.width / tex.image.height;
+      const height = 8;
+      const width = height * aspect;
+      this.createPosterObject(tex, width, height, 'back', 20, 20, -19.8, 'poster_808');
+    });
+  }
+
+  private createPosterObject(texture: THREE.Texture, width: number, height: number, wall: 'left' | 'back', startX: number, startY: number, startZ: number, name: string) {
+    const group = new THREE.Group();
+    group.name = name;
+    group.userData.isPoster = true;
+    group.userData.wall = wall;
+
+    // Frame
+    const frameDepth = 0.5;
+    const frameWidth = 0.4;
+    const frameGeo = new THREE.BoxGeometry(width + frameWidth * 2, height + frameWidth * 2, frameDepth);
+    const frameMat = new THREE.MeshStandardMaterial({ color: 0x2b1d12, roughness: 0.6 }); // dark wood
+    const frame = new THREE.Mesh(frameGeo, frameMat);
+    frame.userData.isFrame = true;
+    frame.castShadow = true;
+    group.add(frame);
+
+    // Matte
+    const matteDepth = 0.2;
+    const matteBorder = 0.8;
+    const matteGeo = new THREE.BoxGeometry(width + matteBorder * 2, height + matteBorder * 2, matteDepth);
+    const matteMat = new THREE.MeshStandardMaterial({ color: 0xf5f5dc, roughness: 1.0 }); // off-white
+    const matte = new THREE.Mesh(matteGeo, matteMat);
+    matte.position.z = frameDepth / 2 + matteDepth / 2 - 0.1;
+    group.add(matte);
+
+    // Canvas/Image
+    const canvasGeo = new THREE.PlaneGeometry(width, height);
+    const canvasMat = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.5 });
+    const canvas = new THREE.Mesh(canvasGeo, canvasMat);
+    canvas.position.z = frameDepth / 2 + matteDepth + 0.01;
+    group.add(canvas);
+
+    // Rotate if on left wall
+    if (wall === 'left') {
+      group.rotation.y = Math.PI / 2;
+    }
+
+    // Load saved position or use default
+    const savedPos = localStorage.getItem(`lofi_pos_${name}`);
+    if (savedPos) {
+      const pos = JSON.parse(savedPos);
+      group.position.set(pos.x, pos.y, pos.z);
+      if (pos.wall) {
+        group.userData.wall = pos.wall;
+        group.rotation.y = pos.wall === 'left' ? Math.PI / 2 : 0;
+      }
+    } else {
+      group.position.set(startX, startY, startZ);
+    }
+
+    this.scene.add(group);
+    this.draggableObjects.push(group);
+    this.clickableObjects.push(group);
+    this.posters.push(group);
+  }
+
 
   private buildFurniture() {
     this.buildBed();
@@ -865,11 +948,15 @@ export class LofiDiorama extends LitElement {
   private saveLayout() {
     for (const obj of this.draggableObjects) {
       if (obj.name) {
-        localStorage.setItem(`lofi_pos_${obj.name}`, JSON.stringify({
+        const data: any = {
           x: obj.position.x,
           y: obj.position.y,
           z: obj.position.z
-        }));
+        };
+        if (obj.userData.isPoster) {
+          data.wall = obj.userData.wall;
+        }
+        localStorage.setItem(`lofi_pos_${obj.name}`, JSON.stringify(data));
       }
     }
   }
@@ -891,6 +978,11 @@ export class LofiDiorama extends LitElement {
     this.buildSP404(this.activeGear.includes('sp404'));
     this.buildStrat(this.activeGear.includes('strat'));
     this.buildM8(this.activeGear.includes('m8'));
+
+    // Update poster visibility
+    this.posters.forEach(poster => {
+      poster.visible = this.activeGear.includes(poster.name);
+    });
   }
 
   private buildPolyend(isActive: boolean) {
@@ -2059,6 +2151,98 @@ export class LofiDiorama extends LitElement {
     this.raycaster.setFromCamera(this.mouse, this.camera);
 
     if (this.dragObject) {
+      if (this.dragObject.userData.isPoster) {
+         const leftWallPlane = new THREE.Plane(new THREE.Vector3(1, 0, 0), 21.55);
+         const backWallPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 19.3);
+         
+         const leftPoint = new THREE.Vector3();
+         const backPoint = new THREE.Vector3();
+         
+         this.raycaster.ray.intersectPlane(leftWallPlane, leftPoint);
+         this.raycaster.ray.intersectPlane(backWallPlane, backPoint);
+         
+         let targetPos = new THREE.Vector3();
+         let targetWall = this.dragObject.userData.wall;
+
+         const leftZMin = -18, leftZMax = 18;
+         const backXMin = -14, backXMax = 42;
+         const yMin = 5, yMax = 40;
+
+         const inLeftWall = leftPoint && leftPoint.z >= leftZMin && leftPoint.z <= leftZMax && leftPoint.y >= yMin && leftPoint.y <= yMax;
+         const inBackWall = backPoint && backPoint.x >= backXMin && backPoint.x <= backXMax && backPoint.y >= yMin && backPoint.y <= yMax;
+
+         if (inLeftWall && !inBackWall) {
+             targetPos.copy(leftPoint);
+             targetWall = 'left';
+         } else if (inBackWall && !inLeftWall) {
+             targetPos.copy(backPoint);
+             targetWall = 'back';
+         } else if (inLeftWall && inBackWall) {
+             if (this.camera.position.distanceTo(leftPoint) < this.camera.position.distanceTo(backPoint)) {
+                 targetPos.copy(leftPoint);
+                 targetWall = 'left';
+             } else {
+                 targetPos.copy(backPoint);
+                 targetWall = 'back';
+             }
+         } else {
+             // Out of bounds, clamp to the current wall
+             if (this.dragObject.userData.wall === 'left' && leftPoint) {
+                 targetPos.copy(leftPoint);
+                 targetPos.z = Math.max(leftZMin, Math.min(leftZMax, targetPos.z));
+                 targetPos.y = Math.max(yMin, Math.min(yMax, targetPos.y));
+             } else if (backPoint) {
+                 targetPos.copy(backPoint);
+                 targetPos.x = Math.max(backXMin, Math.min(backXMax, targetPos.x));
+                 targetPos.y = Math.max(yMin, Math.min(yMax, targetPos.y));
+             } else {
+                 targetPos.copy(this.dragObject.position);
+             }
+         }
+
+         this.dragObject.userData.wall = targetWall;
+         this.dragObject.position.copy(targetPos);
+         this.dragObject.rotation.y = targetWall === 'left' ? Math.PI / 2 : 0;
+         this.dragObject.updateMatrixWorld(true);
+
+         const updatedBox = new THREE.Box3().setFromObject(this.dragObject, true);
+         updatedBox.expandByScalar(-0.2);
+
+         let collision = false;
+         for (const other of this.posters) {
+           if (other !== this.dragObject && other.visible) {
+             other.updateMatrixWorld(true);
+             const otherBox = new THREE.Box3().setFromObject(other, true);
+             otherBox.expandByScalar(-0.2);
+             if (updatedBox.intersectsBox(otherBox)) {
+               collision = true;
+               break;
+             }
+           }
+         }
+         
+         if (collision) {
+           this.dragObject.children.forEach((child: any) => {
+              if (child.material && child.userData.isFrame) {
+                  child.material.emissive.setHex(0xff0000);
+                  child.material.emissiveIntensity = 0.5;
+              }
+           });
+           this.dragObject.userData.colliding = true;
+         } else {
+           this.dragObject.children.forEach((child: any) => {
+              if (child.material && child.userData.isFrame) {
+                  child.material.emissive.setHex(0x000000);
+                  child.material.emissiveIntensity = 0;
+              }
+           });
+           this.dragObject.userData.colliding = false;
+           this.dragObject.userData.lastValidPos = targetPos.clone();
+           this.dragObject.userData.lastValidWall = targetWall;
+         }
+         return;
+      }
+
       this.raycaster.ray.intersectPlane(this.dragPlane, this.intersectionPoint);
       const newPos = this.intersectionPoint.clone().sub(this.dragOffset);
       
@@ -2150,15 +2334,17 @@ export class LofiDiorama extends LitElement {
       }
       
       if (target && this.draggableObjects.includes(target) && this.activeGear.includes(target.name)) {
-        this.hoveredSynth = target;
-        
-        const center = new THREE.Vector3();
-        new THREE.Box3().setFromObject(target).getCenter(center);
-        center.y += 1.0; // Place icon closer to the synth
-        
-        center.project(this.camera);
-        this.hoverPosX = (center.x * 0.5 + 0.5) * rect.width;
-        this.hoverPosY = (-(center.y * 0.5) + 0.5) * rect.height;
+        if (!target.userData.isPoster) {
+          this.hoveredSynth = target;
+          
+          const center = new THREE.Vector3();
+          new THREE.Box3().setFromObject(target).getCenter(center);
+          center.y += 1.0; // Place icon closer to the synth
+          
+          center.project(this.camera);
+          this.hoverPosX = (center.x * 0.5 + 0.5) * rect.width;
+          this.hoverPosY = (-(center.y * 0.5) + 0.5) * rect.height;
+        }
       } else {
         if (this.hoveredSynth) {
           // If we move off the synth, keep UI active if we are moving towards the button
@@ -2211,15 +2397,19 @@ export class LofiDiorama extends LitElement {
         // Disable orbit controls while dragging
         if (this.controls) this.controls.enabled = false;
         
-        // Lift the object slightly into the air to feel like dragging
-        const liftHeight = Math.max(dragTarget.position.y + 0.5, 7.5);
-        this.dragPlane.constant = -liftHeight;
-        
-        // Physically lift it so it renders above other objects while dragging
-        dragTarget.position.y = liftHeight;
-        
-        this.raycaster.ray.intersectPlane(this.dragPlane, this.intersectionPoint);
-        this.dragOffset.copy(this.intersectionPoint).sub(dragTarget.position);
+        if (this.dragObject.userData.isPoster) {
+           this.dragObject.userData.startPos = this.dragObject.position.clone();
+           this.dragObject.userData.lastValidPos = this.dragObject.position.clone();
+           this.dragObject.userData.startWall = this.dragObject.userData.wall;
+           this.dragObject.userData.lastValidWall = this.dragObject.userData.wall;
+        } else {
+           // Normal gear lift
+           const liftHeight = Math.max(dragTarget.position.y + 0.5, 7.5);
+           this.dragPlane.setComponents(0, 1, 0, -liftHeight);
+           dragTarget.position.y = liftHeight;
+           this.raycaster.ray.intersectPlane(this.dragPlane, this.intersectionPoint);
+           this.dragOffset.copy(this.intersectionPoint).sub(this.dragObject.position);
+        }
       } else {
         // Check if we clicked the Herman Miller chair
         let chairTarget: THREE.Object3D | null = object;
@@ -2272,22 +2462,50 @@ export class LofiDiorama extends LitElement {
 
   private onPointerUp() {
     if (this.dragObject) {
-      let snapped = false;
-      if (this.dragObject.name === 'headphones') {
-        const hookPos = new THREE.Vector3(16.6, 4.9, -5);
-        const dist2D = Math.sqrt(Math.pow(this.dragObject.position.x - hookPos.x, 2) + Math.pow(this.dragObject.position.z - hookPos.z, 2));
-        if (dist2D < 2.0) {
-          this.dragObject.position.copy(hookPos);
-          this.dragObject.rotation.set(0, Math.PI / 2, 0);
-          this.dragObject.updateMatrixWorld(true);
-          snapped = true;
-        }
-      }
+      if (this.dragObject.userData.isPoster) {
+         if (this.dragObject.userData.colliding) {
+            this.dragObject.position.copy(this.dragObject.userData.startPos);
+            this.dragObject.userData.wall = this.dragObject.userData.startWall;
+            this.dragObject.children.forEach((child: any) => {
+               if (child.material && child.userData.isFrame) {
+                   child.material.emissive.setHex(0x000000);
+                   child.material.emissiveIntensity = 0;
+               }
+            });
+            this.dragObject.userData.colliding = false;
+         } else if (this.dragObject.userData.lastValidPos) {
+            this.dragObject.position.copy(this.dragObject.userData.lastValidPos);
+            this.dragObject.userData.wall = this.dragObject.userData.lastValidWall;
+         }
+         
+         this.dragObject.rotation.y = this.dragObject.userData.wall === 'left' ? Math.PI / 2 : 0;
+         
+         // Remove hover offset to snap back to the physical wall
+         if (this.dragObject.userData.wall === 'left') {
+            this.dragObject.position.x = -22.05;
+         } else {
+            this.dragObject.position.z = -19.8;
+         }
+         
+         this.dragObject.updateMatrixWorld(true);
+      } else {
+          let snapped = false;
+          if (this.dragObject.name === 'headphones') {
+            const hookPos = new THREE.Vector3(16.6, 4.9, -5);
+            const dist2D = Math.sqrt(Math.pow(this.dragObject.position.x - hookPos.x, 2) + Math.pow(this.dragObject.position.z - hookPos.z, 2));
+            if (dist2D < 2.0) {
+              this.dragObject.position.copy(hookPos);
+              this.dragObject.rotation.set(0, Math.PI / 2, 0);
+              this.dragObject.updateMatrixWorld(true);
+              snapped = true;
+            }
+          }
 
-      if (!snapped) {
-        this.dropToSurface(this.dragObject);
-        // If dropped onto another object, bounce it to the nearest free space
-        this.resolveOverlap(this.dragObject);
+          if (!snapped) {
+            this.dropToSurface(this.dragObject);
+            // If dropped onto another object, bounce it to the nearest free space
+            this.resolveOverlap(this.dragObject);
+          }
       }
       
       this.saveLayout();

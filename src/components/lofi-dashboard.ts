@@ -1,5 +1,5 @@
 import { LitElement, html, css } from 'lit';
-import { customElement, state } from 'lit/decorators.js';
+import { customElement, state, property } from 'lit/decorators.js';
 import { AudioManager } from '../utils/audio-manager';
 import './lofi-diorama';
 import './gear-preview';
@@ -42,11 +42,14 @@ export class LofiDashboard extends LitElement {
   @state()
   private lightningIntensity: number = 50;
 
-  @state()
-  private activeGear: string[] = ['polyend', 'circuit_tracks', 'mood', 'blooper', 'sp404', 'm8'];
+  @property({ type: Array })
+  private activeGear: string[] = ['polyend', 'circuit_tracks', 'mood', 'blooper', 'sp404', 'm8', 'poster_believe', 'poster_808'];
 
   @state()
-  private activePanel: 'gear' | 'environment' | null = null;
+  private activePanel: 'gear' | 'environment' | 'audio' | null = null;
+
+  @state()
+  private expandedCategory: string | null = null;
 
   @state()
   private isAudioOpen = false;
@@ -517,12 +520,22 @@ export class LofiDashboard extends LitElement {
     }
   `;
 
+  private handleDocumentClick = (e: MouseEvent) => {
+    const path = e.composedPath();
+    if (!path.includes(this) && this.activePanel && this.activePanel !== 'audio') {
+      this.activePanel = null;
+      this.requestUpdate();
+    }
+  };
+
   connectedCallback() {
     super.connectedCallback();
+    document.addEventListener('click', this.handleDocumentClick);
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
+    document.removeEventListener('click', this.handleDocumentClick);
     this.stopProgressLoop();
   }
 
@@ -680,23 +693,40 @@ export class LofiDashboard extends LitElement {
     return num.toString().padStart(2, '0');
   }
 
-  private scrollCarousel(id: string, dir: number) {
-    const el = this.shadowRoot?.getElementById(id);
-    if (el) {
-      el.scrollBy({ left: dir * 126, behavior: 'smooth' });
+
+
+  private toggleCategory(categoryId: string) {
+    if (this.expandedCategory === categoryId) {
+      this.expandedCategory = null;
+    } else {
+      this.expandedCategory = categoryId;
     }
   }
 
   private renderGearTab() {
-    const allGear = [
-      { id: 'polyend', label: 'Polyend', icon: '🎛️', cat: 'Seq' },
-      { id: 'circuit_tracks', label: 'Circuit', icon: '🎹', cat: 'Seq' },
-      { id: 'sp404', label: 'SP404', icon: '🎰', cat: 'Sampler' },
-      { id: 'm8', label: 'M8', icon: '📱', cat: 'Tracker' },
-      { id: 'mood', label: 'MOOD', icon: '🎚️', cat: 'Pedal' },
-      { id: 'blooper', label: 'Blooper', icon: '🔁', cat: 'Pedal' },
-      { id: 'reel', label: 'Tape Reel', icon: '📼', cat: 'Tape', disabled: true },
-      { id: 'strat', label: 'Strat', icon: '🎸', cat: 'Inst', disabled: true }
+    const categories = [
+      { id: 'seq', label: 'Sequencers', items: [
+        { id: 'polyend', label: 'Polyend', icon: '🎛️', cat: 'Seq' },
+        { id: 'circuit_tracks', label: 'Circuit', icon: '🎹', cat: 'Seq' },
+      ]},
+      { id: 'samplers', label: 'Samplers', items: [
+        { id: 'sp404', label: 'SP404', icon: '🎰', cat: 'Sampler' },
+      ]},
+      { id: 'trackers', label: 'Trackers', items: [
+        { id: 'm8', label: 'M8', icon: '📱', cat: 'Tracker' },
+      ]},
+      { id: 'pedals', label: 'Pedals', items: [
+        { id: 'mood', label: 'MOOD', icon: '🎚️', cat: 'Pedal' },
+        { id: 'blooper', label: 'Blooper', icon: '🔁', cat: 'Pedal' },
+      ]},
+      { id: 'decor', label: 'Decor', items: [
+        { id: 'poster_believe', label: 'UFO Poster', icon: '🖼️', cat: 'Poster', disabled: false },
+        { id: 'poster_808', label: '808 Poster', icon: '🖼️', cat: 'Poster', disabled: false }
+      ]},
+      { id: 'other', label: 'Other', items: [
+        { id: 'reel', label: 'Tape Reel', icon: '📼', cat: 'Tape', disabled: true },
+        { id: 'strat', label: 'Strat', icon: '🎸', cat: 'Inst', disabled: true }
+      ]}
     ];
 
     const renderCard = (gear: any) => html`
@@ -704,19 +734,37 @@ export class LofiDashboard extends LitElement {
         class="gear-card ${this.activeGear.includes(gear.id) ? 'active' : ''} ${gear.disabled ? 'disabled' : ''}"
         @click="${() => !gear.disabled && this.toggleGear(gear.id)}"
       >
-        <div class="gear-icon"><gear-preview gear="${gear.id}"></gear-preview></div>
+        <div class="gear-icon">
+          ${gear.cat === 'Poster' || gear.cat === 'Tape' || gear.cat === 'Inst' 
+            ? html`<div style="font-size: 2rem; display: flex; align-items: center; justify-content: center; height: 100%;">${gear.icon}</div>` 
+            : html`<gear-preview gear="${gear.id}"></gear-preview>`}
+        </div>
         <div class="gear-name">${gear.label}</div>
         <div style="font-size: 0.65rem; color: rgba(255,255,255,0.4); text-transform: uppercase;">${gear.cat}</div>
       </div>
     `;
 
     return html`
-      <div class="carousel-container" style="padding-top: 4px;">
-        <button class="carousel-btn" @click="${() => this.scrollCarousel('all-gear-grid', -1)}">❮</button>
-        <div class="gear-grid" id="all-gear-grid">
-          ${allGear.map(renderCard)}
-        </div>
-        <button class="carousel-btn" @click="${() => this.scrollCarousel('all-gear-grid', 1)}">❯</button>
+      <div class="accordion-container" style="padding: 12px 12px 12px 0; max-height: 50vh; overflow-y: auto;">
+        ${categories.map(cat => html`
+          <div class="accordion-section" style="margin-bottom: 8px;">
+            <div 
+              class="accordion-header" 
+              style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: rgba(255,255,255,0.05); border-radius: 6px; cursor: pointer; transition: background 0.2s;"
+              @click="${() => this.toggleCategory(cat.id)}"
+            >
+              <div style="font-size: 0.9rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em;">${cat.label}</div>
+              <div style="font-size: 0.75rem; color: rgba(255,255,255,0.5);">${this.expandedCategory === cat.id ? '▼' : '▶'}</div>
+            </div>
+            ${this.expandedCategory === cat.id ? html`
+              <div class="accordion-content" style="padding: 12px 0;">
+                <div class="gear-grid" id="grid-${cat.id}" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 12px; width: 100%;">
+                  ${cat.items.map(renderCard)}
+                </div>
+              </div>
+            ` : ''}
+          </div>
+        `)}
       </div>
     `;
   }
