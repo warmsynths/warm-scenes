@@ -10,6 +10,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { SSAOPass } from 'three/examples/jsm/postprocessing/SSAOPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js';
 
 import { AudioManager } from '../utils/audio-manager';
 import { TrackerScreen } from '../utils/tracker-screen';
@@ -62,8 +63,13 @@ export class LofiDiorama extends LitElement {
   private scene!: THREE.Scene;
   private camera!: THREE.PerspectiveCamera;
   private renderer!: THREE.WebGLRenderer;
+  private cssRenderer!: CSS3DRenderer;
   private composer!: EffectComposer;
   private gearGroup!: THREE.Group;
+  
+  @state()
+  private activeConfigDevice: THREE.Object3D | null = null;
+  private configPanelObj: CSS3DObject | null = null;
   
   private resizeObserver!: ResizeObserver;
   private animationFrameId: number | null = null;
@@ -161,7 +167,7 @@ export class LofiDiorama extends LitElement {
       border-color: rgba(255, 255, 255, 0.4);
     }
 
-    .stand-toggle {
+    .edit-toggle {
       position: absolute;
       background: rgba(0, 0, 0, 0.6);
       border: 1px solid rgba(255, 255, 255, 0.2);
@@ -179,15 +185,82 @@ export class LofiDiorama extends LitElement {
       z-index: 20;
     }
     
-    .stand-toggle:hover {
+    .edit-toggle:hover {
       background: rgba(255, 255, 255, 0.3);
       transform: translate(-50%, -50%) scale(1.1);
     }
     
-    .stand-toggle svg {
+    .edit-toggle svg {
       width: 16px;
       height: 16px;
       fill: currentColor;
+    }
+
+    .config-panel {
+      background: rgba(20, 15, 25, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 12px;
+      padding: 16px;
+      color: white;
+      font-family: inherit;
+      width: 200px;
+      backdrop-filter: blur(8px);
+      pointer-events: auto;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      user-select: none;
+    }
+
+    .config-panel h3 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      padding-bottom: 8px;
+      text-transform: capitalize;
+    }
+
+    .config-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .config-row input[type=range] {
+      width: 100px;
+      accent-color: #ffaa77;
+    }
+
+    .config-row label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+
+    .config-row input[type=checkbox] {
+      accent-color: #ffaa77;
+      cursor: pointer;
+    }
+
+    .config-btn {
+      background: rgba(255, 170, 119, 0.2);
+      border: 1px solid rgba(255, 170, 119, 0.5);
+      color: #ffaa77;
+      border-radius: 4px;
+      padding: 6px 12px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      transition: all 0.2s;
+    }
+    .config-btn:hover {
+      background: rgba(255, 170, 119, 0.4);
     }
   `;
 
@@ -255,6 +328,16 @@ export class LofiDiorama extends LitElement {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.0;
     this.container.appendChild(this.renderer.domElement);
+
+    // CSS3D Renderer for 3D HTML UI
+    this.cssRenderer = new CSS3DRenderer();
+    this.cssRenderer.setSize(width, height);
+    this.cssRenderer.domElement.style.position = 'absolute';
+    this.cssRenderer.domElement.style.top = '0px';
+    this.cssRenderer.domElement.style.left = '0px';
+    this.cssRenderer.domElement.style.overflow = 'hidden';
+    this.cssRenderer.domElement.style.pointerEvents = 'none'; // clicks pass through unless on child elements
+    this.container.appendChild(this.cssRenderer.domElement);
     
     // Set up Post-Processing for SSAO
     this.composer = new EffectComposer(this.renderer);
@@ -801,6 +884,17 @@ export class LofiDiorama extends LitElement {
       obj.userData.hasStand = JSON.parse(savedStand);
       this.applySynthStand(obj, obj.userData.hasStand);
     }
+
+    // Check and apply rotation state
+    const savedRot = localStorage.getItem(`lofi_rot_${name}`);
+    if (savedRot) {
+      const rot = parseFloat(savedRot);
+      if (!isNaN(rot)) {
+        obj.userData.rotationY = rot;
+        obj.rotation.y = rot;
+        obj.updateMatrixWorld(true);
+      }
+    }
     
     // Always ensure synths are flush on a surface on load, 
     // fixing any bad cached Y coordinates from previous bugs.
@@ -890,15 +984,135 @@ export class LofiDiorama extends LitElement {
     }
   }
 
-  private toggleHoveredStand() {
+  private applySynthRotation(synth: THREE.Object3D, rotationY: number) {
+    synth.rotation.y = rotationY;
+    synth.updateMatrixWorld(true);
+  }
+
+  private closeConfigPanel() {
+    if (this.configPanelObj) {
+      if (this.configPanelObj.parent) {
+        this.configPanelObj.parent.remove(this.configPanelObj);
+      }
+      this.configPanelObj = null;
+    }
+    this.activeConfigDevice = null;
+    this.requestUpdate();
+  }
+
+  private openConfigPanel() {
     if (!this.hoveredSynth) return;
     
-    const hasStand = !this.hoveredSynth.userData.hasStand;
-    this.hoveredSynth.userData.hasStand = hasStand;
-    localStorage.setItem(`lofi_stand_${this.hoveredSynth.name}`, JSON.stringify(hasStand));
+    // Close existing if any
+    this.closeConfigPanel();
     
-    this.applySynthStand(this.hoveredSynth, hasStand);
-    this.dropToSurface(this.hoveredSynth);
+    this.activeConfigDevice = this.hoveredSynth;
+    const name = this.activeConfigDevice.name;
+    
+    // Create DOM element for config
+    const panelDiv = document.createElement('div');
+    panelDiv.className = 'config-panel';
+    
+    // Disable interactions propagating to OrbitControls
+    panelDiv.addEventListener('pointerdown', (e) => e.stopPropagation());
+    panelDiv.addEventListener('wheel', (e) => e.stopPropagation());
+    panelDiv.addEventListener('pointermove', (e) => e.stopPropagation());
+    
+    // Header
+    const title = document.createElement('h3');
+    title.innerText = name.replace('_', ' ');
+    panelDiv.appendChild(title);
+    
+    // Rotation Slider
+    const rotRow = document.createElement('div');
+    rotRow.className = 'config-row';
+    const rotLabel = document.createElement('label');
+    rotLabel.innerText = 'Rotation';
+    const rotSlider = document.createElement('input');
+    rotSlider.type = 'range';
+    rotSlider.min = '-180';
+    rotSlider.max = '180';
+    rotSlider.step = '1';
+    
+    const currentRot = this.activeConfigDevice.userData.rotationY || 0;
+    rotSlider.value = (currentRot * (180 / Math.PI)).toString();
+    
+    rotSlider.addEventListener('input', (e) => {
+      if (!this.activeConfigDevice) return;
+      let deg = parseFloat((e.target as HTMLInputElement).value);
+      
+      // Snap to common angles (detents)
+      const snapAngles = [0, 90, -90, 180, -180];
+      for (const angle of snapAngles) {
+        if (Math.abs(deg - angle) < 12) {
+          deg = angle;
+          (e.target as HTMLInputElement).value = angle.toString();
+          break;
+        }
+      }
+
+      const rad = deg * (Math.PI / 180);
+      this.activeConfigDevice.userData.rotationY = rad;
+      localStorage.setItem(`lofi_rot_${name}`, rad.toString());
+      this.applySynthRotation(this.activeConfigDevice, rad);
+    });
+    
+    rotRow.appendChild(rotLabel);
+    rotRow.appendChild(rotSlider);
+    panelDiv.appendChild(rotRow);
+    
+    // Stand Toggle
+    const standRow = document.createElement('div');
+    standRow.className = 'config-row';
+    const standLabel = document.createElement('label');
+    standLabel.innerText = 'Stand';
+    const standToggle = document.createElement('input');
+    standToggle.type = 'checkbox';
+    standToggle.checked = !!this.activeConfigDevice.userData.hasStand;
+    
+    standLabel.prepend(standToggle);
+    standRow.appendChild(standLabel);
+    
+    standToggle.addEventListener('change', (e) => {
+      if (!this.activeConfigDevice) return;
+      const checked = (e.target as HTMLInputElement).checked;
+      this.activeConfigDevice.userData.hasStand = checked;
+      localStorage.setItem(`lofi_stand_${name}`, JSON.stringify(checked));
+      this.applySynthStand(this.activeConfigDevice, checked);
+      this.dropToSurface(this.activeConfigDevice);
+    });
+    
+    panelDiv.appendChild(standRow);
+    
+    // Location Toggle Button
+    const locRow = document.createElement('div');
+    locRow.className = 'config-row';
+    locRow.style.justifyContent = 'center';
+    locRow.style.marginTop = '8px';
+    const locBtn = document.createElement('button');
+    locBtn.className = 'config-btn';
+    
+    const isOnDesk = this.activeGear.includes(name);
+    locBtn.innerText = isOnDesk ? 'Put on Shelf' : 'Put on Desk';
+    
+    locBtn.addEventListener('click', () => {
+      this.dispatchEvent(new CustomEvent('toggle-gear', { 
+        detail: { gear: name }, 
+        bubbles: true, 
+        composed: true 
+      }));
+      this.closeConfigPanel();
+    });
+    
+    locRow.appendChild(locBtn);
+    panelDiv.appendChild(locRow);
+    
+    this.configPanelObj = new CSS3DObject(panelDiv);
+    // Scale it down to fit the diorama scale properly
+    this.configPanelObj.scale.set(0.035, 0.035, 0.035);
+    
+    // Add to scene instead of device so it doesn't spin when the device rotates
+    this.scene.add(this.configPanelObj);
     
     this.requestUpdate();
   }
@@ -1572,6 +1786,7 @@ export class LofiDiorama extends LitElement {
       lampGroup.add(this.deskLight);
     }
 
+    lampGroup.visible = this.activeGear.includes('lamp');
     this.scene.add(lampGroup);
     this.loadOrPlaceObject(lampGroup, 'lamp', -8.5, 6.0, -11);
 
@@ -1589,6 +1804,7 @@ export class LofiDiorama extends LitElement {
     coffee.position.set(0, 1.0, 0);
     mugGroup.add(coffee);
     
+    mugGroup.visible = this.activeGear.includes('cup');
     this.scene.add(mugGroup);
     this.loadOrPlaceObject(mugGroup, 'mug', -7.5, 6.0, -3);
 
@@ -1618,6 +1834,8 @@ export class LofiDiorama extends LitElement {
       leaf.rotation.set(Math.random(), Math.random(), Math.random());
       plantGroup.add(leaf);
     }
+    
+    plantGroup.visible = this.activeGear.includes('plant_small');
     this.scene.add(plantGroup);
     this.loadOrPlaceObject(plantGroup, 'plant', 10.0, 6.0, -6);
 
@@ -2019,6 +2237,7 @@ export class LofiDiorama extends LitElement {
     this.camera.aspect = aspect;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height, false);
+    this.cssRenderer.setSize(width, height);
     this.composer.setSize(width, height);
   }
 
@@ -2138,8 +2357,15 @@ export class LofiDiorama extends LitElement {
       this.hermanMillerChair.rotation.y += (this.targetChairRotation - this.hermanMillerChair.rotation.y) * 0.08;
     }
 
+    if (this.configPanelObj && this.activeConfigDevice) {
+      // Keep panel floating above device and always facing the camera (billboarding)
+      this.configPanelObj.position.copy(this.activeConfigDevice.position).add(new THREE.Vector3(0, 5, 0));
+      this.configPanelObj.quaternion.copy(this.camera.quaternion);
+    }
+
     // Use composer for post-processing instead of standard renderer
     this.composer.render();
+    if (this.cssRenderer) this.cssRenderer.render(this.scene, this.camera);
   }
 
   private onPointerMove(event: PointerEvent) {
@@ -2382,6 +2608,21 @@ export class LofiDiorama extends LitElement {
     this.raycaster.setFromCamera(this.mouse, this.camera);
     const intersects = this.raycaster.intersectObjects([...this.clickableObjects, ...this.draggableObjects], true);
 
+    // Close config panel if clicking elsewhere
+    if (this.activeConfigDevice) {
+       let clickedDevice = false;
+       if (intersects.length > 0) {
+          let target: THREE.Object3D | null = intersects[0].object;
+          while (target && target !== this.scene) {
+             if (target === this.activeConfigDevice) clickedDevice = true;
+             target = target.parent;
+          }
+       }
+       if (!clickedDevice) {
+          this.closeConfigPanel();
+       }
+    }
+
     if (intersects.length > 0) {
       const object = intersects[0].object;
       
@@ -2589,20 +2830,15 @@ export class LofiDiorama extends LitElement {
   render() {
     return html`
       <div class="canvas-container" @dblclick=${this.recenterCamera}></div>
-      ${this.hoveredSynth ? html`
+      ${this.hoveredSynth && !this.activeConfigDevice ? html`
         <div 
-          class="stand-toggle" 
+          class="edit-toggle" 
           style="left: ${this.hoverPosX}px; top: ${this.hoverPosY}px;"
-          @click=${this.toggleHoveredStand}
-          title="Toggle Stand"
+          @click=${this.openConfigPanel}
+          title="Configure Device"
         >
-          ${this.hoveredSynth.userData.hasStand ? html`
-            <!-- Flat Icon (Level) -->
-            <svg viewBox="0 0 24 24"><path d="M22,12 L2,12" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
-          ` : html`
-            <!-- Angled Icon (Tilt) -->
-            <svg viewBox="0 0 24 24"><path d="M22,8 L2,16" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
-          `}
+          <!-- Gear Icon -->
+          <svg viewBox="0 0 24 24"><path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.06-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.73,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.06,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.49-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z" stroke="white" fill="none" stroke-width="1.5"/></svg>
         </div>
       ` : ''}
     `;

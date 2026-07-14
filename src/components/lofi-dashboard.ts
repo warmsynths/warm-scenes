@@ -4,6 +4,9 @@ import { AudioManager } from '../utils/audio-manager';
 import './lofi-diorama';
 import './gear-preview';
 
+import ufoPosterImg from '../assets/posters/iwanttobelieve_.jpg';
+import tr808PosterImg from '../assets/posters/tr808.png';
+
 type Weather = 'sunny' | 'rainy' | 'thunderstorm';
 type TimeOfDay = 'day' | 'sunset' | 'night';
 
@@ -43,7 +46,7 @@ export class LofiDashboard extends LitElement {
   private lightningIntensity: number = 50;
 
   @property({ type: Array })
-  private activeGear: string[] = ['polyend', 'circuit_tracks', 'mood', 'blooper', 'sp404', 'm8', 'poster_believe', 'poster_808'];
+  private activeGear: string[] = ['polyend', 'circuit_tracks', 'mood', 'blooper', 'sp404', 'm8', 'poster_believe', 'poster_808', 'lamp', 'cup', 'plant_small'];
 
   @state()
   private activePanel: 'gear' | 'environment' | 'audio' | null = null;
@@ -176,9 +179,8 @@ export class LofiDashboard extends LitElement {
     }
 
     .gear-card {
-      flex: 0 0 auto;
-      width: 110px;
-      height: 110px;
+      width: 100%;
+      aspect-ratio: 1;
       background: rgba(0, 0, 0, 0.4);
       border-radius: 20px;
       display: flex;
@@ -191,9 +193,9 @@ export class LofiDashboard extends LitElement {
       border: 2px solid rgba(255, 255, 255, 0.05);
       text-align: center;
       padding: 10px;
+      box-sizing: border-box;
       user-select: none;
       color: #a0a0a0;
-      scroll-snap-align: center;
     }
 
     .gear-card:hover {
@@ -521,8 +523,14 @@ export class LofiDashboard extends LitElement {
   `;
 
   private handleDocumentClick = (e: MouseEvent) => {
-    const path = e.composedPath();
-    if (!path.includes(this) && this.activePanel && this.activePanel !== 'audio') {
+    if (!this.activePanel || this.activePanel === 'audio') return;
+    
+    const path = e.composedPath() as HTMLElement[];
+    const clickedInsidePanel = path.some(el => 
+      el.classList && (el.classList.contains('frameless-top-panel') || el.classList.contains('trigger-group'))
+    );
+    
+    if (!clickedInsidePanel) {
       this.activePanel = null;
       this.requestUpdate();
     }
@@ -703,25 +711,16 @@ export class LofiDashboard extends LitElement {
     }
   }
 
-  private renderGearTab() {
+  private renderDecorTab() {
     const categories = [
-      { id: 'seq', label: 'Sequencers', items: [
-        { id: 'polyend', label: 'Polyend', icon: '🎛️', cat: 'Seq' },
-        { id: 'circuit_tracks', label: 'Circuit', icon: '🎹', cat: 'Seq' },
-      ]},
-      { id: 'samplers', label: 'Samplers', items: [
-        { id: 'sp404', label: 'SP404', icon: '🎰', cat: 'Sampler' },
-      ]},
-      { id: 'trackers', label: 'Trackers', items: [
-        { id: 'm8', label: 'M8', icon: '📱', cat: 'Tracker' },
-      ]},
-      { id: 'pedals', label: 'Pedals', items: [
-        { id: 'mood', label: 'MOOD', icon: '🎚️', cat: 'Pedal' },
-        { id: 'blooper', label: 'Blooper', icon: '🔁', cat: 'Pedal' },
-      ]},
       { id: 'decor', label: 'Decor', items: [
-        { id: 'poster_believe', label: 'UFO Poster', icon: '🖼️', cat: 'Poster', disabled: false },
-        { id: 'poster_808', label: '808 Poster', icon: '🖼️', cat: 'Poster', disabled: false }
+        { id: 'lamp', label: 'Desk Lamp', icon: '💡', cat: 'Decor', disabled: false },
+        { id: 'cup', label: 'Coffee Cup', icon: '☕', cat: 'Decor', disabled: false },
+        { id: 'plant_small', label: 'Desk Plant', icon: '🪴', cat: 'Decor', disabled: false }
+      ]},
+      { id: 'posters', label: 'Posters', items: [
+        { id: 'poster_believe', label: 'UFO Poster', img: ufoPosterImg, cat: 'Poster', disabled: false },
+        { id: 'poster_808', label: '808 Poster', img: tr808PosterImg, cat: 'Poster', disabled: false }
       ]},
       { id: 'other', label: 'Other', items: [
         { id: 'reel', label: 'Tape Reel', icon: '📼', cat: 'Tape', disabled: true },
@@ -735,7 +734,9 @@ export class LofiDashboard extends LitElement {
         @click="${() => !gear.disabled && this.toggleGear(gear.id)}"
       >
         <div class="gear-icon">
-          ${gear.cat === 'Poster' || gear.cat === 'Tape' || gear.cat === 'Inst' 
+          ${gear.cat === 'Poster' && gear.img
+            ? html`<img src="${gear.img}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 4px;" />`
+            : gear.cat === 'Tape' || gear.cat === 'Inst' || gear.cat === 'Decor'
             ? html`<div style="font-size: 2rem; display: flex; align-items: center; justify-content: center; height: 100%;">${gear.icon}</div>` 
             : html`<gear-preview gear="${gear.id}"></gear-preview>`}
         </div>
@@ -758,7 +759,7 @@ export class LofiDashboard extends LitElement {
             </div>
             ${this.expandedCategory === cat.id ? html`
               <div class="accordion-content" style="padding: 12px 0;">
-                <div class="gear-grid" id="grid-${cat.id}" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 12px; width: 100%;">
+                <div class="gear-grid" id="grid-${cat.id}" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 12px; width: 100%;">
                   ${cat.items.map(renderCard)}
                 </div>
               </div>
@@ -940,17 +941,19 @@ export class LofiDashboard extends LitElement {
         .lightningIntensity="${this.lightningIntensity}"
         .activeGear="${this.activeGear}"
         @toggle-settings="${() => this.togglePanel('gear')}"
+        @toggle-gear="${(e: CustomEvent) => this.toggleGear(e.detail.gear)}"
       ></lofi-diorama>
 
       <div class="trigger-group">
-        <button class="icon-trigger-btn ${this.activePanel === 'gear' ? 'active' : ''}" @click="${() => this.togglePanel('gear')}" title="Gear">🎒</button>
+        <button class="icon-trigger-btn ${this.activePanel === 'gear' ? 'active' : ''}" @click="${() => this.togglePanel('gear')}" title="Decor">🪴</button>
         <button class="icon-trigger-btn ${this.activePanel === 'environment' ? 'active' : ''}" @click="${() => this.togglePanel('environment')}" title="Environment">🌤️</button>
-        <button class="icon-trigger-btn ${this.isAudioOpen ? 'active' : ''}" @click="${() => this.togglePanel('audio')}" title="Audio">🎵</button>
+        <button class="icon-trigger-btn ${this.activePanel === 'audio' ? 'active' : ''}" @click="${() => this.togglePanel('audio')}" title="Audio">🎵</button>
       </div>
 
+      <!-- Frameless Container for Gear & Environment Panels -->
       <div class="frameless-top-panel ${this.activePanel === 'gear' || this.activePanel === 'environment' ? '' : 'hidden'}">
         ${this.activePanel === 'gear' ? html`
-          ${this.renderGearTab()}
+          ${this.renderDecorTab()}
         ` : ''}
         ${this.activePanel === 'environment' ? html`
           ${this.renderEnvironmentTab()}
