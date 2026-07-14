@@ -182,8 +182,8 @@ export class LofiDiorama extends LitElement {
     // Perspective camera — Diorama/Miniature view (Narrow FOV)
     const aspect = width / height;
     this.camera = new THREE.PerspectiveCamera(15, aspect, 0.1, 1000);
-    this.camera.position.set(80, 50, 90);
-    this.camera.lookAt(0, 5.6, -7);
+    this.camera.position.set(150, 100, 150);
+    this.camera.lookAt(14, 5.6, 0);
 
     // Crisp, clean renderer with transparent background
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -1502,7 +1502,7 @@ export class LofiDiorama extends LitElement {
     for (let i = 0; i < rainCount; i++) {
       rainPositions[i * 3] = (Math.random() - 0.5) * 20; // X from -10 to 10
       rainPositions[i * 3 + 1] = Math.random() * 25 - 5;
-      rainPositions[i * 3 + 2] = -26 + Math.random() * 6; // Z from -26 to -20 (tight outside window)
+      rainPositions[i * 3 + 2] = -28.5 + Math.random() * 6; // Z from -28.5 to -22.5 (tight outside window)
     }
     rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPositions, 3));
     
@@ -1940,12 +1940,12 @@ export class LofiDiorama extends LitElement {
   private recenterCamera() {
     if (!this.camera || !this.controls) return;
     
-    // Snap back to original position (centered on desk)
-    this.camera.position.set(20, 25.6, 13);
+    // Snap back to original diorama position (centered on whole room)
+    this.camera.position.set(150, 100, 150);
     this.camera.zoom = 1;
     this.camera.updateProjectionMatrix();
     
-    this.controls.target.set(0, 5.6, -7);
+    this.controls.target.set(14, 5.6, 0);
     this.controls.update();
   }
 

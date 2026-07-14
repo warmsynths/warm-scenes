@@ -6,8 +6,6 @@ import './gear-preview';
 
 type Weather = 'sunny' | 'rainy' | 'thunderstorm';
 
-type Tab = 'gear' | 'environment' | 'audio';
-
 @customElement('lofi-dashboard')
 export class LofiDashboard extends LitElement {
   @state()
@@ -35,12 +33,13 @@ export class LofiDashboard extends LitElement {
   private activeGear: string[] = ['polyend', 'circuit_tracks', 'mood', 'blooper', 'sp404', 'm8'];
 
   @state()
-  private activeTab: Tab = 'gear';
+  private activePanel: 'gear' | 'environment' | null = null;
 
   @state()
-  private isPanelOpen = false;
+  private isAudioOpen = false;
 
   private progressUpdateId: number | null = null;
+  private isScrubbing = false;
 
   static styles = css`
     :host {
@@ -61,104 +60,51 @@ export class LofiDashboard extends LitElement {
       height: 100%;
     }
 
-    .floating-ui {
+    .frameless-top-panel {
       position: absolute;
-      bottom: 24px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 90%;
-      max-width: 760px;
-      background: rgba(25, 20, 25, 0.65);
-      backdrop-filter: blur(24px);
-      -webkit-backdrop-filter: blur(24px);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 32px;
-      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
-      padding: 12px 24px;
-      color: #eaeaea;
+      top: 88px;
+      left: 24px;
+      width: 540px;
       display: flex;
       flex-direction: column;
       gap: 16px;
       transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
       z-index: 100;
+      opacity: 1;
+      pointer-events: auto;
     }
 
-    .floating-ui.hidden {
-      transform: translate(-50%, 150%);
+    .frameless-top-panel.hidden {
+      transform: translateY(-20px);
       opacity: 0;
       pointer-events: none;
     }
 
-    .hide-btn {
+    .frameless-bottom-panel {
       position: absolute;
-      top: 20px;
-      right: 20px;
-      background: rgba(255, 255, 255, 0.1);
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      color: white;
-      width: 36px;
-      height: 36px;
-      border-radius: 18px;
-      font-size: 1.2rem;
-      cursor: pointer;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 90%;
+      max-width: 1000px;
       display: flex;
-      align-items: center;
       justify-content: center;
-      transition: all 0.2s;
+      transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+      z-index: 100;
+      opacity: 1;
+      pointer-events: auto;
     }
 
-    .hide-btn:hover {
-      background: rgba(255, 255, 255, 0.2);
-      transform: scale(1.1);
+    .frameless-bottom-panel.hidden {
+      transform: translate(-50%, 150%);
+      opacity: 0;
+      pointer-events: none;
     }
 
     .audio-btn.active-loop {
       background: #ffb4a2;
       color: white;
       box-shadow: 0 6px 16px rgba(255, 180, 162, 0.4);
-    }
-
-    .tabs {
-      display: flex;
-      justify-content: center;
-      gap: 16px;
-      margin-bottom: 4px;
-    }
-
-    .tab-btn {
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      padding: 10px 24px;
-      border-radius: 20px;
-      font-size: 1.1rem;
-      font-weight: 600;
-      color: #b0b0b0;
-      cursor: pointer;
-      transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-      font-family: 'Nunito', sans-serif;
-    }
-
-    .tab-btn:hover {
-      transform: translateY(-2px);
-      background: rgba(255, 255, 255, 0.15);
-      color: #ffffff;
-    }
-
-    .tab-btn.active {
-      background: rgba(255, 180, 162, 0.8);
-      color: white;
-      border-color: rgba(255, 180, 162, 0.9);
-      box-shadow: 0 0 16px rgba(255, 180, 162, 0.3);
-      transform: translateY(-2px);
-    }
-
-    .panel-content {
-      animation: fadeIn 0.3s ease-out;
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
     }
 
     /* Gear Tab */
@@ -185,10 +131,11 @@ export class LofiDashboard extends LitElement {
       display: flex;
       gap: 16px;
       overflow-x: auto;
-      padding-bottom: 8px;
-      padding-left: 8px;
-      padding-top: 8px;
+      padding: 12px;
       scrollbar-width: none;
+      width: 134px;
+      scroll-snap-type: x mandatory;
+      scroll-behavior: smooth;
     }
     .gear-grid::-webkit-scrollbar {
       display: none;
@@ -212,6 +159,7 @@ export class LofiDashboard extends LitElement {
       padding: 10px;
       user-select: none;
       color: #a0a0a0;
+      scroll-snap-align: center;
     }
 
     .gear-card:hover {
@@ -237,6 +185,7 @@ export class LofiDashboard extends LitElement {
     .carousel-container {
       display: flex;
       align-items: center;
+      justify-content: flex-start;
       gap: 12px;
       width: 100%;
     }
@@ -281,127 +230,140 @@ export class LofiDashboard extends LitElement {
     /* Environment Tab */
     .weather-grid {
       display: flex;
-      gap: 24px;
-      justify-content: center;
-      padding: 24px 0;
+      gap: 16px;
+      overflow-x: auto;
+      padding: 12px;
+      scrollbar-width: none;
+      width: 134px;
+      scroll-snap-type: x mandatory;
+      scroll-behavior: smooth;
+    }
+    .weather-grid::-webkit-scrollbar {
+      display: none;
     }
 
     .weather-card {
-      width: 180px;
-      height: 180px;
-      background: white;
-      border-radius: 36px;
+      flex: 0 0 auto;
+      width: 110px;
+      height: 110px;
+      background: rgba(0, 0, 0, 0.4);
+      border-radius: 20px;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 16px;
+      gap: 8px;
       cursor: pointer;
       transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
-      border: 6px solid transparent;
+      border: 2px solid rgba(255, 255, 255, 0.05);
+      text-align: center;
+      padding: 10px;
       user-select: none;
+      color: #a0a0a0;
+      scroll-snap-align: center;
     }
 
     .weather-card:hover {
-      transform: translateY(-10px) scale(1.05);
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12);
+      transform: translateY(-4px) scale(1.05);
+      background: rgba(0, 0, 0, 0.6);
+      border-color: rgba(255, 255, 255, 0.2);
+      color: white;
     }
 
     .weather-card.active {
-      border-color: #ffd670;
-      background: #fff9e6;
-    }
-
-    .weather-card.active.rainy {
-      border-color: #a0c4ff;
-      background: #eff4ff;
+      border-color: rgba(163, 217, 201, 0.8);
+      background: rgba(45, 106, 89, 0.4);
+      color: #ffffff;
+      box-shadow: 0 0 12px rgba(163, 217, 201, 0.2);
     }
 
     .weather-icon {
-      font-size: 4rem;
+      font-size: 2.5rem;
     }
 
     .weather-label {
-      font-size: 1.4rem;
+      font-size: 0.95rem;
       font-weight: 800;
-      color: #5a4b41;
+      color: #8c7b6c;
+      line-height: 1.2;
     }
 
     /* Audio Tab */
-    .audio-panel {
+    .audio-row {
       display: flex;
-      flex-direction: column;
+      align-items: center;
       gap: 24px;
-      padding: 0 16px;
+      padding: 0;
+      width: 100%;
     }
 
     .dropzone {
-      border: 4px dashed #ffb4a2;
-      background: #fff5f2;
-      border-radius: 32px;
-      padding: 40px 24px;
+      border: 2px dashed rgba(255, 180, 162, 0.4);
+      background: rgba(255, 245, 242, 0.1);
+      border-radius: 24px;
+      padding: 12px 24px;
       text-align: center;
       cursor: pointer;
       transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-      color: #d68c7c;
+      color: #ffb4a2;
       font-weight: 800;
       font-size: 1.1rem;
       display: flex;
-      flex-direction: column;
       align-items: center;
       gap: 12px;
+      backdrop-filter: blur(12px);
     }
 
     .dropzone.dragover {
-      background: #ffb4a2;
+      background: rgba(255, 180, 162, 0.2);
       color: white;
       transform: scale(1.02);
-      border-color: white;
+      border-color: rgba(255, 180, 162, 0.8);
     }
 
     .dropzone-icon {
-      font-size: 3rem;
+      font-size: 2rem;
     }
 
     .info-card {
-      background: white;
-      border-radius: 20px;
-      padding: 16px 24px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+      background: transparent;
+      padding: 0 16px;
       display: flex;
-      justify-content: space-between;
-      align-items: center;
+      flex-direction: column;
+      justify-content: center;
+      align-items: flex-start;
       font-weight: 700;
-      color: #8c7b6c;
+      color: #d0c0b0;
       font-size: 1.1rem;
+      min-width: 150px;
     }
 
     .info-title {
-      color: #a49382;
+      color: rgba(255,255,255,0.4);
       text-transform: uppercase;
-      font-size: 0.9rem;
+      font-size: 0.75rem;
       letter-spacing: 0.05em;
     }
 
     .controls {
       display: flex;
-      flex-direction: column;
-      gap: 20px;
+      align-items: center;
+      gap: 24px;
+      flex-grow: 1;
     }
 
     .btn-group {
       display: flex;
-      gap: 16px;
-      justify-content: center;
+      gap: 12px;
+      align-items: center;
     }
 
     .audio-btn {
-      background: #f0e6d2;
+      background: rgba(240, 230, 210, 0.9);
       border: none;
-      padding: 16px 32px;
-      border-radius: 24px;
-      font-size: 1.2rem;
+      padding: 12px 24px;
+      border-radius: 20px;
+      font-size: 1rem;
       font-weight: 800;
       color: #8c7b6c;
       cursor: pointer;
@@ -410,7 +372,8 @@ export class LofiDashboard extends LitElement {
       display: flex;
       align-items: center;
       gap: 8px;
-      box-shadow: 0 6px 16px rgba(0,0,0,0.06);
+      box-shadow: 0 6px 16px rgba(0,0,0,0.1);
+      backdrop-filter: blur(12px);
     }
 
     .audio-btn.play-btn {
@@ -438,7 +401,8 @@ export class LofiDashboard extends LitElement {
     .slider-container {
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 8px;
+      flex-grow: 1;
     }
 
     .time-labels {
@@ -482,10 +446,16 @@ export class LofiDashboard extends LitElement {
       transform: scale(1.3);
     }
 
-    .settings-trigger-btn {
+    .trigger-group {
       position: absolute;
       top: 24px;
       left: 24px;
+      display: flex;
+      gap: 16px;
+      z-index: 99;
+    }
+
+    .icon-trigger-btn {
       background: rgba(25, 20, 25, 0.65);
       backdrop-filter: blur(24px);
       -webkit-backdrop-filter: blur(24px);
@@ -500,14 +470,19 @@ export class LofiDashboard extends LitElement {
       cursor: pointer;
       font-size: 1.5rem;
       transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-      z-index: 99;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     }
 
-    .settings-trigger-btn:hover {
+    .icon-trigger-btn:hover {
       background: rgba(255, 255, 255, 0.15);
-      transform: scale(1.1) rotate(45deg);
+      transform: scale(1.1);
       border-color: rgba(255, 255, 255, 0.25);
+    }
+    
+    .icon-trigger-btn.active {
+      background: rgba(163, 217, 201, 0.8);
+      border-color: rgba(163, 217, 201, 0.9);
+      box-shadow: 0 0 16px rgba(163, 217, 201, 0.4);
     }
   `;
 
@@ -592,14 +567,16 @@ export class LofiDashboard extends LitElement {
     this.stopProgressLoop();
     const update = () => {
       if (this.audioManager.isPlaying) {
-        const current = this.audioManager.getCurrentTime();
-        const duration = this.audioManager.duration;
-        
-        const min = Math.floor(current / 60);
-        const sec = Math.floor(current % 60);
-        this.currentTimeStr = `${this.padZero(min)}:${this.padZero(sec)}`;
-        
-        this.progressPercent = duration > 0 ? (current / duration) * 100 : 0;
+        if (!this.isScrubbing) {
+          const current = this.audioManager.getCurrentTime();
+          const duration = this.audioManager.duration;
+          
+          const min = Math.floor(current / 60);
+          const sec = Math.floor(current % 60);
+          this.currentTimeStr = `${this.padZero(min)}:${this.padZero(sec)}`;
+          
+          this.progressPercent = duration > 0 ? (current / duration) * 100 : 0;
+        }
         
         this.progressUpdateId = requestAnimationFrame(update);
       }
@@ -640,19 +617,31 @@ export class LofiDashboard extends LitElement {
     this.requestUpdate();
   }
 
-  private handleScrub(e: Event) {
+  private handleScrubInput(e: Event) {
+    this.isScrubbing = true;
+    const slider = e.target as HTMLInputElement;
+    this.progressPercent = parseFloat(slider.value);
+    const duration = this.audioManager.duration;
+    const current = (this.progressPercent / 100) * duration;
+    const min = Math.floor(current / 60);
+    const sec = Math.floor(current % 60);
+    this.currentTimeStr = `${this.padZero(min)}:${this.padZero(sec)}`;
+  }
+
+  private handleScrubChange(e: Event) {
+    this.isScrubbing = false;
     const slider = e.target as HTMLInputElement;
     const value = parseFloat(slider.value);
     const duration = this.audioManager.duration;
     const seekTime = (value / 100) * duration;
     
     this.audioManager.seek(seekTime);
-    this.progressPercent = value;
-    
-    const min = Math.floor(seekTime / 60);
-    const sec = Math.floor(seekTime % 60);
-    this.currentTimeStr = `${this.padZero(min)}:${this.padZero(sec)}`;
-    
+    this.requestUpdate();
+  }
+
+  private handleVolume(e: Event) {
+    const slider = e.target as HTMLInputElement;
+    this.audioManager.volume = parseFloat(slider.value);
     this.requestUpdate();
   }
 
@@ -663,7 +652,7 @@ export class LofiDashboard extends LitElement {
   private scrollCarousel(id: string, dir: number) {
     const el = this.shadowRoot?.getElementById(id);
     if (el) {
-      el.scrollBy({ left: dir * 200, behavior: 'smooth' });
+      el.scrollBy({ left: dir * 126, behavior: 'smooth' });
     }
   }
 
@@ -693,7 +682,7 @@ export class LofiDashboard extends LitElement {
     return html`
       <div class="carousel-container" style="padding-top: 4px;">
         <button class="carousel-btn" @click="${() => this.scrollCarousel('all-gear-grid', -1)}">❮</button>
-        <div class="gear-grid" id="all-gear-grid" style="width: 100%;">
+        <div class="gear-grid" id="all-gear-grid">
           ${allGear.map(renderCard)}
         </div>
         <button class="carousel-btn" @click="${() => this.scrollCarousel('all-gear-grid', 1)}">❯</button>
@@ -703,36 +692,39 @@ export class LofiDashboard extends LitElement {
 
   private renderEnvironmentTab() {
     return html`
-      <div class="weather-grid">
-        <div 
-          class="weather-card ${this.weather === 'sunny' ? 'active' : ''}"
-          @click="${() => this.weather = 'sunny'}"
-        >
-          <div class="weather-icon">☀️</div>
-          <div class="weather-label">Sunny</div>
+      <div class="carousel-container" style="padding-top: 4px;">
+        <button class="carousel-btn" @click="${() => this.scrollCarousel('all-weather-grid', -1)}">❮</button>
+        <div class="weather-grid" id="all-weather-grid">
+          <div 
+            class="weather-card ${this.weather === 'sunny' ? 'active' : ''}"
+            @click="${() => this.weather = 'sunny'}"
+          >
+            <div class="weather-icon">☀️</div>
+            <div class="weather-label">Sunny</div>
+          </div>
+          <div 
+            class="weather-card ${this.weather === 'rainy' ? 'active' : ''}"
+            @click="${() => this.weather = 'rainy'}"
+          >
+            <div class="weather-icon">🌧️</div>
+            <div class="weather-label">Rainy</div>
+          </div>
+          <div 
+            class="weather-card ${this.weather === 'thunderstorm' ? 'active' : ''}"
+            @click="${() => this.weather = 'thunderstorm'}"
+          >
+            <div class="weather-icon">⛈️</div>
+            <div class="weather-label">Stormy</div>
+          </div>
         </div>
-        <div 
-          class="weather-card ${this.weather === 'rainy' ? 'active rainy' : ''}"
-          @click="${() => this.weather = 'rainy'}"
-        >
-          <div class="weather-icon">🌧️</div>
-          <div class="weather-label">Rainy</div>
-        </div>
-        <div 
-          class="weather-card ${this.weather === 'thunderstorm' ? 'active rainy' : ''}"
-          @click="${() => this.weather = 'thunderstorm'}"
-        >
-          <div class="weather-icon">⛈️</div>
-          <div class="weather-label">Stormy</div>
-        </div>
-      </div>
+        <button class="carousel-btn" @click="${() => this.scrollCarousel('all-weather-grid', 1)}">❯</button>
       </div>
     `;
   }
 
   private renderAudioTab(isLoaded: boolean, isPlaying: boolean) {
     return html`
-      <div class="audio-panel">
+      <div class="audio-row">
         <div
           class="dropzone ${this.isDragOver ? 'dragover' : ''}"
           @dragover="${this.handleDragOver}"
@@ -741,7 +733,7 @@ export class LofiDashboard extends LitElement {
           @click="${() => this.shadowRoot?.getElementById('file-loader')?.click()}"
         >
           <div class="dropzone-icon">📼</div>
-          <div>Drag & Drop an audio file or click to browse</div>
+          <div style="font-size: 0.9rem;">Load Audio</div>
           <input
             type="file"
             id="file-loader"
@@ -753,14 +745,8 @@ export class LofiDashboard extends LitElement {
 
         ${isLoaded && this.fileInfo ? html`
           <div class="info-card">
-            <div>
-              <span class="info-title">Track</span><br/>
-              ${this.fileInfo.name}
-            </div>
-            <div style="text-align: right;">
-              <span class="info-title">Length</span><br/>
-              ${this.fileInfo.duration}
-            </div>
+            <span class="info-title">Track</span>
+            <div style="text-overflow: ellipsis; white-space: nowrap; overflow: hidden; max-width: 200px;">${this.fileInfo.name}</div>
           </div>
         ` : ''}
 
@@ -772,11 +758,18 @@ export class LofiDashboard extends LitElement {
             <button class="audio-btn ${this.audioManager.loop ? 'active-loop' : ''}" ?disabled="${!isLoaded}" @click="${this.toggleLoop}">🔁 Loop</button>
           </div>
           
-          <div class="slider-container">
-            <input type="range" class="scrub-slider" min="0" max="100" step="0.1" .value="${this.progressPercent.toString()}" ?disabled="${!isLoaded}" @input="${this.handleScrub}" />
-            <div class="time-labels">
-              <span>${this.currentTimeStr}</span>
-              <span>${this.totalTimeStr}</span>
+          <div style="display: flex; gap: 16px; align-items: center;">
+            <div class="slider-container" style="flex: 1;">
+              <input type="range" class="scrub-slider" min="0" max="100" step="0.1" .value="${this.progressPercent.toString()}" ?disabled="${!isLoaded}" @input="${this.handleScrubInput}" @change="${this.handleScrubChange}" />
+              <div class="time-labels">
+                <span>${this.currentTimeStr}</span>
+                <span>${this.totalTimeStr}</span>
+              </div>
+            </div>
+            
+            <div class="slider-container" style="flex: 0 0 80px; align-items: center; justify-content: center;">
+              <div style="font-size: 1.0rem; color: #8c7b6c; margin-bottom: 4px;">🔊</div>
+              <input type="range" class="scrub-slider" min="0" max="1" step="0.01" .value="${this.audioManager.volume.toString()}" @input="${this.handleVolume}" />
             </div>
           </div>
         </div>
@@ -784,8 +777,16 @@ export class LofiDashboard extends LitElement {
     `;
   }
 
-  private handleToggleSettings() {
-    this.isPanelOpen = !this.isPanelOpen;
+  private togglePanel(panel: 'gear' | 'environment' | 'audio') {
+    if (panel === 'audio') {
+      this.isAudioOpen = !this.isAudioOpen;
+    } else {
+      if (this.activePanel === panel) {
+        this.activePanel = null;
+      } else {
+        this.activePanel = panel;
+      }
+    }
   }
 
   private toggleLoop() {
@@ -802,25 +803,26 @@ export class LofiDashboard extends LitElement {
         .audioManager="${this.audioManager}" 
         .weather="${this.weather}"
         .activeGear="${this.activeGear}"
-        @toggle-settings="${this.handleToggleSettings}"
+        @toggle-settings="${() => this.togglePanel('gear')}"
       ></lofi-diorama>
 
-      <button class="settings-trigger-btn" @click="${this.handleToggleSettings}" title="Settings">⚙️</button>
+      <div class="trigger-group">
+        <button class="icon-trigger-btn ${this.activePanel === 'gear' ? 'active' : ''}" @click="${() => this.togglePanel('gear')}" title="Gear">🎒</button>
+        <button class="icon-trigger-btn ${this.activePanel === 'environment' ? 'active' : ''}" @click="${() => this.togglePanel('environment')}" title="Environment">🌤️</button>
+        <button class="icon-trigger-btn ${this.isAudioOpen ? 'active' : ''}" @click="${() => this.togglePanel('audio')}" title="Audio">🎵</button>
+      </div>
 
-      <div class="floating-ui ${this.isPanelOpen ? '' : 'hidden'}">
-        <button class="hide-btn" @click="${() => this.isPanelOpen = false}" title="Hide UI">⬇️</button>
+      <div class="frameless-top-panel ${this.activePanel === 'gear' || this.activePanel === 'environment' ? '' : 'hidden'}">
+        ${this.activePanel === 'gear' ? html`
+          ${this.renderGearTab()}
+        ` : ''}
+        ${this.activePanel === 'environment' ? html`
+          ${this.renderEnvironmentTab()}
+        ` : ''}
+      </div>
 
-        <div class="tabs">
-          <button class="tab-btn ${this.activeTab === 'gear' ? 'active' : ''}" @click="${() => this.activeTab = 'gear'}">🎒 Gear</button>
-          <button class="tab-btn ${this.activeTab === 'environment' ? 'active' : ''}" @click="${() => this.activeTab = 'environment'}">🌤️ Environment</button>
-          <button class="tab-btn ${this.activeTab === 'audio' ? 'active' : ''}" @click="${() => this.activeTab = 'audio'}">🎵 Audio</button>
-        </div>
-
-        <div class="panel-content">
-          ${this.activeTab === 'gear' ? this.renderGearTab() : ''}
-          ${this.activeTab === 'environment' ? this.renderEnvironmentTab() : ''}
-          ${this.activeTab === 'audio' ? this.renderAudioTab(isLoaded, isPlaying) : ''}
-        </div>
+      <div class="frameless-bottom-panel ${this.isAudioOpen ? '' : 'hidden'}">
+        ${this.renderAudioTab(isLoaded, isPlaying)}
       </div>
     `;
   }

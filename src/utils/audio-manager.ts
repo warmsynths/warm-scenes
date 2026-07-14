@@ -8,6 +8,19 @@ export class AudioManager {
   private buffer: AudioBuffer | null = null;
   private source: AudioBufferSourceNode | null = null;
   private analyser: AnalyserNode | null = null;
+  private gainNode: GainNode | null = null;
+  private _volume: number = 0.5;
+
+  get volume(): number {
+    return this._volume;
+  }
+
+  set volume(value: number) {
+    this._volume = Math.max(0, Math.min(1, value));
+    if (this.gainNode && this.ctx) {
+      this.gainNode.gain.setTargetAtTime(this._volume, this.ctx.currentTime, 0.05);
+    }
+  }
 
   // Track playback state
   private playbackStartTime = 0;
@@ -85,7 +98,11 @@ export class AudioManager {
     if (!this.buffer) throw new Error('No audio file loaded');
     const context = this.initContext();
 
-    this.stop();
+    if (this.source) {
+      try { this.source.stop(); } catch (e) {}
+      this.source = null;
+    }
+    this.playState = 'stopped';
 
     if (onEnded) {
       this.onEndedCallback = onEnded;
@@ -101,9 +118,16 @@ export class AudioManager {
     this.analyser.fftSize = 512;
     this.analyser.smoothingTimeConstant = 0.8;
 
+    // Create gain node if needed
+    if (!this.gainNode) {
+      this.gainNode = context.createGain();
+    }
+    this.gainNode.gain.value = this._volume;
+
     // Connect nodes
     this.source.connect(this.analyser);
-    this.analyser.connect(context.destination);
+    this.analyser.connect(this.gainNode);
+    this.gainNode.connect(context.destination);
 
     // Playback starting offset
     const offset = this.pausedTime;
