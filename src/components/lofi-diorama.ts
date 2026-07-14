@@ -73,6 +73,7 @@ export class LofiDiorama extends LitElement {
   private boundOnPointerMove = this.onPointerMove.bind(this);
   private boundOnPointerDown = this.onPointerDown.bind(this);
   private boundOnPointerUp = this.onPointerUp.bind(this);
+  private boundOnWheel = this.onWheel.bind(this);
   
   // Weather
   private rainDrops!: THREE.Points;
@@ -151,6 +152,7 @@ export class LofiDiorama extends LitElement {
       if (this.renderer.domElement) {
         this.renderer.domElement.removeEventListener('pointermove', this.boundOnPointerMove);
         this.renderer.domElement.removeEventListener('pointerdown', this.boundOnPointerDown);
+        this.renderer.domElement.removeEventListener('wheel', this.boundOnWheel);
         window.removeEventListener('pointerup', this.boundOnPointerUp);
       }
       this.renderer.dispose();
@@ -214,7 +216,7 @@ export class LofiDiorama extends LitElement {
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.05;
-    this.controls.enableZoom = true;
+    this.controls.enableZoom = false; // We handle zoom manually for cursor centering
     this.controls.enablePan = true;
     this.controls.target.set(14, 5.6, 0); // Center on the whole room
     
@@ -228,6 +230,7 @@ export class LofiDiorama extends LitElement {
     // Bind pointer events for clickable elements
     this.renderer.domElement.addEventListener('pointermove', this.boundOnPointerMove);
     this.renderer.domElement.addEventListener('pointerdown', this.boundOnPointerDown);
+    this.renderer.domElement.addEventListener('wheel', this.boundOnWheel, { passive: false });
     window.addEventListener('pointerup', this.boundOnPointerUp);
 
     // Lighting — warm and clear
@@ -1936,6 +1939,63 @@ export class LofiDiorama extends LitElement {
 
     this.dragObject = null;
   }
+
+  private onWheel(event: WheelEvent) {
+    if (!this.renderer || !this.camera || !this.controls) return;
+    event.preventDefault();
+
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    const mouse = new THREE.Vector2(
+      ((event.clientX - rect.left) / rect.width) * 2 - 1,
+      -((event.clientY - rect.top) / rect.height) * 2 + 1
+    );
+
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(mouse, this.camera);
+
+    const allColliders = [
+      ...this.draggableObjects,
+      ...this.clickableObjects,
+      ...this.staticCollisionObjects,
+      ...this.surfaceObjects
+    ];
+    
+    const intersects = raycaster.intersectObjects(allColliders, true);
+    
+    const P = new THREE.Vector3();
+    if (intersects.length > 0) {
+      P.copy(intersects[0].point);
+    } else {
+      // Fallback to target plane if pointing at empty space
+      const normal = new THREE.Vector3();
+      this.camera.getWorldDirection(normal);
+      const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, this.controls.target);
+      raycaster.ray.intersectPlane(plane, P);
+      if (!P) return;
+    }
+
+    // Calculate zoom factor (OrbitControls default-like feel)
+    const zoomScale = Math.pow(0.95, 2.0);
+    const zoomFactor = event.deltaY > 0 ? (1 / zoomScale) : zoomScale;
+
+    // Clamp based on OrbitControls min/max distance
+    const currentDist = this.camera.position.distanceTo(this.controls.target);
+    let newDist = currentDist * zoomFactor;
+
+    if (newDist < this.controls.minDistance) {
+      newDist = this.controls.minDistance;
+    } else if (newDist > this.controls.maxDistance) {
+      newDist = this.controls.maxDistance;
+    }
+    const actualZoomFactor = newDist / currentDist;
+
+    // Scale camera position and target around P
+    this.camera.position.sub(P).multiplyScalar(actualZoomFactor).add(P);
+    this.controls.target.sub(P).multiplyScalar(actualZoomFactor).add(P);
+    
+    this.controls.update();
+  }
+
 
   private recenterCamera() {
     if (!this.camera || !this.controls) return;
