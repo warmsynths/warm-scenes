@@ -575,8 +575,8 @@ export class LofiDiorama extends LitElement {
     const shelfGroup = new THREE.Group();
     shelfGroup.position.set(-21, 15, -4); // Left wall, multi-tier
     
-    const woodMat = new THREE.MeshStandardMaterial({ color: 0x3d2817, roughness: 0.9 });
-    const metalMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.8, roughness: 0.4 });
+    // Warm mid-tone walnut material to harmonize with the desk and room
+    const woodMat = new THREE.MeshStandardMaterial({ color: 0x7f4f24, roughness: 0.95 });
     
     // Shelves
     const shelfGeo = new RoundedBoxGeometry(2, 0.4, 20, 4, 0.1); // Width 2, Length 20 along Z
@@ -593,19 +593,35 @@ export class LofiDiorama extends LitElement {
     shelfGroup.add(shelf2);
     this.surfaceObjects.push(shelf2);
 
-    // Brackets
-    const bracketGeo = new THREE.BoxGeometry(0.2, 6, 0.2);
-    const bracketZ = [-8, 0, 8];
-    
-    bracketZ.forEach(z => {
-      const bracket1 = new THREE.Mesh(bracketGeo, metalMat);
-      bracket1.position.set(0.9, -1.25, z);
-      shelfGroup.add(bracket1);
+    // Create the ribbed arch backboard
+    const createArchBackboard = () => {
+      const archGroup = new THREE.Group();
+      const numArches = 6;
+      const numRidges = 6;
+      const shelfLength = 20;
+      const archWidth = shelfLength / numArches;
+      const tube = shelfLength / (numArches * numRidges * 4); // ~0.139
       
-      const bracket2 = new THREE.Mesh(bracketGeo, metalMat);
-      bracket2.position.set(-0.9, -1.25, z);
-      shelfGroup.add(bracket2);
-    });
+      for (let i = 0; i < numArches; i++) {
+        const archCenterZ = -shelfLength / 2 + archWidth / 2 + i * archWidth;
+        
+        for (let j = 0; j < numRidges; j++) {
+          const r = tube + j * (tube * 2);
+          const torusGeo = new THREE.TorusGeometry(r, tube, 16, 48, Math.PI);
+          const torus = new THREE.Mesh(torusGeo, woodMat);
+          torus.castShadow = true;
+          
+          torus.rotation.y = Math.PI / 2;
+          torus.position.set(-0.9, 0.2, archCenterZ); // 0.2 is half of shelf thickness
+          
+          archGroup.add(torus);
+        }
+      }
+      return archGroup;
+    };
+
+    shelf1.add(createArchBackboard());
+    shelf2.add(createArchBackboard());
     
     this.scene.add(shelfGroup);
     this.staticCollisionObjects.push(shelf1, shelf2);
