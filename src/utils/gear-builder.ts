@@ -28,7 +28,7 @@ export async function createGearModel(id: string): Promise<THREE.Object3D> {
 function buildPolyend() {
   const trackerScreen = new TrackerScreen();
   const textureLoader = new THREE.TextureLoader();
-  const topTex = textureLoader.load('/tracker_ref.png');
+  const topTex = textureLoader.load(import.meta.env.BASE_URL + 'tracker_ref.png');
   topTex.colorSpace = THREE.SRGBColorSpace;
   topTex.repeat.set(0.85, 0.85);
   topTex.offset.set(0.075, 0.075);
@@ -61,7 +61,7 @@ function buildPolyend() {
 
 function buildCircuitTracks() {
   const textureLoader = new THREE.TextureLoader();
-  const topTex = textureLoader.load('/circuit_ref.png');
+  const topTex = textureLoader.load(import.meta.env.BASE_URL + 'circuit_ref.png');
   topTex.colorSpace = THREE.SRGBColorSpace;
   topTex.repeat.set(0.85, 0.85);
   topTex.offset.set(0.075, 0.075);
@@ -97,11 +97,11 @@ function buildCircuitTracks() {
 }
 
 function buildMood() {
-  return buildBasePedal(0xffa07a, '/mood_texture.png');
+  return buildBasePedal(0xffa07a, import.meta.env.BASE_URL + 'mood_texture.png');
 }
 
 function buildBlooper() {
-  return buildBasePedal(0xa4c8e1, '/blooper_texture.png');
+  return buildBasePedal(0xa4c8e1, import.meta.env.BASE_URL + 'blooper_texture.png');
 }
 
 function buildBasePedal(colorHex: number, topTexturePath?: string) {
@@ -212,7 +212,7 @@ function buildReel() {
 
 function buildSP404() {
   const textureLoader = new THREE.TextureLoader();
-  const topTex = textureLoader.load('/sp404_ref.png');
+  const topTex = textureLoader.load(import.meta.env.BASE_URL + 'sp404_ref.png');
   topTex.colorSpace = THREE.SRGBColorSpace;
   topTex.repeat.set(0.82, 0.82);
   topTex.offset.set(0.09, 0.09);
@@ -250,7 +250,7 @@ function buildSP404() {
 async function buildStrat(): Promise<THREE.Object3D> {
   return new Promise((resolve, reject) => {
     const loader = new FBXLoader();
-    loader.load('/guitar/stratocaster.FBX', (object) => {
+    loader.load(import.meta.env.BASE_URL + 'guitar/stratocaster.FBX', (object) => {
       const targetLength = 950 * MM_TO_UNITS;
       const box = new THREE.Box3().setFromObject(object);
       const size = box.getSize(new THREE.Vector3());

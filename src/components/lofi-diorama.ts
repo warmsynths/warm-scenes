@@ -425,7 +425,7 @@ export class LofiDiorama extends LitElement {
 
     // Floor
     const textureLoader = new THREE.TextureLoader();
-    const floorTex = textureLoader.load('/dark_wood_floor.png');
+    const floorTex = textureLoader.load(import.meta.env.BASE_URL + 'dark_wood_floor.png');
     floorTex.wrapS = THREE.MirroredRepeatWrapping;
     floorTex.wrapT = THREE.MirroredRepeatWrapping;
     floorTex.repeat.set(3.5, 3.5);
@@ -444,7 +444,7 @@ export class LofiDiorama extends LitElement {
     this.surfaceObjects.push(floor);
 
     // Back wall (behind the window)
-    const wallTex = textureLoader.load('/warm_retro_wallpaper.png');
+    const wallTex = textureLoader.load(import.meta.env.BASE_URL + 'warm_retro_wallpaper.png');
     wallTex.wrapS = THREE.RepeatWrapping;
     wallTex.wrapT = THREE.RepeatWrapping;
     wallTex.repeat.set(6.6, 4);
@@ -799,7 +799,7 @@ export class LofiDiorama extends LitElement {
   private buildDesk() {
     // Desk surface
     const textureLoader = new THREE.TextureLoader();
-    const deskTex = textureLoader.load('/polished_desk_wood.png');
+    const deskTex = textureLoader.load(import.meta.env.BASE_URL + 'polished_desk_wood.png');
     deskTex.wrapS = THREE.RepeatWrapping;
     deskTex.wrapT = THREE.RepeatWrapping;
     deskTex.repeat.set(1.5, 1.0);
@@ -1204,7 +1204,7 @@ export class LofiDiorama extends LitElement {
   private buildPolyend(isActive: boolean) {
     this.trackerScreen = new TrackerScreen();
     const textureLoader = new THREE.TextureLoader();
-    const topTex = textureLoader.load('/tracker_ref.png');
+    const topTex = textureLoader.load(import.meta.env.BASE_URL + 'tracker_ref.png');
     topTex.colorSpace = THREE.SRGBColorSpace;
     // Crop white border out using UVs
     topTex.repeat.set(0.85, 0.85); // Zoom in 15%
@@ -1256,7 +1256,7 @@ export class LofiDiorama extends LitElement {
 
   private buildCircuitTracks(isActive: boolean) {
     const textureLoader = new THREE.TextureLoader();
-    const topTex = textureLoader.load('/circuit_ref.png');
+    const topTex = textureLoader.load(import.meta.env.BASE_URL + 'circuit_ref.png');
     topTex.colorSpace = THREE.SRGBColorSpace;
     // Crop white border out using UVs
     topTex.repeat.set(0.85, 0.85); // Zoom in 15%
@@ -1313,12 +1313,12 @@ export class LofiDiorama extends LitElement {
   }
 
   private buildMood(isActive: boolean) {
-    const pGroup = this.buildBasePedal(isActive, 0xffa07a, -7.5, -5, 0.1, 'mood', '/mood_texture.png', -7.5); // Salmon Peach
+    const pGroup = this.buildBasePedal(isActive, 0xffa07a, -7.5, -5, 0.1, 'mood', import.meta.env.BASE_URL + 'mood_texture.png', -7.5); // Salmon Peach
     this.gearGroup.add(pGroup);
   }
 
   private buildBlooper(isActive: boolean) {
-    const pGroup = this.buildBasePedal(isActive, 0xa4c8e1, -9.5, -5, -0.05, 'blooper', '/blooper_texture.png', -5); // Pastel Blue
+    const pGroup = this.buildBasePedal(isActive, 0xa4c8e1, -9.5, -5, -0.05, 'blooper', import.meta.env.BASE_URL + 'blooper_texture.png', -5); // Pastel Blue
     this.gearGroup.add(pGroup);
   }
 
@@ -1480,7 +1480,7 @@ export class LofiDiorama extends LitElement {
 
   private buildSP404(isActive: boolean) {
     const textureLoader = new THREE.TextureLoader();
-    const topTex = textureLoader.load('/sp404_ref.png');
+    const topTex = textureLoader.load(import.meta.env.BASE_URL + 'sp404_ref.png');
     topTex.colorSpace = THREE.SRGBColorSpace;
     // Crop white border out using UVs
     topTex.repeat.set(0.82, 0.82); // Zoom in 18%
@@ -1674,7 +1674,7 @@ export class LofiDiorama extends LitElement {
     this.stratLoading = true;
 
     const loader = new FBXLoader();
-    loader.load('/guitar/stratocaster.FBX', (object) => {
+    loader.load(import.meta.env.BASE_URL + 'guitar/stratocaster.FBX', (object) => {
       this.stratLoading = false;
 
       // Normalize scale (950mm real world length)
@@ -1957,7 +1957,7 @@ export class LofiDiorama extends LitElement {
   private buildWindow() {
     // Window frame
     const textureLoader = new THREE.TextureLoader();
-    const frameTex = textureLoader.load('/painted_cream_wood.png');
+    const frameTex = textureLoader.load(import.meta.env.BASE_URL + 'painted_cream_wood.png');
     frameTex.wrapS = THREE.RepeatWrapping;
     frameTex.wrapT = THREE.RepeatWrapping;
     frameTex.repeat.set(2, 2);

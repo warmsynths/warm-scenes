@@ -695,7 +695,7 @@ export class WavefieldScreen extends LitElement {
         
         <input id="file-input" type="file" accept="audio/*" @change="${this.handleFileSelect}" />
         <!-- Hidden audio element. A generic looping placeholder is used if no file loaded. -->
-        <audio id="audio" src="/sample.wav" loop hidden></audio>
+        <audio id="audio" src="${import.meta.env.BASE_URL}sample.wav" loop hidden></audio>
       </div>
     `;
   }
