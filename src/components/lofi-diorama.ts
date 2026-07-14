@@ -15,6 +15,7 @@ import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRe
 import { AudioManager } from '../utils/audio-manager';
 import { TrackerScreen } from '../utils/tracker-screen';
 import { M8Screen } from '../utils/m8-screen';
+import { QuantumCube } from '../utils/quantum-cube';
 
 const MM_TO_UNITS = 0.018;
 const GET_GEAR_SIZE = (wMm: number, dMm: number, hMm: number) => {
@@ -77,6 +78,7 @@ export class LofiDiorama extends LitElement {
   // Scene targets
   private trackerScreen!: TrackerScreen;
   private m8Screen!: M8Screen;
+  private quantumCube!: QuantumCube;
   private tapeSpools: THREE.Object3D[] = [];
   private posters: THREE.Object3D[] = [];
   private circuitPads: THREE.Mesh[] = [];
@@ -1942,6 +1944,12 @@ export class LofiDiorama extends LitElement {
 
     this.scene.add(hpGroup);
     this.loadOrPlaceObject(hpGroup, 'headphones', 16.6, 4.9, -5);
+
+    // Quantum Cube Toy
+    this.quantumCube = new QuantumCube();
+    this.scene.add(this.quantumCube.sprite);
+    this.loadOrPlaceObject(this.quantumCube.sprite, 'quantum_cube', -10, 6.2, 2);
+    this.quantumCube.sprite.castShadow = false;
   }
 
 
@@ -2346,6 +2354,10 @@ export class LofiDiorama extends LitElement {
       this.lightningLight.intensity = 0;
       this.targetLightningIntensity = 0;
       this.currentLightningIntensity = 0;
+    }
+
+    if (this.quantumCube) {
+      this.quantumCube.update(this.renderer, this.camera);
     }
 
     if (this.controls) {
