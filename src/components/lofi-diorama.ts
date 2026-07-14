@@ -471,7 +471,8 @@ export class LofiDiorama extends LitElement {
   private buildChair() {
     const chairGroup = new THREE.Group();
     chairGroup.name = 'herman_miller_chair';
-    chairGroup.position.set(2, -5.1, 7); // In front of desk, slightly to the right
+    chairGroup.position.set(2, -5.0, 7); // In front of desk, slightly to the right
+    chairGroup.scale.set(1.5, 1.5, 1.5);
     
     // Facing desk (-Z) but turned slightly out
     this.targetChairRotation = -Math.PI / 5;
@@ -1097,7 +1098,7 @@ export class LofiDiorama extends LitElement {
       reelGroup.rotation.y = -0.2;
       this.loadOrPlaceObject(reelGroup, 'reel', 8.5, 8.25, -10);
     } else {
-      reelGroup.position.set(-21, 17.5, -12); // Top shelf slot
+      reelGroup.position.set(-21, 18.45, -12); // Top shelf slot
       reelGroup.rotation.y = Math.PI / 2;
     }
 
