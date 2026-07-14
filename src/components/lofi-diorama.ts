@@ -107,6 +107,10 @@ export class LofiDiorama extends LitElement {
   private boundOnPointerDown = this.onPointerDown.bind(this);
   private boundOnPointerUp = this.onPointerUp.bind(this);
   private boundOnWheel = this.onWheel.bind(this);
+  private lastTouchDistance: number | null = null;
+  private boundOnTouchStart = this.onTouchStart.bind(this);
+  private boundOnTouchMove = this.onTouchMove.bind(this);
+  private boundOnTouchEnd = this.onTouchEnd.bind(this);
   
   // Weather
   private rainDrops!: THREE.Points;
@@ -139,6 +143,7 @@ export class LofiDiorama extends LitElement {
       width: 100%;
       height: 100%;
       overflow: hidden;
+      touch-action: none;
     }
 
     .canvas-container canvas {
@@ -283,6 +288,10 @@ export class LofiDiorama extends LitElement {
         this.renderer.domElement.removeEventListener('pointerdown', this.boundOnPointerDown);
         this.renderer.domElement.removeEventListener('wheel', this.boundOnWheel);
         window.removeEventListener('pointerup', this.boundOnPointerUp);
+        this.renderer.domElement.removeEventListener('touchstart', this.boundOnTouchStart);
+        this.renderer.domElement.removeEventListener('touchmove', this.boundOnTouchMove);
+        this.renderer.domElement.removeEventListener('touchend', this.boundOnTouchEnd);
+        this.renderer.domElement.removeEventListener('touchcancel', this.boundOnTouchEnd);
       }
       this.renderer.dispose();
       const gl = this.renderer.getContext();
@@ -375,6 +384,12 @@ export class LofiDiorama extends LitElement {
     this.renderer.domElement.addEventListener('pointerdown', this.boundOnPointerDown);
     this.renderer.domElement.addEventListener('wheel', this.boundOnWheel, { passive: false });
     window.addEventListener('pointerup', this.boundOnPointerUp);
+    
+    // Bind touch events for mobile pinch-to-zoom
+    this.renderer.domElement.addEventListener('touchstart', this.boundOnTouchStart, { passive: false });
+    this.renderer.domElement.addEventListener('touchmove', this.boundOnTouchMove, { passive: false });
+    this.renderer.domElement.addEventListener('touchend', this.boundOnTouchEnd, { passive: false });
+    this.renderer.domElement.addEventListener('touchcancel', this.boundOnTouchEnd, { passive: false });
 
     // Lighting — warm and clear
     const ambient = new THREE.AmbientLight(0xfff0e0, 0.3); // Lowered for stronger shadows
@@ -2824,6 +2839,115 @@ export class LofiDiorama extends LitElement {
     this.controls.target.sub(P).multiplyScalar(actualZoomFactor).add(P);
     
     this.controls.update();
+  }
+
+  private onTouchStart(event: TouchEvent) {
+    if (event.touches.length === 2) {
+      event.preventDefault();
+      
+      // If we were dragging an object, drop it cleanly before starting pinch-zoom
+      if (this.dragObject) {
+        this.onPointerUp();
+      }
+
+      const touch1 = event.touches[0];
+      const touch2 = event.touches[1];
+      const dx = touch1.clientX - touch2.clientX;
+      const dy = touch1.clientY - touch2.clientY;
+      this.lastTouchDistance = Math.sqrt(dx * dx + dy * dy);
+      if (this.controls) this.controls.enabled = false;
+    } else {
+      this.lastTouchDistance = null;
+    }
+  }
+
+  private onTouchMove(event: TouchEvent) {
+    if (event.touches.length === 2) {
+      event.preventDefault();
+      if (!this.renderer || !this.camera || !this.controls) return;
+
+      const touch1 = event.touches[0];
+      const touch2 = event.touches[1];
+      const dx = touch1.clientX - touch2.clientX;
+      const dy = touch1.clientY - touch2.clientY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (this.lastTouchDistance !== null && this.lastTouchDistance > 0) {
+        const zoomFactor = this.lastTouchDistance / distance;
+
+        const rect = this.renderer.domElement.getBoundingClientRect();
+        const midX = (touch1.clientX + touch2.clientX) / 2;
+        const midY = (touch1.clientY + touch2.clientY) / 2;
+
+        const mouse = new THREE.Vector2(
+          ((midX - rect.left) / rect.width) * 2 - 1,
+          -((midY - rect.top) / rect.height) * 2 + 1
+        );
+
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(mouse, this.camera);
+
+        const allColliders = [
+          ...this.draggableObjects,
+          ...this.clickableObjects,
+          ...this.staticCollisionObjects,
+          ...this.surfaceObjects
+        ];
+
+        const intersects = raycaster.intersectObjects(allColliders, true);
+
+        const P = new THREE.Vector3();
+        if (intersects.length > 0) {
+          P.copy(intersects[0].point);
+        } else {
+          const normal = new THREE.Vector3();
+          this.camera.getWorldDirection(normal);
+          const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, this.controls.target);
+          raycaster.ray.intersectPlane(plane, P);
+        }
+
+        if (P) {
+          const currentDist = this.camera.position.distanceTo(this.controls.target);
+          let newDist = currentDist * zoomFactor;
+
+          if (newDist < this.controls.minDistance) {
+            newDist = this.controls.minDistance;
+          } else if (newDist > this.controls.maxDistance) {
+            newDist = this.controls.maxDistance;
+          }
+          const actualZoomFactor = newDist / currentDist;
+
+          this.camera.position.sub(P).multiplyScalar(actualZoomFactor).add(P);
+          this.controls.target.sub(P).multiplyScalar(actualZoomFactor).add(P);
+
+          this.controls.update();
+        }
+      }
+
+      this.lastTouchDistance = distance;
+      if (this.controls) this.controls.enabled = false;
+    } else {
+      if (!this.dragObject && this.controls) {
+        this.controls.enabled = true;
+      }
+      this.lastTouchDistance = null;
+    }
+  }
+
+  private onTouchEnd(event: TouchEvent) {
+    if (event.touches.length === 2) {
+      const touch1 = event.touches[0];
+      const touch2 = event.touches[1];
+      const dx = touch1.clientX - touch2.clientX;
+      const dy = touch1.clientY - touch2.clientY;
+      this.lastTouchDistance = Math.sqrt(dx * dx + dy * dy);
+      if (this.controls) this.controls.enabled = false;
+    } else {
+      if (!this.dragObject && this.controls) {
+        this.controls.enabled = true;
+      }
+      this.lastTouchDistance = null;
+    }
   }
 
 
