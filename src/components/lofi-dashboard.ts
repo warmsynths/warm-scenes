@@ -7,6 +7,9 @@ import './gear-preview';
 import ufoPosterImg from '../assets/posters/iwanttobelieve_.jpg';
 import tr808PosterImg from '../assets/posters/tr808.png';
 import mpcPosterImg from '../assets/posters/mpc.jpg';
+import greenRugImg from '../assets/rugs/green_arched_rug.png';
+import pinkRugImg from '../assets/rugs/pink_arched_rug.png';
+import whiteRugImg from '../assets/rugs/white_arched_rug.png';
 
 type Weather = 'sunny' | 'rainy' | 'thunderstorm';
 type TimeOfDay = 'day' | 'sunset' | 'night';
@@ -46,8 +49,16 @@ export class LofiDashboard extends LitElement {
   @state()
   private lightningIntensity: number = 50;
 
+  private getInitialGear(): string[] {
+    const saved = localStorage.getItem('lofi_active_gear');
+    if (saved) {
+      try { return JSON.parse(saved); } catch(e) {}
+    }
+    return ['polyend', 'circuit_tracks', 'mood', 'blooper', 'sp404', 'm8', 'poster_believe', 'poster_808', 'poster_mpc', 'lamp', 'cup', 'succulent_echeveria', 'succulent_moonstones', 'succulent_haworthia', 'succulent_pearls', 'succulent_jade'];
+  }
+
   @property({ type: Array })
-  private activeGear: string[] = ['polyend', 'circuit_tracks', 'mood', 'blooper', 'sp404', 'm8', 'poster_believe', 'poster_808', 'poster_mpc', 'lamp', 'cup', 'succulent_echeveria', 'succulent_moonstones', 'succulent_haworthia', 'succulent_pearls', 'succulent_jade'];
+  private activeGear: string[] = this.getInitialGear();
 
   @state()
   private activePanel: 'gear' | 'environment' | 'audio' | null = null;
@@ -555,6 +566,7 @@ export class LofiDashboard extends LitElement {
     } else {
       this.activeGear = [...this.activeGear, gear];
     }
+    localStorage.setItem('lofi_active_gear', JSON.stringify(this.activeGear));
   }
 
   private handleDragOver(e: DragEvent) {
@@ -717,6 +729,9 @@ export class LofiDashboard extends LitElement {
       { id: 'decor', label: 'Decor', items: [
         { id: 'lamp', label: 'Desk Lamp', icon: '💡', cat: 'Decor', disabled: false },
         { id: 'cup', label: 'Coffee Cup', icon: '☕', cat: 'Decor', disabled: false },
+        { id: 'rug_green_arched', label: 'Green Rug', img: greenRugImg, cat: 'Rug', disabled: false },
+        { id: 'rug_pink_arched', label: 'Pink Rug', img: pinkRugImg, cat: 'Rug', disabled: false },
+        { id: 'rug_white_arched', label: 'White Rug', img: whiteRugImg, cat: 'Rug', disabled: false },
         { id: 'succulent_echeveria', label: 'Echeveria', icon: '🪴', cat: 'Decor', disabled: false },
         { id: 'succulent_moonstones', label: 'Moonstones', icon: '🪴', cat: 'Decor', disabled: false },
         { id: 'succulent_haworthia', label: 'Haworthia', icon: '🪴', cat: 'Decor', disabled: false },
@@ -740,7 +755,7 @@ export class LofiDashboard extends LitElement {
         @click="${() => !gear.disabled && this.toggleGear(gear.id)}"
       >
         <div class="gear-icon">
-          ${gear.cat === 'Poster' && gear.img
+          ${(gear.cat === 'Poster' || gear.cat === 'Rug') && gear.img
             ? html`<img src="${gear.img}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 4px;" />`
             : gear.cat === 'Tape' || gear.cat === 'Inst' || gear.cat === 'Decor'
             ? html`<div style="font-size: 2rem; display: flex; align-items: center; justify-content: center; height: 100%;">${gear.icon}</div>` 

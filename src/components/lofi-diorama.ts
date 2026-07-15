@@ -4,6 +4,9 @@ import * as THREE from 'three';
 import ufoPosterImg from '../assets/posters/iwanttobelieve_.jpg';
 import tr808PosterImg from '../assets/posters/tr808.png';
 import mpcPosterImg from '../assets/posters/mpc.jpg';
+import greenRugImg from '../assets/rugs/green_arched_rug.png';
+import pinkRugImg from '../assets/rugs/pink_arched_rug.png';
+import whiteRugImg from '../assets/rugs/white_arched_rug.png';
 import yellowWallpaperImg from '../assets/textures/yellow_wallpaper.png';
 import dampCarpetImg from '../assets/textures/damp_carpet.png';
 import dropCeilingImg from '../assets/textures/drop_ceiling.png';
@@ -92,6 +95,7 @@ export class LofiDiorama extends LitElement {
   private quantumCube!: QuantumCube;
   private tapeSpools: THREE.Object3D[] = [];
   private posters: THREE.Object3D[] = [];
+  private rugs: THREE.Object3D[] = [];
   private circuitPads: THREE.Mesh[] = [];
   private lampBulb!: THREE.Mesh;
   private deskLight!: THREE.PointLight;
@@ -444,6 +448,7 @@ export class LofiDiorama extends LitElement {
     this.buildDesk();
     this.buildFurniture();
     this.buildPosters();
+    this.buildRugs();
     
     this.gearGroup = new THREE.Group();
     this.scene.add(this.gearGroup);
@@ -651,6 +656,51 @@ export class LofiDiorama extends LitElement {
     this.cosyRoomGroup.add(leftWall);
     
     this.staticCollisionObjects.push(wallLeft, wallRight, wallAbove, wallBelow, leftWall);
+  }
+
+  private buildRugs() {
+    const buildRug = (img: string, id: string, defaultZ: number) => {
+      const textureLoader = new THREE.TextureLoader();
+      textureLoader.load(img, (tex) => {
+        tex.colorSpace = THREE.SRGBColorSpace;
+        
+        const width = 16; 
+        const height = 24; 
+        
+        const group = new THREE.Group();
+        group.name = id;
+        group.userData.isRug = true;
+        
+        const rugGeo = new THREE.BoxGeometry(width, 0.05, height);
+        const rugMat = new THREE.MeshStandardMaterial({ map: tex, roughness: 1.0, color: 0xdddddd });
+        const rug = new THREE.Mesh(rugGeo, rugMat);
+        rug.position.set(0, 0, 0); 
+        rug.receiveShadow = true;
+        group.add(rug);
+        
+        const savedPos = localStorage.getItem(`lofi_pos_${this.sceneMode}_${id}`);
+        if (savedPos) {
+          try {
+            const pos = JSON.parse(savedPos);
+            group.position.set(pos.x, pos.y, pos.z);
+            if (pos.rY !== undefined) group.rotation.y = pos.rY;
+          } catch (e) {}
+        } else {
+          group.position.set(4, -4.95, defaultZ); 
+        }
+        
+        this.cosyRoomGroup.add(group);
+        this.draggableObjects.push(group);
+        this.clickableObjects.push(group);
+        this.rugs.push(group);
+        
+        group.visible = this.activeGear.includes(id);
+      });
+    };
+
+    buildRug(greenRugImg, 'rug_green_arched', 0);
+    buildRug(pinkRugImg, 'rug_pink_arched', 0);
+    buildRug(whiteRugImg, 'rug_white_arched', 0);
   }
 
   private buildPosters() {
@@ -1016,8 +1066,9 @@ export class LofiDiorama extends LitElement {
     const saved = localStorage.getItem(`lofi_pos_${this.sceneMode}_${name}`);
     if (saved) {
       try {
-        const {x, y, z} = JSON.parse(saved);
+        const {x, y, z, rY} = JSON.parse(saved);
         obj.position.set(x, y, z);
+        if (rY !== undefined) obj.rotation.y = rY;
         obj.updateMatrixWorld(true);
         
         // Restore headphone rotation based on proximity to hook
@@ -1326,7 +1377,8 @@ export class LofiDiorama extends LitElement {
         const data: any = {
           x: obj.position.x,
           y: obj.position.y,
-          z: obj.position.z
+          z: obj.position.z,
+          rY: obj.rotation.y
         };
         if (obj.userData.isPoster) {
           data.wall = obj.userData.wall;
@@ -1357,6 +1409,10 @@ export class LofiDiorama extends LitElement {
     // Update poster visibility
     this.posters.forEach(poster => {
       poster.visible = this.activeGear.includes(poster.name);
+    });
+    // Update rug visibility
+    this.rugs.forEach(rug => {
+      rug.visible = this.activeGear.includes(rug.name);
     });
     if (this.clutterGroup) {
       const clutterItems = ['lamp', 'cup', 'headphones', 'succulent_echeveria', 'succulent_moonstones', 'succulent_haworthia', 'succulent_pearls', 'succulent_jade'];
