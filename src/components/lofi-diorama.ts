@@ -1349,8 +1349,9 @@ export class LofiDiorama extends LitElement {
       poster.visible = this.activeGear.includes(poster.name);
     });
     if (this.clutterGroup) {
+      const clutterItems = ['lamp', 'cup', 'headphones', 'succulent_echeveria', 'succulent_moonstones', 'succulent_haworthia', 'succulent_pearls', 'succulent_jade'];
       this.clutterGroup.children.forEach(child => {
-        if (['lamp', 'cup', 'plant_small', 'headphones'].includes(child.name)) {
+        if (clutterItems.includes(child.name)) {
           child.visible = this.activeGear.includes(child.name);
         }
       });
@@ -1968,37 +1969,118 @@ export class LofiDiorama extends LitElement {
     this.clutterGroup.add(mugGroup);
     this.loadOrPlaceObject(mugGroup, 'mug', -7.5, 6.0, -3);
 
-    // Small plant on right side of desk
-    const plantGroup = new THREE.Group();
-    const potMat = new THREE.MeshStandardMaterial({ color: 0xcc6633, roughness: 0.85 });
-    const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.4, 1.0, 16), potMat);
-    pot.position.set(0, 0.5, 0);
-    pot.castShadow = true;
-    plantGroup.add(pot);
+    // Helper to make a standard pot and soil
+    const createPot = () => {
+      const group = new THREE.Group();
+      const potMat = new THREE.MeshStandardMaterial({ color: 0xf5f5dc, roughness: 0.7 });
+      const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.5, 0.6, 24), potMat);
+      pot.position.set(0, 0.3, 0);
+      pot.castShadow = true;
+      group.add(pot);
+      
+      // Lighter, warmer brown so it doesn't look black
+      const soilMat = new THREE.MeshStandardMaterial({ color: 0x5a3a22, roughness: 1.0 });
+      // Using a cylinder for soil gives it volume and completely stops z-fighting with the pot's top face
+      const soil = new THREE.Mesh(new THREE.CylinderGeometry(0.66, 0.66, 0.05, 24), soilMat);
+      soil.position.set(0, 0.61, 0); 
+      soil.receiveShadow = true;
+      group.add(soil);
+      return group;
+    };
 
-    const soilMat = new THREE.MeshStandardMaterial({ color: 0x3a2a1a, roughness: 0.9 });
-    const soil = new THREE.Mesh(new THREE.CircleGeometry(0.55, 16), soilMat);
-    soil.rotation.x = -Math.PI / 2;
-    soil.position.set(0, 1.0, 0);
-    plantGroup.add(soil);
-
-    const leafMat = new THREE.MeshStandardMaterial({ color: 0x3a7a2a, roughness: 0.5 });
-    for (let i = 0; i < 5; i++) {
-      const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 8), leafMat);
-      leaf.scale.set(1, 0.2, 1.2);
-      leaf.position.set(
-        (Math.random() - 0.5) * 0.5,
-        1.4 + Math.random() * 0.6,
-        (Math.random() - 0.5) * 0.5
-      );
-      leaf.rotation.set(Math.random(), Math.random(), Math.random());
-      plantGroup.add(leaf);
+    // 1. Echeveria (Mint Green Rosette)
+    const echevGroup = createPot();
+    const mintMat = new THREE.MeshStandardMaterial({ color: 0x88d49e, roughness: 0.6 });
+    for (let i = 0; i < 6; i++) {
+      const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.25, 12, 12), mintMat);
+      leaf.scale.set(1, 0.3, 1.5);
+      const angle = (i / 6) * Math.PI * 2;
+      leaf.position.set(Math.cos(angle) * 0.25, 0.7, Math.sin(angle) * 0.25);
+      leaf.rotation.y = -angle;
+      leaf.rotation.x = 0.4;
+      leaf.castShadow = true;
+      echevGroup.add(leaf);
     }
-    
-    plantGroup.visible = this.activeGear.includes('plant_small');
-    plantGroup.name = 'plant_small';
-    this.clutterGroup.add(plantGroup);
-    this.loadOrPlaceObject(plantGroup, 'plant', 10.0, 6.0, -6);
+    const mintCenter = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 12), mintMat);
+    mintCenter.scale.set(1, 0.5, 1);
+    mintCenter.position.set(0, 0.75, 0);
+    echevGroup.add(mintCenter);
+    echevGroup.visible = this.activeGear.includes('succulent_echeveria');
+    this.clutterGroup.add(echevGroup);
+    this.loadOrPlaceObject(echevGroup, 'succulent_echeveria', 10.0, 6.0, -6);
+
+    // 2. Moonstones (Pink Chubby)
+    const moonGroup = createPot();
+    const pinkMat = new THREE.MeshStandardMaterial({ color: 0xff6b81, roughness: 0.5 });
+    for (let i = 0; i < 5; i++) {
+      const chubby = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 12), pinkMat);
+      chubby.scale.set(0.9, 1.1, 0.9);
+      const angle = (i / 5) * Math.PI * 2;
+      chubby.position.set(Math.cos(angle) * 0.2, 0.75, Math.sin(angle) * 0.2);
+      chubby.rotation.x = Math.cos(angle) * 0.3;
+      chubby.rotation.z = Math.sin(angle) * 0.3;
+      chubby.castShadow = true;
+      moonGroup.add(chubby);
+    }
+    moonGroup.visible = this.activeGear.includes('succulent_moonstones');
+    this.clutterGroup.add(moonGroup);
+    this.loadOrPlaceObject(moonGroup, 'succulent_moonstones', 11.5, 6.0, -6);
+
+    // 3. Haworthia (Purple Spiky)
+    const hawGroup = createPot();
+    const purpleMat = new THREE.MeshStandardMaterial({ color: 0xa29bfe, roughness: 0.4 });
+    for (let i = 0; i < 5; i++) {
+      const spike = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.7, 6), purpleMat);
+      const angle = (i / 5) * Math.PI * 2;
+      spike.position.set(Math.cos(angle) * 0.15, 0.85, Math.sin(angle) * 0.15);
+      spike.rotation.x = Math.sin(angle) * 0.2;
+      spike.rotation.z = -Math.cos(angle) * 0.2;
+      spike.castShadow = true;
+      hawGroup.add(spike);
+    }
+    hawGroup.visible = this.activeGear.includes('succulent_haworthia');
+    this.clutterGroup.add(hawGroup);
+    this.loadOrPlaceObject(hawGroup, 'succulent_haworthia', 10.0, 6.0, -4.5);
+
+    // 4. String of Pearls (Cascading green balls)
+    const pearlGroup = createPot();
+    const pearlMat = new THREE.MeshStandardMaterial({ color: 0x55aa66, roughness: 0.6 });
+    for (let j = 0; j < 4; j++) {
+      const angle = (j / 4) * Math.PI * 2;
+      for (let i = 0; i < 6; i++) {
+        const pearl = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 8), pearlMat);
+        const dist = 0.3 + (i * 0.15);
+        const yDrop = 0.7 - (i * 0.15);
+        pearl.position.set(Math.cos(angle) * dist, yDrop, Math.sin(angle) * dist);
+        pearl.castShadow = true;
+        pearlGroup.add(pearl);
+      }
+    }
+    pearlGroup.visible = this.activeGear.includes('succulent_pearls');
+    this.clutterGroup.add(pearlGroup);
+    this.loadOrPlaceObject(pearlGroup, 'succulent_pearls', 11.5, 6.0, -4.5);
+
+    // 5. Jade Plant (Tree-like)
+    const jadeGroup = createPot();
+    const jadeMat = new THREE.MeshStandardMaterial({ color: 0x448844, roughness: 0.5 });
+    const stemMat = new THREE.MeshStandardMaterial({ color: 0x887755, roughness: 0.8 });
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.15, 0.8, 8), stemMat);
+    stem.position.set(0, 0.9, 0);
+    jadeGroup.add(stem);
+    for (let i = 0; i < 8; i++) {
+      const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), jadeMat);
+      leaf.scale.set(1, 0.3, 1.2);
+      const y = 0.8 + (i * 0.1);
+      const angle = i * 2.4; // golden angle approx
+      leaf.position.set(Math.cos(angle) * 0.2, y, Math.sin(angle) * 0.2);
+      leaf.rotation.y = -angle;
+      leaf.rotation.x = 0.2;
+      leaf.castShadow = true;
+      jadeGroup.add(leaf);
+    }
+    jadeGroup.visible = this.activeGear.includes('succulent_jade');
+    this.clutterGroup.add(jadeGroup);
+    this.loadOrPlaceObject(jadeGroup, 'succulent_jade', 10.75, 6.0, -7.5);
 
     // Headphones on the desk (right side) - Sennheiser HD 280 Pro style
     const hpGroup = new THREE.Group();

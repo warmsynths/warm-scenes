@@ -46,7 +46,7 @@ export class LofiDashboard extends LitElement {
   private lightningIntensity: number = 50;
 
   @property({ type: Array })
-  private activeGear: string[] = ['polyend', 'circuit_tracks', 'mood', 'blooper', 'sp404', 'm8', 'poster_believe', 'poster_808', 'lamp', 'cup', 'plant_small'];
+  private activeGear: string[] = ['polyend', 'circuit_tracks', 'mood', 'blooper', 'sp404', 'm8', 'poster_believe', 'poster_808', 'lamp', 'cup', 'succulent_echeveria', 'succulent_moonstones', 'succulent_haworthia', 'succulent_pearls', 'succulent_jade'];
 
   @state()
   private activePanel: 'gear' | 'environment' | 'audio' | null = null;
@@ -716,7 +716,11 @@ export class LofiDashboard extends LitElement {
       { id: 'decor', label: 'Decor', items: [
         { id: 'lamp', label: 'Desk Lamp', icon: '💡', cat: 'Decor', disabled: false },
         { id: 'cup', label: 'Coffee Cup', icon: '☕', cat: 'Decor', disabled: false },
-        { id: 'plant_small', label: 'Desk Plant', icon: '🪴', cat: 'Decor', disabled: false }
+        { id: 'succulent_echeveria', label: 'Echeveria', icon: '🪴', cat: 'Decor', disabled: false },
+        { id: 'succulent_moonstones', label: 'Moonstones', icon: '🪴', cat: 'Decor', disabled: false },
+        { id: 'succulent_haworthia', label: 'Haworthia', icon: '🪴', cat: 'Decor', disabled: false },
+        { id: 'succulent_pearls', label: 'String of Pearls', icon: '🪴', cat: 'Decor', disabled: false },
+        { id: 'succulent_jade', label: 'Jade Plant', icon: '🪴', cat: 'Decor', disabled: false }
       ]},
       { id: 'posters', label: 'Posters', items: [
         { id: 'poster_believe', label: 'UFO Poster', img: ufoPosterImg, cat: 'Poster', disabled: false },
