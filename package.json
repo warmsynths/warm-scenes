@@ -6,12 +6,15 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "render": "node render.js"
   },
   "dependencies": {
     "gsap": "^3.15.0",
     "lit": "^3.3.3",
-    "three": "^0.185.1"
+    "meyda": "^5.6.3",
+    "three": "^0.185.1",
+    "wavesurfer.js": "^7.12.10"
   },
   "devDependencies": {
     "@types/three": "^0.185.1",

@@ -4,6 +4,8 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import './AudioDirector/AudioDirector';
+import type { AudioDirector } from './AudioDirector/AudioDirector';
 
 @customElement('wavefield-screen')
 export class WavefieldScreen extends LitElement {
@@ -15,6 +17,26 @@ export class WavefieldScreen extends LitElement {
 
   @state()
   private isPlaying = false;
+
+  @state()
+  private showDirector = false;
+
+  @state() 
+  private playbackMode: 'freeplay' | 'scripted' = 'freeplay';
+
+  private activeScript: { time: number, config: any }[] = [];
+  private lastProcessedScriptIndex = -1;
+  private proxyTriggerFrames = 0;
+  
+  private activeModulators: { config: any, startTime: number }[] = [];
+
+  private availableTargets = [
+    { id: 'device', label: 'Device', type: 'trigger' },
+    { id: 'theme', label: 'Theme', type: 'trigger' },
+    { id: 'speed', label: 'Speed', type: 'continuous' },
+    { id: 'gap', label: 'Gap', type: 'continuous' },
+    { id: 'height', label: 'Grid Height', type: 'continuous' }
+  ];
 
   @state()
   private audioInitialized = false;
@@ -91,6 +113,17 @@ export class WavefieldScreen extends LitElement {
       color: #fff;
       z-index: 10;
       min-width: 250px;
+    }
+    .director-overlay {
+      position: absolute;
+      top: 60px;
+      left: 20px;
+      right: 20px;
+      z-index: 20;
+      display: none;
+    }
+    .director-overlay.visible {
+      display: block;
     }
     .controls-row {
       display: flex;
@@ -404,11 +437,71 @@ export class WavefieldScreen extends LitElement {
     if (file) {
       const url = URL.createObjectURL(file);
       this.audioElement.src = url;
+      
+      const director = this.shadowRoot?.querySelector('audio-director') as AudioDirector;
+      if (director) {
+        director.loadFromFile(file);
+      }
+
       // If already initialized, play immediately
       if (this.audioInitialized) {
         this.audioElement.play();
         this.isPlaying = true;
       }
+    }
+  }
+  public get activeScriptEvents() {
+    return this.activeScript;
+  }
+
+  public get currentState() {
+    return {
+      theme: this.theme,
+      device: this.device,
+      speed: this.scrollSpeed,
+      gap: this.lineGap,
+      height: this.gridHeight,
+      mode: this.mode,
+      rippleDir: this.rippleDir
+    };
+  }
+
+  private applyScript() {
+    const director = this.shadowRoot?.querySelector('audio-director') as any;
+    if (director) {
+      this.activeScript = director.generateScript();
+      this.playbackMode = 'scripted';
+      this.lastProcessedScriptIndex = -1; // Reset playback head
+      this.activeModulators = [];
+      this.showDirector = false;
+    }
+  }
+
+  private handleDirectorChange(e: CustomEvent) {
+    this.activeScript = e.detail.script;
+    this.lastProcessedScriptIndex = -1;
+    this.activeModulators = [];
+  }
+
+  private handleDirectorClose() {
+    this.showDirector = false;
+    if (this.activeScript.length > 0) {
+      this.playbackMode = 'scripted';
+    }
+  }
+
+  private executeScriptAction(config: any) {
+    if (config.mode === 'trigger' || config.mode === 'next') {
+      if (config.target === 'device') {
+         this.proxyTriggerFrames = 15;
+      } else if (config.target === 'theme') {
+         const themes: any[] = ['noir', 'synthwave', 'firework'];
+         const themeIdx = themes.indexOf(this.theme);
+         this.theme = themes[(themeIdx + 1) % themes.length];
+      }
+    } else {
+      // Continuous modulators (envelope, envelope_lfo)
+      this.activeModulators.push({ config, startTime: this.audioElement.currentTime });
     }
   }
 
@@ -432,20 +525,50 @@ export class WavefieldScreen extends LitElement {
     if (this.audioInitialized && this.isPlaying) {
       this.analyser.getByteFrequencyData(this.dataArray as any);
       
-      // Isolate low-end bass frequencies (first few bins)
-      let bassSum = 0;
-      const bassBins = 4;
-      for (let i = 0; i < bassBins; i++) {
-        bassSum += this.dataArray[i];
-      }
-      const bassAvg = bassSum / bassBins;
-      
-      // Threshold logic for the "Drape" over the SP-404 proxy
-      const peakThreshold = 235; // Increased so it only triggers on the hardest bass hits 
-      if (bassAvg > peakThreshold) {
-        targetWeight = 1.0;
-      } else {
-        targetWeight = 0.0;
+      if (this.playbackMode === 'freeplay') {
+        // Isolate low-end bass frequencies (first few bins)
+        let bassSum = 0;
+        const bassBins = 4;
+        for (let i = 0; i < bassBins; i++) {
+          bassSum += this.dataArray[i];
+        }
+        const bassAvg = bassSum / bassBins;
+        
+        const peakThreshold = 235; // Increased so it only triggers on the hardest bass hits 
+        if (bassAvg > peakThreshold) {
+          targetWeight = 1.0;
+        }
+      } else if (this.playbackMode === 'scripted') {
+        const currentTime = this.audioElement.currentTime;
+        
+        // Handle seeking backwards or looping
+        if (this.lastProcessedScriptIndex >= 0 && 
+            this.activeScript.length > 0 && 
+            currentTime < this.activeScript[this.lastProcessedScriptIndex].time) {
+          this.lastProcessedScriptIndex = -1;
+          this.activeModulators = [];
+        }
+
+        // Process discrete events
+        let triggered = false;
+        while (
+          this.lastProcessedScriptIndex + 1 < this.activeScript.length &&
+          this.activeScript[this.lastProcessedScriptIndex + 1].time <= currentTime
+        ) {
+          this.lastProcessedScriptIndex++;
+          this.executeScriptAction(this.activeScript[this.lastProcessedScriptIndex].config);
+        }
+
+        if (triggered) {
+          this.proxyTriggerFrames = 15; // Hold reveal weight high for 15 frames (approx 250ms)
+        }
+
+        if (this.proxyTriggerFrames > 0) {
+          targetWeight = 1.0;
+          this.proxyTriggerFrames--;
+        } else {
+          targetWeight = 0.0;
+        }
       }
 
       // Overall volume for subtle ripple
@@ -455,6 +578,34 @@ export class WavefieldScreen extends LitElement {
       }
       const totalAvg = totalSum / this.dataArray.length;
       volumeRipple = totalAvg / 255.0;
+    }
+
+    // Process continuous Modulators
+    let modSpeed = this.scrollSpeed;
+    let modGap = this.lineGap;
+    let modHeight = this.gridHeight;
+
+    if (this.audioInitialized && this.isPlaying && this.playbackMode === 'scripted') {
+      const currentTime = this.audioElement.currentTime;
+      const decayTime = 1.0; // Fixed 1 second decay for envelopes
+      this.activeModulators = this.activeModulators.filter(m => currentTime - m.startTime < decayTime);
+
+      for (const mod of this.activeModulators) {
+        const t = currentTime - mod.startTime;
+        let val = 0;
+        
+        if (mod.config.mode === 'envelope') {
+           const env = Math.max(0, 1.0 - (t / decayTime));
+           val = mod.config.amount * env;
+        } else if (mod.config.mode === 'envelope_lfo') {
+           const env = Math.max(0, 1.0 - (t / decayTime));
+           val = mod.config.amount * env * Math.sin(t * Math.PI * 2 * 10); // 10Hz wobble
+        }
+
+        if (mod.config.target === 'speed') modSpeed += val;
+        else if (mod.config.target === 'gap') modGap += val;
+        else if (mod.config.target === 'height') modHeight += val;
+      }
     }
 
     // Lerp currentWeight towards targetWeight
@@ -467,8 +618,8 @@ export class WavefieldScreen extends LitElement {
       const width = 120;
       const depth = 120;
       
-      const step = Math.floor(this.lineGap);
-      const heightScale = this.gridHeight / 100.0;
+      const step = Math.floor(Math.max(1, modGap));
+      const heightScale = modHeight / 100.0;
       
       for (let i = 0; i < numLines; i++) {
         const { line, curtain } = this.waveLines[i];
@@ -566,8 +717,8 @@ export class WavefieldScreen extends LitElement {
 
           // To prevent spatial aliasing (where the waves appear to stop or jitter on large gaps), 
           // we stretch the physical length of the wave along the Z-axis proportionally to the gap.
-          const zPhaseDist = unscaledZ / this.lineGap;
-          const zPhaseTime = this.time * this.scrollSpeed;
+          const zPhaseDist = unscaledZ / Math.max(1, modGap);
+          const zPhaseTime = this.time * modSpeed;
           const zPhase = (this.rippleDir === 'down') ? (zPhaseDist - zPhaseTime) : (zPhaseDist + zPhaseTime);
           
           // Joy Division style jagged peaks concentrated in the center
@@ -628,6 +779,15 @@ export class WavefieldScreen extends LitElement {
     return html`
       <div class="canvas-container"></div>
       
+      <div class="director-overlay ${this.showDirector ? 'visible' : ''}">
+        <audio-director 
+          .availableTargets=${this.availableTargets} 
+          @close=${this.handleDirectorClose}
+          @change=${this.handleDirectorChange}
+          @apply=${this.applyScript}>
+        </audio-director>
+      </div>
+      
       <div class="ui-panel">
         <div class="controls-row">
           <button class="btn" @click="${this.initAudio}">
@@ -636,6 +796,20 @@ export class WavefieldScreen extends LitElement {
           <button class="btn" @click="${() => this.shadowRoot?.getElementById('file-input')?.click()}">
             Load Track
           </button>
+        </div>
+        
+        <div class="controls-row">
+          <button class="btn" style="background: #333;" @click="${() => this.showDirector = !this.showDirector}">
+            ${this.showDirector ? 'Hide Director' : 'Show Director'}
+          </button>
+        </div>
+        
+        <div class="controls-row">
+          <label>Playback:</label>
+          <select @change="${(e: any) => this.playbackMode = e.target.value}" .value=${this.playbackMode}>
+            <option value="freeplay">Freeplay (Audio Reactive)</option>
+            <option value="scripted">Scripted (Director)</option>
+          </select>
         </div>
         
         <div class="controls-row">
@@ -648,11 +822,16 @@ export class WavefieldScreen extends LitElement {
         
         <div class="controls-row">
           <label>Theme:</label>
-          <select @change="${(e: any) => this.theme = e.target.value}">
-            <option value="noir">Noir (B&W)</option>
-            <option value="synthwave">Synthwave (Pink/Cyan)</option>
-            <option value="firework">Firework (Rainbow)</option>
+          <select @change="${(e: any) => this.theme = e.target.value}" .value=${this.theme}>
+            <option value="noir" ?selected="${this.theme === 'noir'}">Noir (B&W)</option>
+            <option value="synthwave" ?selected="${this.theme === 'synthwave'}">Synthwave (Pink/Cyan)</option>
+            <option value="firework" ?selected="${this.theme === 'firework'}">Firework (Rainbow)</option>
           </select>
+        </div>
+
+        <div class="controls-row">
+          <label>Height:</label>
+          <input type="range" min="10" max="300" step="10" .value=${this.gridHeight} @input=${(e: any) => this.gridHeight = parseFloat(e.target.value)} style="flex: 1; margin-left: 10px;"/>
         </div>
         
         <div class="controls-row">
@@ -665,12 +844,12 @@ export class WavefieldScreen extends LitElement {
 
         <div class="controls-row">
           <label>Device:</label>
-          <select @change="${(e: any) => this.device = e.target.value}">
-            <option value="sp404">SP-404 MKII</option>
-            <option value="circuit">Circuit Tracks</option>
-            <option value="guitar">Electric Guitar</option>
-            <option value="bass">Bass Guitar</option>
-            <option value="drum">Snare Drum</option>
+          <select @change="${(e: any) => this.device = e.target.value}" .value=${this.device}>
+            <option value="sp404" ?selected="${this.device === 'sp404'}">SP-404 MKII</option>
+            <option value="circuit" ?selected="${this.device === 'circuit'}">Circuit Tracks</option>
+            <option value="guitar" ?selected="${this.device === 'guitar'}">Electric Guitar</option>
+            <option value="bass" ?selected="${this.device === 'bass'}">Bass Guitar</option>
+            <option value="drum" ?selected="${this.device === 'drum'}">Snare Drum</option>
           </select>
         </div>
 
