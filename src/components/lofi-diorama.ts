@@ -1321,7 +1321,7 @@ export class LofiDiorama extends LitElement {
         if (obj.userData.isPoster) {
           data.wall = obj.userData.wall;
         }
-        localStorage.setItem(`lofi_pos_${obj.name}`, JSON.stringify(data));
+        localStorage.setItem(`lofi_pos_${this.sceneMode}_${obj.name}`, JSON.stringify(data));
       }
     }
   }
@@ -3028,7 +3028,6 @@ export class LofiDiorama extends LitElement {
       const dx = touch1.clientX - touch2.clientX;
       const dy = touch1.clientY - touch2.clientY;
       this.lastTouchDistance = Math.sqrt(dx * dx + dy * dy);
-      if (this.controls) this.controls.enabled = false;
     } else {
       this.lastTouchDistance = null;
     }
@@ -3098,7 +3097,6 @@ export class LofiDiorama extends LitElement {
       }
 
       this.lastTouchDistance = distance;
-      if (this.controls) this.controls.enabled = false;
     } else {
       if (!this.dragObject && this.controls) {
         this.controls.enabled = true;
@@ -3114,7 +3112,6 @@ export class LofiDiorama extends LitElement {
       const dx = touch1.clientX - touch2.clientX;
       const dy = touch1.clientY - touch2.clientY;
       this.lastTouchDistance = Math.sqrt(dx * dx + dy * dy);
-      if (this.controls) this.controls.enabled = false;
     } else {
       if (!this.dragObject && this.controls) {
         this.controls.enabled = true;
@@ -3167,7 +3164,14 @@ export class LofiDiorama extends LitElement {
           if (saved) {
             const data = JSON.parse(saved);
             child.position.set(data.x, data.y, data.z);
-            child.rotation.y = data.ry;
+            if (data.ry !== undefined) {
+              child.rotation.y = data.ry;
+            } else {
+              const savedRot = localStorage.getItem(`lofi_rot_${this.sceneMode}_${child.name}`);
+              if (savedRot && !isNaN(parseFloat(savedRot))) {
+                child.rotation.y = parseFloat(savedRot);
+              }
+            }
           } else {
             // Default position if no save for this mode
             child.position.set(14 + (Math.random() * 10 - 5), 5.6, (Math.random() * 10 - 5));
