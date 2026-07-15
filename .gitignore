@@ -23,3 +23,9 @@ dist-ssr
 *.sln
 *.sw?
 config.json
+
+# HyperFrames temp and output
+work-*/
+hyperframes-temp.html
+output.mp4
+audio.wav

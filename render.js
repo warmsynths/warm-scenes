@@ -13,7 +13,29 @@ function main() {
     process.exit(1);
   }
 
-  // 1. Read JSON config
+  // 1. Build the Vite app first so we have a bundle that a headless browser can load
+  console.log('Building Vite app for render...');
+  try {
+    execSync('npm run build', { stdio: 'inherit' });
+  } catch (err) {
+    console.error('Build failed', err);
+    process.exit(1);
+  }
+
+  // 2. Read the generated docs/index.html to find the compiled JS/CSS paths
+  const docsIndexPath = path.resolve('docs', 'index.html');
+  if (!fs.existsSync(docsIndexPath)) {
+    console.error('Error: docs/index.html not found after build.');
+    process.exit(1);
+  }
+  const indexHtmlStr = fs.readFileSync(docsIndexPath, 'utf-8');
+  const scriptMatch = indexHtmlStr.match(/<script type="module" crossorigin src="([^"]+)"><\/script>/);
+  const cssMatch = indexHtmlStr.match(/<link rel="stylesheet" crossorigin href="([^"]+)">/);
+
+  const scriptSrc = scriptMatch ? scriptMatch[1].replace('/warm-scenes/', './docs/') : '';
+  const cssHref = cssMatch ? cssMatch[1].replace('/warm-scenes/', './docs/') : '';
+
+  // 3. Read JSON config
   const configData = fs.readFileSync(CONFIG_PATH, 'utf-8');
   let events = [];
   try {
@@ -23,47 +45,61 @@ function main() {
     process.exit(1);
   }
 
-  // 2. Generate HTML divs for each event
+  // Find the exact audio duration to set data-duration correctly
+  let duration = 60;
+  try {
+    const output = execSync(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 ${AUDIO_PATH}`, { encoding: 'utf-8' });
+    const audioDuration = Math.ceil(parseFloat(output.trim()));
+    if (!isNaN(audioDuration) && audioDuration > 0) {
+      duration = audioDuration;
+    }
+  } catch(e) {
+    console.warn('Could not determine audio duration with ffprobe, falling back to 60s.');
+  }
+
+  // 4. Generate HTML divs for each event
   const eventsHtml = events.map((evt, i) => {
     return `      <div id="event-${i}" class="config-event clip" data-type="${evt.type}" data-value="${evt.value}" data-start="${evt.time}"></div>`;
   }).join('\n');
 
-  // 3. Wrap in standard HTML5 with Audio and Canvas
+  // 5. Wrap in standard HTML5 with Audio and wavefield-screen
   const htmlContent = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hyperframes Render Temp</title>
+  ${cssHref ? `<link rel="stylesheet" href="${cssHref}">` : ''}
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
 </head>
-<body>
-  <div id="composition" data-composition-id="main" data-width="1920" data-height="1080" data-start="0">
-    <!-- Three.js Canvas -->
-    <canvas id="canvas"></canvas>
-
-    <!-- Audio track -->
+<body style="margin: 0; padding: 0;">
+  <div id="composition" data-composition-id="main" data-width="1920" data-height="1080" data-start="0" data-duration="${duration}" style="width: 1920px; height: 1080px; position: relative; overflow: hidden; background: #000;">
+    
+    <!-- Audio track (Hyperframes will own this) -->
     <audio id="main-audio" src="${AUDIO_PATH}" data-start="0"></audio>
 
     <!-- Config Events -->
 ${eventsHtml}
+
+    <!-- Target wavefield screen -->
+    <wavefield-screen style="width: 100%; height: 100%; display: block;"></wavefield-screen>
   </div>
 
   <script>
     window.__timelines = window.__timelines || {};
-    window.__timelines['main'] = gsap.timeline();
+    window.__timelines['main'] = gsap.timeline({ paused: true });
   </script>
 
   <!-- App logic containing Three.js and HyperFrames initialization -->
-  <script type="module" src="./src/components/main-app.ts"></script>
+  ${scriptSrc ? `<script type="module" src="${scriptSrc}"></script>` : ''}
 </body>
 </html>`;
 
-  // 4. Write temp file
+  // 6. Write temp file
   fs.writeFileSync(TEMP_HTML_PATH, htmlContent, 'utf-8');
   console.log(`Generated temporary HTML template: ${TEMP_HTML_PATH}`);
 
-  // 5. Execute hyperframes render
+  // 7. Execute hyperframes render
   try {
     console.log(`Running: npx hyperframes render --composition hyperframes-temp.html --output ${OUTPUT_PATH}`);
     execSync(`npx hyperframes render --composition hyperframes-temp.html --output ${OUTPUT_PATH}`, { 
@@ -73,7 +109,7 @@ ${eventsHtml}
   } catch (err) {
     console.error('Error during HyperFrames rendering:', err.message);
   } finally {
-    // 6. Cleanup temp file
+    // 8. Cleanup temp file
     if (fs.existsSync(TEMP_HTML_PATH)) {
       fs.unlinkSync(TEMP_HTML_PATH);
       console.log(`Cleaned up temporary file: ${TEMP_HTML_PATH}`);

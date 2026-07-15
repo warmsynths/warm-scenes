@@ -21,6 +21,9 @@ export class WavefieldScreen extends LitElement {
   @state()
   private showDirector = false;
 
+  @state()
+  private isRenderMode = false;
+
   @state() 
   private playbackMode: 'freeplay' | 'scripted' = 'freeplay';
 
@@ -432,6 +435,23 @@ export class WavefieldScreen extends LitElement {
     }
   }
 
+  private offlineAudioBuffer: Float32Array | null = null;
+  private offlineSampleRate = 44100;
+  private lastFilterVal = 0;
+
+  private async loadOfflineAudio() {
+    try {
+      const response = await fetch('audio.wav');
+      const arrayBuffer = await response.arrayBuffer();
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+      this.offlineAudioBuffer = audioBuffer.getChannelData(0);
+      this.offlineSampleRate = audioBuffer.sampleRate;
+    } catch(e) {
+      console.warn("Could not load offline audio", e);
+    }
+  }
+
   private handleFileSelect(e: Event) {
     const file = (e.target as HTMLInputElement).files?.[0];
     if (file) {
@@ -491,7 +511,14 @@ export class WavefieldScreen extends LitElement {
   }
 
   private executeScriptAction(config: any) {
-    if (config.mode === 'trigger' || config.mode === 'next') {
+    if (typeof config.value === 'string') {
+      // Absolute state update (from baseline snapshot)
+      if (config.target === 'device') this.device = config.value as any;
+      else if (config.target === 'theme') this.theme = config.value as any;
+      else if (config.target === 'mode') this.mode = config.value as any;
+      else if (config.target === 'rippleDir') this.rippleDir = config.value as any;
+    } else if (config.target === 'device' || config.target === 'theme') {
+      // Trigger update (from AudioDirector next events)
       if (config.target === 'device') {
          this.proxyTriggerFrames = 15;
       } else if (config.target === 'theme') {
@@ -501,6 +528,8 @@ export class WavefieldScreen extends LitElement {
       }
     } else {
       // Continuous modulators (envelope, envelope_lfo)
+      // Since mode was lost in export, default to envelope for smooth transitions
+      config.mode = 'envelope';
       this.activeModulators.push({ config, startTime: this.audioElement.currentTime });
     }
   }
@@ -508,11 +537,57 @@ export class WavefieldScreen extends LitElement {
   // --- Render Loop ---
 
   private startLoop() {
-    const loop = () => {
+    // Detect HyperFrames offline rendering mode
+    if (window.hasOwnProperty('__timelines') || document.querySelector('.config-event')) {
+      this.mode = 'full';
+      // Do not force scripted playbackMode so freeplay can still work offline
+      this.audioInitialized = true;
+      this.isPlaying = true;
+      this.isRenderMode = true;
+      
+      // Load offline audio buffer for deterministic analysis
+      this.loadOfflineAudio();
+      
+      // Provide a dummy dataArray to prevent crashes in offline render
+      this.dataArray = new Uint8Array(256);
+      this.analyser = {
+        getByteFrequencyData: (_arr: any) => { /* dummy */ }
+      } as any;
+
+      // Load events from DOM injected by render.js
+      const eventEls = document.querySelectorAll('.config-event');
+      this.activeScript = Array.from(eventEls).map(el => {
+        const valStr = el.getAttribute('data-value') || '0';
+        const numVal = Number(valStr);
+        return {
+          time: parseFloat(el.getAttribute('data-start') || '0'),
+          config: {
+            target: el.getAttribute('data-type'),
+            value: isNaN(numVal) ? valStr : numVal,
+            amount: isNaN(numVal) ? 0 : numVal // fallback for old modulator logic
+          }
+        };
+      }).sort((a, b) => a.time - b.time);
+
+      // Hook into HyperFrames adapter time instead of requestAnimationFrame
+      window.addEventListener('hf-seek', (e: any) => {
+        const time = e.detail.time;
+        // Mock the audio element time since the real audio tag isn't playing
+        if (this.audioElement) {
+          Object.defineProperty(this.audioElement, 'currentTime', { value: time, writable: true });
+        }
+        this.renderScene();
+      });
+
       this.renderScene();
+    } else {
+      // Normal browser mode with requestAnimationFrame
+      const loop = () => {
+        this.renderScene();
+        this.animationFrameId = requestAnimationFrame(loop);
+      };
       this.animationFrameId = requestAnimationFrame(loop);
-    };
-    this.animationFrameId = requestAnimationFrame(loop);
+    }
   }
 
   private renderScene() {
@@ -523,22 +598,67 @@ export class WavefieldScreen extends LitElement {
     let volumeRipple = 0;
 
     if (this.audioInitialized && this.isPlaying) {
-      this.analyser.getByteFrequencyData(this.dataArray as any);
       
-      if (this.playbackMode === 'freeplay') {
-        // Isolate low-end bass frequencies (first few bins)
-        let bassSum = 0;
-        const bassBins = 4;
-        for (let i = 0; i < bassBins; i++) {
-          bassSum += this.dataArray[i];
-        }
-        const bassAvg = bassSum / bassBins;
+      if (this.isRenderMode && this.offlineAudioBuffer) {
+        // --- OFFLINE RENDERING ANALYSIS ---
+        const currentTime = this.audioElement.currentTime;
+        const sampleIndex = Math.floor(currentTime * this.offlineSampleRate);
+        const windowSize = 2048; // roughly 46ms
+        let rms = 0;
+        let bassRms = 0;
+        const startIdx = Math.max(0, sampleIndex - windowSize);
+        const endIdx = Math.min(this.offlineAudioBuffer.length, sampleIndex);
         
-        const peakThreshold = 235; // Increased so it only triggers on the hardest bass hits 
-        if (bassAvg > peakThreshold) {
-          targetWeight = 1.0;
+        for (let i = startIdx; i < endIdx; i++) {
+          const val = this.offlineAudioBuffer[i];
+          rms += val * val;
+          // Simple 1-pole low pass filter at ~100Hz
+          this.lastFilterVal = this.lastFilterVal + 0.015 * (val - this.lastFilterVal);
+          bassRms += this.lastFilterVal * this.lastFilterVal;
         }
-      } else if (this.playbackMode === 'scripted') {
+        
+        const actualSize = endIdx - startIdx || 1;
+        rms = Math.sqrt(rms / actualSize);
+        bassRms = Math.sqrt(bassRms / actualSize);
+        
+        // Map RMS (usually 0 to ~0.5) to volumeRipple (0 to 1.0)
+        volumeRipple = Math.min(1.0, rms * 4.0);
+
+        if (this.playbackMode === 'freeplay') {
+          // Trigger hard bass hit threshold
+          if (bassRms > 0.12) {
+            targetWeight = 1.0;
+          }
+        }
+      } else if (!this.isRenderMode) {
+        // --- REALTIME WEB AUDIO ANALYSIS ---
+        this.analyser.getByteFrequencyData(this.dataArray as any);
+        
+        if (this.playbackMode === 'freeplay') {
+          // Isolate low-end bass frequencies (first few bins)
+          let bassSum = 0;
+          const bassBins = 4;
+          for (let i = 0; i < bassBins; i++) {
+            bassSum += this.dataArray[i];
+          }
+          const bassAvg = bassSum / bassBins;
+          
+          const peakThreshold = 235; // Increased so it only triggers on the hardest bass hits 
+          if (bassAvg > peakThreshold) {
+            targetWeight = 1.0;
+          }
+        }
+        
+        // Overall volume for subtle ripple
+        let totalSum = 0;
+        for (let i = 0; i < this.dataArray.length; i++) {
+          totalSum += this.dataArray[i];
+        }
+        const totalAvg = totalSum / this.dataArray.length;
+        volumeRipple = totalAvg / 255.0;
+      }
+      
+      if (this.playbackMode === 'scripted') {
         const currentTime = this.audioElement.currentTime;
         
         // Handle seeking backwards or looping
@@ -570,14 +690,6 @@ export class WavefieldScreen extends LitElement {
           targetWeight = 0.0;
         }
       }
-
-      // Overall volume for subtle ripple
-      let totalSum = 0;
-      for (let i = 0; i < this.dataArray.length; i++) {
-        totalSum += this.dataArray[i];
-      }
-      const totalAvg = totalSum / this.dataArray.length;
-      volumeRipple = totalAvg / 255.0;
     }
 
     // Process continuous Modulators
@@ -779,6 +891,7 @@ export class WavefieldScreen extends LitElement {
     return html`
       <div class="canvas-container"></div>
       
+      ${!this.isRenderMode ? html`
       <div class="director-overlay ${this.showDirector ? 'visible' : ''}">
         <audio-director 
           .availableTargets=${this.availableTargets} 
@@ -876,6 +989,9 @@ export class WavefieldScreen extends LitElement {
         <!-- Hidden audio element. A generic looping placeholder is used if no file loaded. -->
         <audio id="audio" src="${import.meta.env.BASE_URL}sample.wav" loop hidden></audio>
       </div>
+      ` : html`
+        <audio id="audio" hidden></audio>
+      `}
     `;
   }
 }
