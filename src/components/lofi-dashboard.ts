@@ -6,6 +6,7 @@ import './gear-preview';
 
 import ufoPosterImg from '../assets/posters/iwanttobelieve_.jpg';
 import tr808PosterImg from '../assets/posters/tr808.png';
+import mpcPosterImg from '../assets/posters/mpc.jpg';
 
 type Weather = 'sunny' | 'rainy' | 'thunderstorm';
 type TimeOfDay = 'day' | 'sunset' | 'night';
@@ -46,7 +47,7 @@ export class LofiDashboard extends LitElement {
   private lightningIntensity: number = 50;
 
   @property({ type: Array })
-  private activeGear: string[] = ['polyend', 'circuit_tracks', 'mood', 'blooper', 'sp404', 'm8', 'poster_believe', 'poster_808', 'lamp', 'cup', 'succulent_echeveria', 'succulent_moonstones', 'succulent_haworthia', 'succulent_pearls', 'succulent_jade'];
+  private activeGear: string[] = ['polyend', 'circuit_tracks', 'mood', 'blooper', 'sp404', 'm8', 'poster_believe', 'poster_808', 'poster_mpc', 'lamp', 'cup', 'succulent_echeveria', 'succulent_moonstones', 'succulent_haworthia', 'succulent_pearls', 'succulent_jade'];
 
   @state()
   private activePanel: 'gear' | 'environment' | 'audio' | null = null;
@@ -724,7 +725,8 @@ export class LofiDashboard extends LitElement {
       ]},
       { id: 'posters', label: 'Posters', items: [
         { id: 'poster_believe', label: 'UFO Poster', img: ufoPosterImg, cat: 'Poster', disabled: false },
-        { id: 'poster_808', label: '808 Poster', img: tr808PosterImg, cat: 'Poster', disabled: false }
+        { id: 'poster_808', label: '808 Poster', img: tr808PosterImg, cat: 'Poster', disabled: false },
+        { id: 'poster_mpc', label: 'MPC Poster', img: mpcPosterImg, cat: 'Poster', disabled: false }
       ]},
       { id: 'other', label: 'Other', items: [
         { id: 'reel', label: 'Tape Reel', icon: '📼', cat: 'Tape', disabled: true },

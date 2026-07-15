@@ -3,6 +3,7 @@ import { customElement, property, state, query } from 'lit/decorators.js';
 import * as THREE from 'three';
 import ufoPosterImg from '../assets/posters/iwanttobelieve_.jpg';
 import tr808PosterImg from '../assets/posters/tr808.png';
+import mpcPosterImg from '../assets/posters/mpc.jpg';
 import yellowWallpaperImg from '../assets/textures/yellow_wallpaper.png';
 import dampCarpetImg from '../assets/textures/damp_carpet.png';
 import dropCeilingImg from '../assets/textures/drop_ceiling.png';
@@ -53,7 +54,7 @@ export class LofiDiorama extends LitElement {
   sceneMode: 'normal' | 'liminal' = 'normal';
 
   @property({ type: Array })
-  activeGear: string[] = ['polyend', 'circuit_tracks', 'mood', 'blooper', 'sp404', 'm8'];
+  activeGear: string[] = ['polyend', 'circuit_tracks', 'mood', 'blooper', 'sp404', 'm8', 'poster_believe', 'poster_808', 'poster_mpc', 'lamp', 'cup', 'succulent_echeveria', 'succulent_moonstones', 'succulent_haworthia', 'succulent_pearls', 'succulent_jade'];
 
   @query('.canvas-container')
   container!: HTMLDivElement;
@@ -671,6 +672,15 @@ export class LofiDiorama extends LitElement {
       const height = 8;
       const width = height * aspect;
       this.createPosterObject(tex, width, height, 'back', 20, 20, -19.8, 'poster_808');
+    });
+
+    // Poster 3: MPC
+    textureLoader.load(mpcPosterImg, (tex) => {
+      tex.colorSpace = THREE.SRGBColorSpace;
+      const aspect = tex.image.width / tex.image.height;
+      const height = 9;
+      const width = height * aspect;
+      this.createPosterObject(tex, width, height, 'back', -5, 22, -19.8, 'poster_mpc');
     });
   }
 
