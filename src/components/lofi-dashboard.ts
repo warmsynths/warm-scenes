@@ -54,7 +54,7 @@ export class LofiDashboard extends LitElement {
     if (saved) {
       try { return JSON.parse(saved); } catch(e) {}
     }
-    return ['polyend', 'circuit_tracks', 'mood', 'blooper', 'sp404', 'm8', 'poster_believe', 'poster_808', 'poster_mpc', 'lamp', 'cup', 'succulent_echeveria', 'succulent_moonstones', 'succulent_haworthia', 'succulent_pearls', 'succulent_jade'];
+    return ['polyend', 'circuit_tracks', 'mood', 'blooper', 'generation_loss', 'sp404', 'm8', 'poster_believe', 'poster_808', 'poster_mpc', 'lamp', 'cup', 'succulent_echeveria', 'succulent_moonstones', 'succulent_haworthia', 'succulent_pearls', 'succulent_jade'];
   }
 
   @property({ type: Array })
@@ -746,6 +746,17 @@ export class LofiDashboard extends LitElement {
       { id: 'other', label: 'Other', items: [
         { id: 'reel', label: 'Tape Reel', icon: '📼', cat: 'Tape', disabled: true },
         { id: 'strat', label: 'Strat', icon: '🎸', cat: 'Inst', disabled: true }
+      ]},
+      { id: 'pedals', label: 'Pedals', items: [
+        { id: 'mood', label: 'MOOD', icon: '🎛️', cat: 'Pedal', disabled: false },
+        { id: 'blooper', label: 'Blooper', icon: '🎛️', cat: 'Pedal', disabled: false },
+        { id: 'generation_loss', label: 'Gen Loss', icon: '🎛️', cat: 'Pedal', disabled: false }
+      ]},
+      { id: 'synths', label: 'Synths', items: [
+        { id: 'polyend', label: 'Polyend', icon: '🎹', cat: 'Synth', disabled: false },
+        { id: 'circuit_tracks', label: 'Circuit Tracks', icon: '🎹', cat: 'Synth', disabled: false },
+        { id: 'sp404', label: 'SP-404', icon: '🎹', cat: 'Synth', disabled: false },
+        { id: 'm8', label: 'M8', icon: '🎹', cat: 'Synth', disabled: false }
       ]}
     ];
 

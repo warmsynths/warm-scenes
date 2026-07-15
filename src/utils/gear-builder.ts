@@ -17,6 +17,7 @@ export async function createGearModel(id: string): Promise<THREE.Object3D> {
     case 'circuit_tracks': return buildCircuitTracks();
     case 'mood': return buildMood();
     case 'blooper': return buildBlooper();
+    case 'generation_loss': return buildGenerationLoss();
     case 'reel': return buildReel();
     case 'sp404': return buildSP404();
     case 'strat': return buildStrat();
@@ -102,6 +103,10 @@ function buildMood() {
 
 function buildBlooper() {
   return buildBasePedal(0xa4c8e1, import.meta.env.BASE_URL + 'blooper_texture.png');
+}
+
+function buildGenerationLoss() {
+  return buildBasePedal(0x6e90a6, import.meta.env.BASE_URL + 'generation_loss_texture.png');
 }
 
 function buildBasePedal(colorHex: number, topTexturePath?: string) {

@@ -57,7 +57,7 @@ export class LofiDiorama extends LitElement {
   sceneMode: 'normal' | 'liminal' = 'normal';
 
   @property({ type: Array })
-  activeGear: string[] = ['polyend', 'circuit_tracks', 'mood', 'blooper', 'sp404', 'm8', 'poster_believe', 'poster_808', 'poster_mpc', 'lamp', 'cup', 'succulent_echeveria', 'succulent_moonstones', 'succulent_haworthia', 'succulent_pearls', 'succulent_jade'];
+  activeGear: string[] = ['polyend', 'circuit_tracks', 'mood', 'blooper', 'generation_loss', 'sp404', 'm8', 'poster_believe', 'poster_808', 'poster_mpc', 'lamp', 'cup', 'succulent_echeveria', 'succulent_moonstones', 'succulent_haworthia', 'succulent_pearls', 'succulent_jade'];
 
   @query('.canvas-container')
   container!: HTMLDivElement;
@@ -1401,6 +1401,7 @@ export class LofiDiorama extends LitElement {
     this.buildCircuitTracks(this.activeGear.includes('circuit_tracks'));
     this.buildMood(this.activeGear.includes('mood'));
     this.buildBlooper(this.activeGear.includes('blooper'));
+    this.buildGenerationLoss(this.activeGear.includes('generation_loss'));
     this.buildReel(this.activeGear.includes('reel'));
     this.buildSP404(this.activeGear.includes('sp404'));
     this.buildStrat(this.activeGear.includes('strat'));
@@ -1542,6 +1543,11 @@ export class LofiDiorama extends LitElement {
 
   private buildBlooper(isActive: boolean) {
     const pGroup = this.buildBasePedal(isActive, 0xa4c8e1, -9.5, -5, -0.05, 'blooper', import.meta.env.BASE_URL + 'blooper_texture.png', -5); // Pastel Blue
+    this.gearGroup.add(pGroup);
+  }
+
+  private buildGenerationLoss(isActive: boolean) {
+    const pGroup = this.buildBasePedal(isActive, 0x6e90a6, -11.5, -5, 0.05, 'generation_loss', import.meta.env.BASE_URL + 'generation_loss_texture.png', -2.5); // Slate Blue/Grey
     this.gearGroup.add(pGroup);
   }
 
