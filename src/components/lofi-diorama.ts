@@ -2649,6 +2649,13 @@ export class LofiDiorama extends LitElement {
         for (let i = 0; i < 4; i++) bassSum += (rt.frequencies[i] || 0);
         bass = (bassSum / 4) / 255.0;
         for (let i = 0; i < 8; i++) freqs[i] = (rt.frequencies[i * 10] || 0) / 255.0;
+      } else if (this.audioDirector && this.audioDirector.isPlaying) {
+        // Audio Director uses WaveSurfer — drive visuals from deterministic buffer data
+        const time = this.audioDirector.getCurrentTime();
+        const det = this.audioManager.getDeterministicData(time);
+        amplitude = det.amplitude;
+        bass = det.frequencies[0] || 0;
+        freqs = det.frequencies;
       } else {
         const time = this.audioManager.getCurrentTime();
         const det = this.audioManager.getDeterministicData(time);
@@ -3446,10 +3453,10 @@ export class LofiDiorama extends LitElement {
           cameraOffset.set(0, 7, 0.5);
           break;
         case 'ambient':
-          // Wide environmental pull — camera looks at the window area but keeps desk in view
-          // Point camera toward the window (back wall at z≈-20, centered at x≈0, y≈16)
+          // B-roll: Frame the window from inside the room
+          // Window center is roughly (0, 16.2, -20), frame spans ~16.5 wide, ~8.4 tall
           targetPosition.set(0, 16, -19);
-          cameraOffset.set(5, 4, 8);
+          cameraOffset.set(3, 2, 28);
           break;
         default:
           cameraOffset.set(0, 10, 10);
