@@ -123,6 +123,11 @@ export class LofiDashboard extends LitElement {
   private progressUpdateId: number | null = null;
   private isScrubbing = false;
 
+  @state()
+  private isRenderMode = false;
+
+
+
   static styles = css`
     :host {
       display: block;
@@ -673,6 +678,9 @@ export class LofiDashboard extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     document.addEventListener('click', this.handleDocumentClick);
+    if (window.hasOwnProperty('__timelines') || document.querySelector('.config-event')) {
+      this.isRenderMode = true;
+    }
   }
 
   disconnectedCallback() {
@@ -1309,41 +1317,43 @@ export class LofiDashboard extends LitElement {
         @toggle-gear="${(e: CustomEvent) => this.toggleGear(e.detail.gear)}"
       ></lofi-diorama>
 
-      <div class="trigger-group">
-        <button class="icon-trigger-btn ${this.activePanel === 'gear' ? 'active' : ''}" @click="${() => this.togglePanel('gear')}" title="Decor">🪴</button>
-        <button class="icon-trigger-btn ${this.activePanel === 'environment' ? 'active' : ''}" @click="${() => this.togglePanel('environment')}" title="Environment">🌤️</button>
-        <button class="icon-trigger-btn ${this.activePanel === 'audio' ? 'active' : ''}" @click="${() => this.togglePanel('audio')}" title="Audio">🎵</button>
-        <button class="icon-trigger-btn ${this.showDirector ? 'active' : ''}" @click="${() => this.showDirector = !this.showDirector}" title="Director Timeline">🎬</button>
-        <button class="icon-trigger-btn ${this.activePanel === 'preflight' ? 'active' : ''}" @click="${() => { this.activePanel = (this.activePanel === 'preflight' ? null : 'preflight'); }}" title="Pre-Flight Checklist">📋</button>
-      </div>
+      ${!this.isRenderMode ? html`
+        <div class="trigger-group">
+          <button class="icon-trigger-btn ${this.activePanel === 'gear' ? 'active' : ''}" @click="${() => this.togglePanel('gear')}" title="Decor">🪴</button>
+          <button class="icon-trigger-btn ${this.activePanel === 'environment' ? 'active' : ''}" @click="${() => this.togglePanel('environment')}" title="Environment">🌤️</button>
+          <button class="icon-trigger-btn ${this.activePanel === 'audio' ? 'active' : ''}" @click="${() => this.togglePanel('audio')}" title="Audio">🎵</button>
+          <button class="icon-trigger-btn ${this.showDirector ? 'active' : ''}" @click="${() => this.showDirector = !this.showDirector}" title="Director Timeline">🎬</button>
+          <button class="icon-trigger-btn ${this.activePanel === 'preflight' ? 'active' : ''}" @click="${() => { this.activePanel = (this.activePanel === 'preflight' ? null : 'preflight'); }}" title="Pre-Flight Checklist">📋</button>
+        </div>
 
-      <!-- Frameless Container for Gear, Environment & Preflight Panels -->
-      <div class="frameless-top-panel ${this.activePanel === 'gear' || this.activePanel === 'environment' || this.activePanel === ('preflight') ? '' : 'hidden'}">
-        ${this.activePanel === 'gear' ? html`
-          ${this.renderDecorTab()}
-        ` : ''}
-        ${this.activePanel === 'environment' ? html`
-          ${this.renderEnvironmentTab()}
-        ` : ''}
-        ${this.activePanel === ('preflight') ? html`
-          ${this.renderPreflightTab()}
-        ` : ''}
-      </div>
+        <!-- Frameless Container for Gear, Environment & Preflight Panels -->
+        <div class="frameless-top-panel ${this.activePanel === 'gear' || this.activePanel === 'environment' || this.activePanel === ('preflight') ? '' : 'hidden'}">
+          ${this.activePanel === 'gear' ? html`
+            ${this.renderDecorTab()}
+          ` : ''}
+          ${this.activePanel === 'environment' ? html`
+            ${this.renderEnvironmentTab()}
+          ` : ''}
+          ${this.activePanel === ('preflight') ? html`
+            ${this.renderPreflightTab()}
+          ` : ''}
+        </div>
 
-      <div class="frameless-bottom-panel ${this.isAudioOpen ? '' : 'hidden'}">
-        ${this.renderAudioTab(isLoaded, isPlaying)}
-      </div>
+        <div class="frameless-bottom-panel ${this.isAudioOpen ? '' : 'hidden'}">
+          ${this.renderAudioTab(isLoaded, isPlaying)}
+        </div>
 
-      <!-- Diorama Audio Director Timeline -->
-      <div class="director-overlay ${this.showDirector ? 'visible' : ''}">
-        <audio-director
-          mode="diorama"
-          .availableTargets=${this.dioramaTargets}
-          @close=${this.handleDirectorClose}
-          @change=${this.handleDirectorChange}
-          @apply=${this.applyDioramaScript}>
-        </audio-director>
-      </div>
+        <!-- Diorama Audio Director Timeline -->
+        <div class="director-overlay ${this.showDirector ? 'visible' : ''}">
+          <audio-director
+            mode="diorama"
+            .availableTargets=${this.dioramaTargets}
+            @close=${this.handleDirectorClose}
+            @change=${this.handleDirectorChange}
+            @apply=${this.applyDioramaScript}>
+          </audio-director>
+        </div>
+      ` : ''}
     `;
   }
 }
