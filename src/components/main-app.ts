@@ -2,7 +2,8 @@ import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import './diorama-screen';
 import './wavefield-screen';
-import { exportConfigAsJSON } from '../utils/exportConfig';
+import { exportConfigAsJSON, exportDirectorConfig } from '../utils/exportConfig';
+import type { AudioDirector } from './AudioDirector/AudioDirector';
 
 @customElement('main-app')
 export class MainApp extends LitElement {
@@ -60,8 +61,14 @@ export class MainApp extends LitElement {
 
   private handleExportConfig() {
     if (this.activeScreen === 'wavefield') {
+      // Try the new director-based export first
       const wavefieldScreen = this.shadowRoot?.querySelector('wavefield-screen') as any;
-      if (wavefieldScreen) {
+      const director = wavefieldScreen?.shadowRoot?.querySelector('audio-director') as AudioDirector | null;
+      
+      if (director) {
+        exportDirectorConfig(director);
+      } else if (wavefieldScreen) {
+        // Fallback to legacy export
         const script = wavefieldScreen.activeScriptEvents || [];
         let exportData: any[] = [];
         
@@ -87,7 +94,19 @@ export class MainApp extends LitElement {
         exportConfigAsJSON(exportData);
       }
     } else {
-      alert("Configuration export is only supported on the Wavefield screen.");
+      // Diorama export - will be fully wired in Phase 2
+      const dioramaScreen = this.shadowRoot?.querySelector('diorama-screen') as any;
+      const dashboard = dioramaScreen?.shadowRoot?.querySelector('lofi-dashboard') as any;
+      const director = dashboard?.shadowRoot?.querySelector('audio-director') as AudioDirector | null;
+      
+      if (director) {
+        exportDirectorConfig(director, {
+          primaryArray: dashboard.primaryArray || [],
+          secondaryArray: dashboard.secondaryArray || [],
+        });
+      } else {
+        alert("Load an audio file in the Diorama timeline first.");
+      }
     }
   }
 

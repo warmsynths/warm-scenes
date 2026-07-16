@@ -21,6 +21,23 @@ export interface ScriptEvent {
   config: ActionConfig;
 }
 
+export interface MacroShot {
+  id: string;
+  startTime: number;
+  duration: number;
+  target: string;
+  label?: string;
+  mood?: 'chaotic' | 'submerged' | 'balanced' | 'ambient';
+  intensity?: number;
+}
+
+export interface MicroCut {
+  id: string;
+  time: number;
+  target: string;
+  label?: string;
+}
+
 interface InternalMarker {
   id: string;
   time: number;
@@ -210,9 +227,38 @@ export class AudioDirector extends LitElement {
       height: 8px;
       border-radius: 50%;
     }
+
+    .mode-toggle {
+      display: flex;
+      gap: 2px;
+      background: #333;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .mode-toggle button {
+      background: transparent;
+      color: #aaa;
+      border: none;
+      padding: 4px 10px;
+      cursor: pointer;
+      font-size: 11px;
+      transition: all 0.2s;
+      font-weight: 500;
+    }
+
+    .mode-toggle button:hover {
+      color: #fff;
+    }
+
+    .mode-toggle button.active {
+      background: #7c4dff;
+      color: white;
+    }
   `;
 
   @property({ type: String }) src = '';
+  @property({ type: String, reflect: true }) mode: 'wave_field' | 'diorama' = 'wave_field';
   @property({ type: Array }) availableTargets: AvailableTarget[] = [];
 
   @state() private density = 20;
@@ -226,9 +272,12 @@ export class AudioDirector extends LitElement {
   };
 
   @state() private markers: InternalMarker[] = [];
+  @state() private macroShots: MacroShot[] = [];
+  @state() private microCuts: MicroCut[] = [];
+  @state() private dioramaAddMode: 'macro_shot' | 'micro_cut' = 'micro_cut';
   @state() private isAnalyzing = false;
   @state() private isDecoding = false;
-  @state() private isPlaying = false;
+  @state() public isPlaying = false;
   
   @query('#waveform-container') private waveformContainer!: HTMLElement;
 
@@ -278,17 +327,45 @@ export class AudioDirector extends LitElement {
     this.wavesurfer.on('click', (relativeX) => {
       if (!this.wavesurfer) return;
       const time = relativeX * this.wavesurfer.getDuration();
-      this.addMarkerManual(time);
+      if (this.mode === 'diorama') {
+        if (this.dioramaAddMode === 'macro_shot') {
+          this.addMacroShot({
+            id: `macro_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+            startTime: time,
+            duration: 2.0,
+            target: '',
+            mood: 'balanced',
+            intensity: 0.5
+          });
+        } else {
+          this.addMicroCut({
+            id: `micro_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+            time,
+            target: ''
+          });
+        }
+      } else {
+        this.addMarkerManual(time);
+      }
     });
 
     this.regionsPlugin.on('region-updated', (region) => {
-      this.updateMarkerTime(region.id, region.start);
+      if (this.mode === 'diorama') {
+        this.updateDioramaEventTime(region.id, region.start, region.end - region.start);
+      } else {
+        this.updateMarkerTime(region.id, region.start);
+      }
     });
 
     this.regionsPlugin.on('region-clicked', (region, e) => {
       e.stopPropagation();
       if ((e as MouseEvent).detail === 2) {
-        this.removeMarker(region.id);
+        // Double-click to delete
+        if (this.mode === 'diorama') {
+          this.removeDioramaEvent(region.id);
+        } else {
+          this.removeMarker(region.id);
+        }
         region.remove();
         if (this.selectedMarkerId === region.id) {
           this.selectedMarkerId = null;
@@ -298,6 +375,8 @@ export class AudioDirector extends LitElement {
       }
     });
   }
+
+  // ── Public API ──────────────────────────────────────────────
 
   public async loadFromFile(file: File) {
     const url = URL.createObjectURL(file);
@@ -313,11 +392,65 @@ export class AudioDirector extends LitElement {
       }));
   }
 
+  public getCurrentTime(): number {
+    return this.wavesurfer?.getCurrentTime() || 0;
+  }
+
+  public setMacroShots(shots: MacroShot[]) {
+    this.macroShots = [...shots];
+    this.renderRegions();
+    this.dispatchChangeEvent();
+  }
+
+  public setMicroCuts(cuts: MicroCut[]) {
+    this.microCuts = [...cuts];
+    this.renderRegions();
+    this.dispatchChangeEvent();
+  }
+
+  public addMacroShot(shot: MacroShot) {
+    this.macroShots = [...this.macroShots, shot];
+    this.renderRegions();
+    this.dispatchChangeEvent();
+  }
+
+  public addMicroCut(cut: MicroCut) {
+    this.microCuts = [...this.microCuts, cut];
+    this.renderRegions();
+    this.dispatchChangeEvent();
+  }
+
+  public getState() {
+    const base = {
+      mode: this.mode,
+      duration: this.wavesurfer?.getDuration() ?? 0,
+    };
+
+    if (this.mode === 'diorama') {
+      return {
+        ...base,
+        macroShots: [...this.macroShots],
+        microCuts: [...this.microCuts],
+      };
+    }
+
+    return {
+      ...base,
+      script: this.generateScript(),
+      density: this.density,
+      transientMappings: { ...this.transientMappings },
+    };
+  }
+
+  // ── Audio Loading ───────────────────────────────────────────
+
   private async loadFromURL(url: string) {
     if (!this.wavesurfer) return;
     
     this.isDecoding = true;
     this.markers = [];
+    this.macroShots = [];
+    this.microCuts = [];
     this.selectedMarkerId = null;
     this.regionsPlugin?.clearRegions();
     
@@ -339,6 +472,8 @@ export class AudioDirector extends LitElement {
       this.isDecoding = false;
     }
   }
+
+  // ── Wave Field Analysis ─────────────────────────────────────
 
   private runAnalysis() {
     if (!this.channelData) return;
@@ -391,6 +526,8 @@ export class AudioDirector extends LitElement {
     return { target: this.availableTargets[0]?.id || '', mode: 'trigger', amount: 0 };
   }
 
+  // ── Region Rendering ────────────────────────────────────────
+
   private getRegionColor(type: string): string {
     switch (type) {
       case 'bass_transient': return 'rgba(244, 67, 54, 0.45)';
@@ -403,17 +540,50 @@ export class AudioDirector extends LitElement {
 
   private renderRegions() {
     this.regionsPlugin?.clearRegions();
-    this.markers.forEach(marker => {
-      this.regionsPlugin?.addRegion({
-        id: marker.id,
-        start: marker.time,
-        end: marker.time + 0.05,
-        color: this.getRegionColor(marker.type),
-        content: this.createRegionLabel(marker.type, marker.config),
-        drag: true,
-        resize: false
+
+    if (this.mode === 'diorama') {
+      // Macro shots as wide, resizable blocks
+      this.macroShots.forEach(shot => {
+        const targetDef = this.availableTargets.find(t => t.id === shot.target);
+        const label = targetDef?.label || shot.target || 'Macro Shot';
+        this.regionsPlugin?.addRegion({
+          id: shot.id,
+          start: shot.startTime,
+          end: shot.startTime + shot.duration,
+          color: 'rgba(124, 77, 255, 0.25)',
+          content: this.createDioramaLabel('📷', label),
+          drag: true,
+          resize: true
+        });
       });
-    });
+
+      // Micro cuts as thin pins
+      this.microCuts.forEach(cut => {
+        const targetDef = this.availableTargets.find(t => t.id === cut.target);
+        const label = targetDef?.label || cut.target || 'Micro Cut';
+        this.regionsPlugin?.addRegion({
+          id: cut.id,
+          start: cut.time,
+          end: cut.time + 0.05,
+          color: 'rgba(255, 109, 0, 0.45)',
+          content: this.createDioramaLabel('✂', label),
+          drag: true,
+          resize: false
+        });
+      });
+    } else {
+      this.markers.forEach(marker => {
+        this.regionsPlugin?.addRegion({
+          id: marker.id,
+          start: marker.time,
+          end: marker.time + 0.05,
+          color: this.getRegionColor(marker.type),
+          content: this.createRegionLabel(marker.type, marker.config),
+          drag: true,
+          resize: false
+        });
+      });
+    }
   }
 
   private createRegionLabel(type: string, config: ActionConfig): HTMLElement {
@@ -431,6 +601,15 @@ export class AudioDirector extends LitElement {
     el.innerText = labelText;
     return el;
   }
+
+  private createDioramaLabel(icon: string, label: string): HTMLElement {
+    const el = document.createElement('div');
+    el.className = 'region-label';
+    el.innerText = `${icon} ${label}`;
+    return el;
+  }
+
+  // ── Wave Field Marker Methods ───────────────────────────────
 
   private addMarkerManual(time: number) {
     const id = `manual_${Math.random().toString(36).substr(2, 9)}`;
@@ -455,6 +634,65 @@ export class AudioDirector extends LitElement {
     this.markers = this.markers.filter(m => m.id !== id);
     this.dispatchChangeEvent();
   }
+
+  // ── Diorama Event Methods ───────────────────────────────────
+
+  private updateDioramaEventTime(id: string, newStart: number, newDuration?: number) {
+    const isMacro = this.macroShots.some(s => s.id === id);
+    if (isMacro) {
+      this.macroShots = this.macroShots.map(s =>
+        s.id === id ? { ...s, startTime: newStart, ...(newDuration != null ? { duration: newDuration } : {}) } : s
+      );
+    } else {
+      this.microCuts = this.microCuts.map(c =>
+        c.id === id ? { ...c, time: newStart } : c
+      );
+    }
+    this.dispatchChangeEvent();
+  }
+
+  private removeDioramaEvent(id: string) {
+    this.macroShots = this.macroShots.filter(s => s.id !== id);
+    this.microCuts = this.microCuts.filter(c => c.id !== id);
+    this.dispatchChangeEvent();
+  }
+
+  private findSelectedDioramaEvent(): { type: 'macro', event: MacroShot } | { type: 'micro', event: MicroCut } | null {
+    if (!this.selectedMarkerId) return null;
+    const macro = this.macroShots.find(s => s.id === this.selectedMarkerId);
+    if (macro) return { type: 'macro', event: macro };
+    const micro = this.microCuts.find(c => c.id === this.selectedMarkerId);
+    if (micro) return { type: 'micro', event: micro };
+    return null;
+  }
+
+  private updateSelectedMacroShot(updates: Partial<MacroShot>) {
+    if (!this.selectedMarkerId) return;
+    this.macroShots = this.macroShots.map(s =>
+      s.id === this.selectedMarkerId ? { ...s, ...updates } : s
+    );
+    this.renderRegions();
+    this.dispatchChangeEvent();
+  }
+
+  private updateSelectedMicroCut(updates: Partial<MicroCut>) {
+    if (!this.selectedMarkerId) return;
+    this.microCuts = this.microCuts.map(c =>
+      c.id === this.selectedMarkerId ? { ...c, ...updates } : c
+    );
+    this.renderRegions();
+    this.dispatchChangeEvent();
+  }
+
+  private removeSelectedDioramaEvent() {
+    if (!this.selectedMarkerId) return;
+    this.removeDioramaEvent(this.selectedMarkerId);
+    const region = this.regionsPlugin?.getRegions().find(r => r.id === this.selectedMarkerId);
+    region?.remove();
+    this.selectedMarkerId = null;
+  }
+
+  // ── Shared Controls ─────────────────────────────────────────
 
   private togglePlayback() {
     this.wavesurfer?.playPause();
@@ -528,10 +766,18 @@ export class AudioDirector extends LitElement {
   }
 
   private dispatchChangeEvent() {
-    this.dispatchEvent(new CustomEvent('change', {
-      detail: { script: this.generateScript() }
-    }));
+    if (this.mode === 'diorama') {
+      this.dispatchEvent(new CustomEvent('change', {
+        detail: { macroShots: this.macroShots, microCuts: this.microCuts }
+      }));
+    } else {
+      this.dispatchEvent(new CustomEvent('change', {
+        detail: { script: this.generateScript() }
+      }));
+    }
   }
+
+  // ── Shared Render Helpers ───────────────────────────────────
 
   private renderConfigControls(config: ActionConfig, onChange: (updates: Partial<ActionConfig>) => void) {
     const targetDef = this.availableTargets.find(t => t.id === config.target);
@@ -556,11 +802,35 @@ export class AudioDirector extends LitElement {
     `;
   }
 
+  private renderDioramaTargetSelect(currentTarget: string, onChange: (target: string) => void) {
+    return html`
+      <select @change=${(e: Event) => onChange((e.target as HTMLSelectElement).value)} .value=${currentTarget}>
+        <option value="">— None —</option>
+        ${this.availableTargets.map(t => html`<option value=${t.id}>${t.label}</option>`)}
+      </select>
+    `;
+  }
+
+  // ── Render ──────────────────────────────────────────────────
+
   render() {
+    const isDiorama = this.mode === 'diorama';
+    const hasEvents = isDiorama
+      ? (this.macroShots.length > 0 || this.microCuts.length > 0)
+      : this.markers.length > 0;
+
     return html`
       <div class="toolbar">
-        <div class="title">Audio Director</div>
+        <div class="title">Audio Director${isDiorama ? ' — Diorama' : ''}</div>
         <div class="controls">
+          ${isDiorama ? html`
+            <div class="mode-toggle">
+              <button class="${this.dioramaAddMode === 'macro_shot' ? 'active' : ''}"
+                      @click=${() => this.dioramaAddMode = 'macro_shot'}>📷 Macro</button>
+              <button class="${this.dioramaAddMode === 'micro_cut' ? 'active' : ''}"
+                      @click=${() => this.dioramaAddMode = 'micro_cut'}>✂ Micro</button>
+            </div>
+          ` : ''}
           <button @click=${this.togglePlayback}>
             ${this.isPlaying ? 'Pause' : 'Play'}
           </button>
@@ -573,30 +843,32 @@ export class AudioDirector extends LitElement {
         </div>
       </div>
 
-      <div class="mapping-panel">
-        <div class="mapping-row">
-          <div class="mapping-label" style="color: #f44336;">🔊 Bass Drop Mapping:</div>
-          ${this.renderConfigControls(this.transientMappings['bass_transient'], updates => this.updateMappingConfig('bass_transient', updates))}
-        </div>
-        <div class="mapping-row">
-          <div class="mapping-label" style="color: #00bcd4;">⚡ Treble Mapping:</div>
-          ${this.renderConfigControls(this.transientMappings['treble_transient'], updates => this.updateMappingConfig('treble_transient', updates))}
-        </div>
-        <div class="mapping-row">
-          <div class="mapping-label" style="color: #ffc107;">🎵 Mid Mapping:</div>
-          ${this.renderConfigControls(this.transientMappings['mid_transient'], updates => this.updateMappingConfig('mid_transient', updates))}
-        </div>
-        <div class="mapping-row" style="background: #2a2a2a; padding: 8px; border-radius: 4px; border: 1px solid #444; justify-content: space-between;">
-          <div style="display: flex; gap: 8px; align-items: center;">
-            <label style="font-weight: 600;">Global Density (${this.density}):</label>
-            <input type="range" min="1" max="100" step="1" .value=${this.density} @input=${this.handleDensityChange} style="width: 150px;"/>
+      ${!isDiorama ? html`
+        <div class="mapping-panel">
+          <div class="mapping-row">
+            <div class="mapping-label" style="color: #f44336;">🔊 Bass Drop Mapping:</div>
+            ${this.renderConfigControls(this.transientMappings['bass_transient'], updates => this.updateMappingConfig('bass_transient', updates))}
           </div>
-          <button style="background: ${this.markers.length === 0 ? '#4caf50' : '#555'}; border: none; padding: 6px 12px; color: white; border-radius: 4px; cursor: pointer; font-weight: bold;" 
-                  @click=${this.handleDensityApply}>
-            ${this.markers.length === 0 ? 'Analyze Track' : 'Re-Analyze Track'}
-          </button>
+          <div class="mapping-row">
+            <div class="mapping-label" style="color: #00bcd4;">⚡ Treble Mapping:</div>
+            ${this.renderConfigControls(this.transientMappings['treble_transient'], updates => this.updateMappingConfig('treble_transient', updates))}
+          </div>
+          <div class="mapping-row">
+            <div class="mapping-label" style="color: #ffc107;">🎵 Mid Mapping:</div>
+            ${this.renderConfigControls(this.transientMappings['mid_transient'], updates => this.updateMappingConfig('mid_transient', updates))}
+          </div>
+          <div class="mapping-row" style="background: #2a2a2a; padding: 8px; border-radius: 4px; border: 1px solid #444; justify-content: space-between;">
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <label style="font-weight: 600;">Global Density (${this.density}):</label>
+              <input type="range" min="1" max="100" step="1" .value=${this.density} @input=${this.handleDensityChange} style="width: 150px;"/>
+            </div>
+            <button style="background: ${this.markers.length === 0 ? '#4caf50' : '#555'}; border: none; padding: 6px 12px; color: white; border-radius: 4px; cursor: pointer; font-weight: bold;" 
+                    @click=${this.handleDensityApply}>
+              ${this.markers.length === 0 ? 'Analyze Track' : 'Re-Analyze Track'}
+            </button>
+          </div>
         </div>
-      </div>
+      ` : ''}
       
       <div id="waveform-container">
         ${this.isDecoding ? html`
@@ -605,14 +877,16 @@ export class AudioDirector extends LitElement {
         ${this.isAnalyzing ? html`
           <div class="loading-overlay">Analyzing Audio Spectrum & Transients...</div>
         ` : ''}
-        ${!this.isAnalyzing && !this.isDecoding && this.markers.length === 0 && this.channelData ? html`
+        ${!this.isAnalyzing && !this.isDecoding && !hasEvents && this.channelData ? html`
           <div class="loading-overlay" style="background: rgba(0,0,0,0.65);">
-            Ready. Adjust Density and click "Analyze Track" above.
+            ${isDiorama
+              ? 'Ready. Click the waveform to add events, or use "Analyze for Camera" from the Pre-Flight panel.'
+              : 'Ready. Adjust Density and click "Analyze Track" above.'}
           </div>
         ` : ''}
       </div>
 
-      ${this.selectedMarkerId ? html`
+      ${!isDiorama && this.selectedMarkerId ? html`
         <div class="selected-marker-panel">
           <div>Selected Marker: <strong>${(this.markers.find(m => m.id === this.selectedMarkerId)?.time || 0).toFixed(2)}s</strong></div>
           ${(() => {
@@ -629,14 +903,67 @@ export class AudioDirector extends LitElement {
         </div>
       ` : ''}
 
+      ${isDiorama && this.selectedMarkerId ? html`
+        ${(() => {
+          const found = this.findSelectedDioramaEvent();
+          if (!found) return '';
+          if (found.type === 'macro') {
+            const shot = found.event;
+            return html`
+              <div class="selected-marker-panel">
+                <div>📷 <strong>Macro Shot</strong> at <strong>${shot.startTime.toFixed(2)}s</strong> (${shot.duration.toFixed(1)}s)</div>
+                <div style="display: flex; gap: 8px; align-items: center; margin-left: 10px; border-left: 1px solid #555; padding-left: 15px;">
+                  <label>Target:</label>
+                  ${this.renderDioramaTargetSelect(shot.target, t => this.updateSelectedMacroShot({ target: t }))}
+                  <label style="margin-left: 8px;">Duration:</label>
+                  <input type="number" step="0.1" min="0.1" .value=${shot.duration.toString()}
+                         @input=${(e: Event) => this.updateSelectedMacroShot({ duration: parseFloat((e.target as HTMLInputElement).value) || 0.1 })} />
+                  <label style="margin-left: 8px;">Mood:</label>
+                  <select @change=${(e: Event) => this.updateSelectedMacroShot({ mood: (e.target as HTMLSelectElement).value as any })} .value=${shot.mood || 'balanced'}>
+                    <option value="balanced">Balanced</option>
+                    <option value="chaotic">Chaotic</option>
+                    <option value="submerged">Submerged</option>
+                    <option value="ambient">Ambient</option>
+                  </select>
+                  <label style="margin-left: 8px;">Intensity:</label>
+                  <input type="number" step="0.05" min="0" max="1" .value=${(shot.intensity ?? 0.5).toFixed(2)}
+                         @input=${(e: Event) => this.updateSelectedMacroShot({ intensity: parseFloat((e.target as HTMLInputElement).value) || 0.0 })} style="width: 50px;" />
+                </div>
+                <button class="delete-btn" @click=${this.removeSelectedDioramaEvent}>Delete</button>
+              </div>
+            `;
+          } else {
+            const cut = found.event;
+            return html`
+              <div class="selected-marker-panel">
+                <div>✂ <strong>Micro Cut</strong> at <strong>${cut.time.toFixed(2)}s</strong></div>
+                <div style="display: flex; gap: 8px; align-items: center; margin-left: 10px; border-left: 1px solid #555; padding-left: 15px;">
+                  <label>Target:</label>
+                  ${this.renderDioramaTargetSelect(cut.target, t => this.updateSelectedMicroCut({ target: t }))}
+                </div>
+                <button class="delete-btn" @click=${this.removeSelectedDioramaEvent}>Delete</button>
+              </div>
+            `;
+          }
+        })()}
+      ` : ''}
+
       <div class="status-bar">
-        <div class="legend">
-          <div class="legend-item"><div class="legend-dot" style="background: #f44336;"></div>Bass</div>
-          <div class="legend-item"><div class="legend-dot" style="background: #ffc107;"></div>Mid</div>
-          <div class="legend-item"><div class="legend-dot" style="background: #00bcd4;"></div>Treble</div>
-          <div class="legend-item"><div class="legend-dot" style="background: #4caf50;"></div>Manual</div>
-        </div>
-        <span>Click region to select. Double-click to delete.</span>
+        ${!isDiorama ? html`
+          <div class="legend">
+            <div class="legend-item"><div class="legend-dot" style="background: #f44336;"></div>Bass</div>
+            <div class="legend-item"><div class="legend-dot" style="background: #ffc107;"></div>Mid</div>
+            <div class="legend-item"><div class="legend-dot" style="background: #00bcd4;"></div>Treble</div>
+            <div class="legend-item"><div class="legend-dot" style="background: #4caf50;"></div>Manual</div>
+          </div>
+          <span>Click region to select. Double-click to delete.</span>
+        ` : html`
+          <div class="legend">
+            <div class="legend-item"><div class="legend-dot" style="background: #7c4dff;"></div>Macro Shot</div>
+            <div class="legend-item"><div class="legend-dot" style="background: #ff6d00;"></div>Micro Cut</div>
+          </div>
+          <span>Click to add. Double-click to delete. Use toggle to switch type.</span>
+        `}
       </div>
     `;
   }

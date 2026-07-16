@@ -37,16 +37,26 @@ function main() {
 
   // 3. Read JSON config
   const configData = fs.readFileSync(CONFIG_PATH, 'utf-8');
-  let events = [];
+  let config = {};
+  let isLegacy = false;
+  
   try {
-    events = JSON.parse(configData);
+    const parsed = JSON.parse(configData);
+    if (Array.isArray(parsed)) {
+      isLegacy = true;
+      config = { engine: 'wave_field', script: parsed };
+    } else {
+      config = parsed;
+    }
   } catch (e) {
     console.error('Error parsing config.json:', e);
     process.exit(1);
   }
 
+  const engine = config.engine || 'wave_field';
+
   // Find the exact audio duration to set data-duration correctly
-  let duration = 60;
+  let duration = config.duration || 60;
   try {
     const output = execSync(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 ${AUDIO_PATH}`, { encoding: 'utf-8' });
     const audioDuration = Math.ceil(parseFloat(output.trim()));
@@ -54,21 +64,51 @@ function main() {
       duration = audioDuration;
     }
   } catch(e) {
-    console.warn('Could not determine audio duration with ffprobe, falling back to 60s.');
+    console.warn('Could not determine audio duration with ffprobe, falling back to config duration or 60s.');
   }
 
-  // 4. Generate HTML divs for each event
-  const eventsHtml = events.map((evt, i) => {
-    return `      <div id="event-${i}" class="config-event clip" data-type="${evt.type}" data-value="${evt.value}" data-start="${evt.time}"></div>`;
-  }).join('\n');
+  // 4. Generate HTML divs for each event based on engine
+  let eventsHtml = '';
+  let targetScreen = '';
 
-  // 5. Wrap in standard HTML5 with Audio and wavefield-screen
+  if (engine === 'wave_field') {
+    const script = config.script || [];
+    eventsHtml = script.map((evt, i) => {
+      // Handle legacy { time, type, value } vs new { time, config: { target, amount } }
+      const type = isLegacy ? evt.type : evt.config.target;
+      const value = isLegacy ? evt.value : evt.config.amount;
+      return `      <div id="event-${i}" class="config-event clip" data-type="${type}" data-value="${value}" data-start="${evt.time}"></div>`;
+    }).join('\n');
+    targetScreen = `<wavefield-screen style="width: 100%; height: 100%; display: block;"></wavefield-screen>`;
+  } else if (engine === 'diorama') {
+    const macros = config.macroShots || [];
+    const micros = config.microCuts || [];
+    
+    const macroHtml = macros.map((evt, i) => {
+      return `      <div id="macro-${i}" class="macro-shot clip" data-target="${evt.target}" data-start="${evt.startTime}" data-duration="${evt.duration}"></div>`;
+    }).join('\n');
+    
+    const microHtml = micros.map((evt, i) => {
+      return `      <div id="micro-${i}" class="micro-cut clip" data-target="${evt.target}" data-start="${evt.time}"></div>`;
+    }).join('\n');
+    
+    eventsHtml = macroHtml + '\n' + microHtml;
+    // Add primary/secondary arrays as attributes or global window vars if needed, 
+    // but the dashboard relies on localStorage. We'll pass them as data-attributes.
+    targetScreen = `<diorama-screen 
+      data-primary-array="${(config.primaryArray || []).join(',')}" 
+      data-secondary-array="${(config.secondaryArray || []).join(',')}" 
+      style="width: 100%; height: 100%; display: block;">
+    </diorama-screen>`;
+  }
+
+  // 5. Wrap in standard HTML5 with Audio and target screen
   const htmlContent = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hyperframes Render Temp</title>
+  <title>Hyperframes Render Temp (${engine})</title>
   ${cssHref ? `<link rel="stylesheet" href="${cssHref}">` : ''}
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
 </head>
@@ -81,8 +121,8 @@ function main() {
     <!-- Config Events -->
 ${eventsHtml}
 
-    <!-- Target wavefield screen -->
-    <wavefield-screen style="width: 100%; height: 100%; display: block;"></wavefield-screen>
+    <!-- Target screen -->
+    ${targetScreen}
   </div>
 
   <script>

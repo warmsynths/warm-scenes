@@ -894,6 +894,7 @@ export class WavefieldScreen extends LitElement {
       ${!this.isRenderMode ? html`
       <div class="director-overlay ${this.showDirector ? 'visible' : ''}">
         <audio-director 
+          mode="wave_field"
           .availableTargets=${this.availableTargets} 
           @close=${this.handleDirectorClose}
           @change=${this.handleDirectorChange}

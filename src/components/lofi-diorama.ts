@@ -59,6 +59,21 @@ export class LofiDiorama extends LitElement {
   @property({ type: Array })
   activeGear: string[] = ['polyend', 'circuit_tracks', 'mood', 'blooper', 'generation_loss', 'sp404', 'm8', 'poster_believe', 'poster_808', 'poster_mpc', 'lamp', 'cup', 'succulent_echeveria', 'succulent_moonstones', 'succulent_haworthia', 'succulent_pearls', 'succulent_jade'];
 
+  @property({ type: Object })
+  audioDirector: any | null = null;
+
+  @property({ type: Array })
+  primaryArray: string[] = [];
+
+  @property({ type: Array })
+  secondaryArray: string[] = [];
+
+  @property({ type: Array })
+  macroShots: any[] = [];
+
+  @property({ type: Array })
+  microCuts: any[] = [];
+
   @query('.canvas-container')
   container!: HTMLDivElement;
 
@@ -113,6 +128,19 @@ export class LofiDiorama extends LitElement {
   
   private hermanMillerChair: THREE.Group | null = null;
   private targetChairRotation: number = 0;
+
+  // Live Sequencer
+  private sequencerActive = false;
+
+  private lastMacroId: string | null = null;
+
+  // 1.5s Transition State
+  private transitionStartTime = 0;
+  private isTransitioning = false;
+  private sourceCameraPos = new THREE.Vector3();
+  private sourceCameraTarget = new THREE.Vector3();
+  private targetCameraPos = new THREE.Vector3();
+  private targetCameraTarget = new THREE.Vector3();
 
   private controls!: OrbitControls;
 
@@ -1446,6 +1474,7 @@ export class LofiDiorama extends LitElement {
     
     const tSize = GET_GEAR_SIZE(282, 207, 33); // 28.2 cm W x 20.7 cm D x 3.3 cm H
     const trackerBody = new THREE.Mesh(new THREE.BoxGeometry(tSize.w, tSize.h, tSize.d), trackerMats);
+    trackerBody.name = 'polyend';
     trackerBody.castShadow = true;
     trackerBody.receiveShadow = true;
     
@@ -1496,6 +1525,7 @@ export class LofiDiorama extends LitElement {
     const ctMats = [sideMat, sideMat, topMat, sideMat, sideMat, sideMat];
     const ctSize = GET_GEAR_SIZE(240, 210, 30); // 24.0 cm W x 21.0 cm D x 3.0 cm H
     const ctBody = new THREE.Mesh(new THREE.BoxGeometry(ctSize.w, ctSize.h, ctSize.d), ctMats);
+    ctBody.name = 'circuit_tracks';
     ctBody.castShadow = true;
     ctBody.receiveShadow = true;
     
@@ -1553,6 +1583,7 @@ export class LofiDiorama extends LitElement {
 
   private buildBasePedal(isActive: boolean, colorHex: number, x: number, z: number, rotY: number, name: string, topTexturePath: string | undefined, shelfZ: number) {
     const pedal = new THREE.Group();
+    pedal.name = name;
     
     if (isActive) {
       pedal.rotation.y = rotY;
@@ -1630,6 +1661,7 @@ export class LofiDiorama extends LitElement {
 
   private buildReel(isActive: boolean) {
     const reelGroup = new THREE.Group();
+    reelGroup.name = 'reel';
     
     if (isActive) {
       reelGroup.rotation.y = -0.2;
@@ -1726,6 +1758,7 @@ export class LofiDiorama extends LitElement {
     // Adjusted dimensions to match SP-404 aspect ratio
     const spSize = GET_GEAR_SIZE(177.5, 275.8, 70.5); // 17.75 cm W x 27.58 cm D x 7.05 cm H
     const spBody = new THREE.Mesh(new THREE.BoxGeometry(spSize.w, spSize.h, spSize.d), spMats);
+    spBody.name = 'sp404';
     spBody.castShadow = true;
     spBody.receiveShadow = true;
     
@@ -1770,6 +1803,7 @@ export class LofiDiorama extends LitElement {
 
   private buildM8(isActive: boolean) {
     const m8Group = new THREE.Group();
+    m8Group.name = 'm8';
     
     if (isActive) {
       m8Group.rotation.y = 0.15;
@@ -1889,6 +1923,7 @@ export class LofiDiorama extends LitElement {
     // Prevent duplicate loading from hot-reloads or fast property changes
     if (this.stratModel) {
       if (!this.gearGroup.children.includes(this.stratModel)) {
+        this.stratModel.name = 'strat';
         if (isActive) {
           this.loadOrPlaceObject(this.stratModel, 'strat', -14, 12, -5);
         } else {
@@ -2717,6 +2752,17 @@ export class LofiDiorama extends LitElement {
       this.configPanelObj.quaternion.copy(this.camera.quaternion);
     }
 
+    const isTimelinePlaying = this.audioDirector && this.audioDirector.isPlaying;
+    const isGlobalPlaying = this.audioManager && this.audioManager.isPlaying;
+
+    if (isTimelinePlaying || isGlobalPlaying) {
+      this.updateCameraSequencer();
+    } else if (this.sequencerActive) {
+      // Release camera to orbit controls
+      this.sequencerActive = false;
+      this.controls.enabled = true;
+    }
+
     // Use composer for post-processing instead of standard renderer
     this.composer.render();
     if (this.cssRenderer) this.cssRenderer.render(this.scene, this.camera);
@@ -3285,6 +3331,155 @@ export class LofiDiorama extends LitElement {
     
     this.controls.target.set(14, 5.6, 0);
     this.controls.update();
+  }
+
+  private findGearObject(id: string): THREE.Object3D | null {
+    if (!id) return null;
+    const cleanId = id.toLowerCase().replace(/[^a-z0-9]/g, '');
+    let targetObject: THREE.Object3D | null = null;
+    
+    this.gearGroup.children.forEach(child => {
+      const cleanChildName = (child.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (cleanChildName === cleanId || cleanChildName.includes(cleanId) || cleanId.includes(cleanChildName)) {
+        targetObject = child;
+      } else {
+        // Fallback to recursive child search
+        const found = child.getObjectByName(id);
+        if (found) {
+          targetObject = found;
+        } else {
+          // Fuzzy recursive search
+          child.traverse(subChild => {
+            const cleanSubName = (subChild.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (cleanSubName === cleanId) {
+              targetObject = subChild;
+            }
+          });
+        }
+      }
+    });
+    return targetObject;
+  }
+
+
+  private updateCameraSequencer() {
+    if (!this.macroShots || this.macroShots.length === 0) return;
+    
+    let time = 0;
+    if (this.audioDirector && this.audioDirector.isPlaying) {
+      time = this.audioDirector.getCurrentTime();
+    } else if (this.audioManager && this.audioManager.isPlaying) {
+      time = this.audioManager.getCurrentTime();
+    } else {
+      if (this.lastMacroId !== null) {
+        this.lastMacroId = null;
+        this.isTransitioning = false;
+      }
+      return;
+    }
+
+    // 1. Find active macro shot
+    const activeMacro = this.macroShots.find(m => time >= m.startTime && time < (m.startTime + m.duration));
+    
+    // 2. Check for micro cut override
+    let activeMicro: any = null;
+    if (this.microCuts && this.microCuts.length > 0) {
+      activeMicro = this.microCuts.find(m => time >= m.time && time < (m.time + 0.2));
+    }
+
+    if (!activeMacro && !activeMicro) {
+      this.lastMacroId = null;
+      this.isTransitioning = false;
+      return;
+    }
+
+    // Handle new macro shot event
+    if (activeMacro && activeMacro.id !== this.lastMacroId) {
+      this.lastMacroId = activeMacro.id;
+
+      let targetPosition = new THREE.Vector3(0, 0, 0);
+      let cameraOffset = new THREE.Vector3(0, 10, 10);
+
+      // Dynamically locate the event target's 3D mesh and extract its position
+      if (activeMacro.target) {
+        const targetObj = this.findGearObject(activeMacro.target);
+        if (targetObj) {
+          targetObj.getWorldPosition(targetPosition);
+        } else {
+          console.warn(`Camera Sequencer: Could not find 3D object for target '${activeMacro.target}'. Falling back to center desk.`);
+        }
+      }
+
+      // Mood State Machine (offsets only, except ambient B-roll override)
+      switch (activeMacro.mood) {
+        case 'balanced':
+          cameraOffset.set(0, 15, 12);
+          break;
+        case 'submerged':
+          cameraOffset.set(-4, 6, 6);
+          break;
+        case 'chaotic':
+          cameraOffset.set(0, 7, 0.5);
+          break;
+        case 'ambient':
+          // Override target entirely for ambient B-roll
+          targetPosition.set(-10, 15, -10);
+          cameraOffset.set(-5, 12, 0);
+          break;
+        default:
+          cameraOffset.set(0, 10, 10);
+      }
+
+      // Initialize 1.5s Transition
+      this.sourceCameraPos.copy(this.camera.position);
+      this.sourceCameraTarget.copy(this.controls.target);
+
+      this.targetCameraTarget.copy(targetPosition);
+      this.targetCameraPos.copy(targetPosition).add(cameraOffset);
+
+      this.transitionStartTime = performance.now();
+      this.isTransitioning = true;
+    }
+
+    this.sequencerActive = true;
+    this.controls.enabled = false;
+
+    // Micro Cut Override: Instantly snap to top-down view of specific target
+    if (activeMicro) {
+      const microTargetPos = new THREE.Vector3();
+      const microObj = this.findGearObject(activeMicro.target);
+      if (microObj) {
+        microObj.getWorldPosition(microTargetPos);
+      }
+      const microOffset = new THREE.Vector3(0, 14, 0.1);
+
+      this.camera.position.copy(microTargetPos).add(microOffset);
+      this.controls.target.copy(microTargetPos);
+      this.camera.lookAt(this.controls.target);
+      return;
+    }
+
+    // Apply Macro Transition / Lock
+    if (this.isTransitioning) {
+      const elapsed = performance.now() - this.transitionStartTime;
+      let t = Math.min(1.0, elapsed / 1500);
+      
+      // Smooth cubic easing
+      t = t * t * (3 - 2 * t);
+
+      this.camera.position.lerpVectors(this.sourceCameraPos, this.targetCameraPos, t);
+      this.controls.target.lerpVectors(this.sourceCameraTarget, this.targetCameraTarget, t);
+      
+      if (elapsed >= 1500) {
+        this.isTransitioning = false;
+      }
+    } else {
+      // Solid lock - no drift, no panning
+      this.camera.position.copy(this.targetCameraPos);
+      this.controls.target.copy(this.targetCameraTarget);
+    }
+
+    this.camera.lookAt(this.controls.target);
   }
 
   private applySceneMode() {

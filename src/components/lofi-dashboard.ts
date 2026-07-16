@@ -1,8 +1,11 @@
 import { LitElement, html, css } from 'lit';
-import { customElement, state, property } from 'lit/decorators.js';
+import { customElement, state, property, query } from 'lit/decorators.js';
 import { AudioManager } from '../utils/audio-manager';
 import './lofi-diorama';
 import './gear-preview';
+import './AudioDirector/AudioDirector';
+import type { AudioDirector, AvailableTarget } from './AudioDirector/AudioDirector';
+import type { DioramaAnalyzeResult, DioramaAnalyzeError } from './AudioDirector/diorama-analyzer.worker';
 
 import ufoPosterImg from '../assets/posters/iwanttobelieve_.jpg';
 import tr808PosterImg from '../assets/posters/tr808.png';
@@ -61,13 +64,41 @@ export class LofiDashboard extends LitElement {
   private activeGear: string[] = this.getInitialGear();
 
   @state()
-  private activePanel: 'gear' | 'environment' | 'audio' | null = null;
+  private activePanel: 'gear' | 'environment' | 'audio' | 'preflight' | null = null;
 
   @state()
   private expandedCategory: string | null = null;
 
   @state()
   private isAudioOpen = false;
+
+  @state()
+  private showDirector = false;
+
+  @state()
+  private primaryArray: string[] = [];
+
+  @state()
+  private secondaryArray: string[] = [];
+
+  @query('audio-director')
+  private directorEl!: AudioDirector;
+
+  @state()
+  private dioramaSensitivity = 50;
+
+  @state()
+  private isAnalyzingDiorama = false;
+
+  @state()
+  private macroShots: any[] = [];
+
+  @state()
+  private microCuts: any[] = [];
+
+  private dioramaWorker: Worker | null = null;
+  private dioramaChannelData: Float32Array | null = null;
+  private dioramaSampleRate = 44100;
 
   private progressUpdateId: number | null = null;
   private isScrubbing = false;
@@ -532,6 +563,77 @@ export class LofiDashboard extends LitElement {
       border-color: rgba(163, 217, 201, 0.9);
       box-shadow: 0 0 16px rgba(163, 217, 201, 0.4);
     }
+
+    .director-overlay {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 200;
+      transform: translateY(100%);
+      transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .director-overlay.visible {
+      transform: translateY(0);
+    }
+
+    .preflight-panel {
+      padding: 12px 12px 12px 0;
+    }
+
+    .preflight-section {
+      margin-bottom: 12px;
+    }
+
+    .preflight-label {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #d0c0b0;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+    }
+
+    .chip-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .chip {
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      font-family: 'Nunito', sans-serif;
+      cursor: pointer;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      transition: all 0.2s;
+      user-select: none;
+    }
+
+    .chip.available {
+      background: rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    .chip.available:hover {
+      background: rgba(255, 255, 255, 0.15);
+      color: white;
+    }
+
+    .chip.primary {
+      background: rgba(124, 77, 255, 0.3);
+      border-color: rgba(124, 77, 255, 0.6);
+      color: #c9b8ff;
+    }
+
+    .chip.secondary {
+      background: rgba(255, 109, 0, 0.3);
+      border-color: rgba(255, 109, 0, 0.6);
+      color: #ffb380;
+    }
   `;
 
   private handleDocumentClick = (e: MouseEvent) => {
@@ -618,6 +720,24 @@ export class LofiDashboard extends LitElement {
         size: `${(file.size / (1024 * 1024)).toFixed(2)} MB`,
         duration: this.totalTimeStr,
       };
+
+      // Feed the audio file to the diorama audio-director timeline
+      await this.updateComplete;
+      if (this.directorEl) {
+        this.directorEl.loadFromFile(file);
+      }
+
+      // Store decoded audio for diorama analysis
+      try {
+        const analysisBuffer = await file.arrayBuffer();
+        const tempCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const decoded = await tempCtx.decodeAudioData(analysisBuffer);
+        this.dioramaChannelData = decoded.getChannelData(0);
+        this.dioramaSampleRate = decoded.sampleRate;
+        tempCtx.close();
+      } catch (decErr) {
+        console.warn('Could not decode audio for diorama analysis:', decErr);
+      }
 
       this.requestUpdate();
     } catch (err) {
@@ -942,7 +1062,7 @@ export class LofiDashboard extends LitElement {
     `;
   }
 
-  private togglePanel(panel: 'gear' | 'environment' | 'audio') {
+  private togglePanel(panel: 'gear' | 'environment' | 'audio' | 'preflight') {
     if (panel === 'audio') {
       this.isAudioOpen = !this.isAudioOpen;
     } else {
@@ -959,6 +1079,196 @@ export class LofiDashboard extends LitElement {
     this.requestUpdate();
   }
 
+  private handleDirectorClose() {
+    this.showDirector = false;
+  }
+
+  private handleDirectorChange(e: CustomEvent) {
+    if (e.detail) {
+      this.macroShots = e.detail.macroShots || [];
+      this.microCuts = e.detail.microCuts || [];
+    }
+  }
+
+  private applyDioramaScript() {
+    // Phase 3 will use this to apply the analyzed script
+    this.showDirector = false;
+  }
+
+  private runDioramaAnalysis() {
+    if (!this.dioramaChannelData) {
+      alert('Load an audio file first.');
+      return;
+    }
+    if (this.primaryArray.length === 0 && this.secondaryArray.length === 0) {
+      alert('Assign at least one device to the Primary or Secondary array.');
+      return;
+    }
+
+    this.isAnalyzingDiorama = true;
+
+    if (this.dioramaWorker) {
+      this.dioramaWorker.terminate();
+    }
+
+    this.dioramaWorker = new Worker(
+      new URL('./AudioDirector/diorama-analyzer.worker.ts', import.meta.url),
+      { type: 'module' }
+    );
+
+    this.dioramaWorker.onmessage = (ev: MessageEvent) => {
+      const data = ev.data;
+      if (data.type === 'DIORAMA_RESULT') {
+        const result = data as DioramaAnalyzeResult;
+        this.macroShots = result.payload.macroShots;
+        this.microCuts = result.payload.microCuts;
+        if (this.directorEl) {
+          this.directorEl.setMacroShots(this.macroShots);
+          this.directorEl.setMicroCuts(this.microCuts);
+        }
+        this.isAnalyzingDiorama = false;
+        this.showDirector = true; // auto-open director to show results
+      } else if (data.type === 'DIORAMA_ERROR') {
+        console.error('Diorama analysis error:', (data as DioramaAnalyzeError).payload);
+        this.isAnalyzingDiorama = false;
+      }
+    };
+
+    this.dioramaWorker.postMessage({
+      type: 'ANALYZE_DIORAMA',
+      payload: {
+        channelData: this.dioramaChannelData,
+        sampleRate: this.dioramaSampleRate,
+        primaryArray: this.primaryArray,
+        secondaryArray: this.secondaryArray,
+        sensitivity: this.dioramaSensitivity
+      }
+    });
+  }
+
+  private get dioramaTargets(): AvailableTarget[] {
+    const gearIds = [
+      'polyend', 'circuit_tracks', 'mood', 'blooper',
+      'generation_loss', 'sp404', 'm8',
+      'poster_believe', 'poster_808', 'poster_mpc',
+      'lamp', 'cup', 'succulent_echeveria', 'succulent_moonstones',
+      'succulent_haworthia', 'succulent_pearls', 'succulent_jade'
+    ];
+    const gearLabels: Record<string, string> = {
+      polyend: 'Polyend Tracker', circuit_tracks: 'Circuit Tracks',
+      mood: 'MOOD', blooper: 'Blooper', generation_loss: 'Gen Loss',
+      sp404: 'SP-404', m8: 'M8',
+      poster_believe: 'Believe Poster', poster_808: 'TR-808 Poster', poster_mpc: 'MPC Poster',
+      lamp: 'Desk Lamp', cup: 'Coffee Cup',
+      succulent_echeveria: 'Echeveria', succulent_moonstones: 'Moonstones',
+      succulent_haworthia: 'Haworthia', succulent_pearls: 'String of Pearls',
+      succulent_jade: 'Jade Plant'
+    };
+    return this.activeGear
+      .filter(id => gearIds.includes(id))
+      .map(id => ({ id, label: gearLabels[id] || id, type: 'trigger' as const }));
+  }
+
+  private cycleChip(gearId: string) {
+    if (this.primaryArray.includes(gearId)) {
+      // primary → secondary
+      this.primaryArray = this.primaryArray.filter(id => id !== gearId);
+      this.secondaryArray = [...this.secondaryArray, gearId];
+    } else if (this.secondaryArray.includes(gearId)) {
+      // secondary → available
+      this.secondaryArray = this.secondaryArray.filter(id => id !== gearId);
+    } else {
+      // available → primary
+      this.primaryArray = [...this.primaryArray, gearId];
+    }
+  }
+
+  private getChipClass(gearId: string): string {
+    if (this.primaryArray.includes(gearId)) return 'chip primary';
+    if (this.secondaryArray.includes(gearId)) return 'chip secondary';
+    return 'chip available';
+  }
+
+  private getChipSuffix(gearId: string): string {
+    if (this.primaryArray.includes(gearId)) return ' ● Primary';
+    if (this.secondaryArray.includes(gearId)) return ' ○ Secondary';
+    return '';
+  }
+
+  private renderPreflightTab() {
+    const gearIds = [
+      'polyend', 'circuit_tracks', 'mood', 'blooper',
+      'generation_loss', 'sp404', 'm8',
+      'poster_believe', 'poster_808', 'poster_mpc',
+      'lamp', 'cup', 'succulent_echeveria', 'succulent_moonstones',
+      'succulent_haworthia', 'succulent_pearls', 'succulent_jade'
+    ];
+    const gearLabels: Record<string, string> = {
+      polyend: 'Polyend', circuit_tracks: 'Circuit Tracks',
+      mood: 'MOOD', blooper: 'Blooper', generation_loss: 'Gen Loss',
+      sp404: 'SP-404', m8: 'M8',
+      poster_believe: 'UFO Poster', poster_808: '808 Poster', poster_mpc: 'MPC Poster',
+      lamp: 'Desk Lamp', cup: 'Coffee Cup',
+      succulent_echeveria: 'Echeveria', succulent_moonstones: 'Moonstones',
+      succulent_haworthia: 'Haworthia', succulent_pearls: 'Pearls',
+      succulent_jade: 'Jade Plant'
+    };
+    const availableGear = this.activeGear.filter(id => gearIds.includes(id));
+
+    return html`
+      <div class="preflight-panel">
+        <div class="gear-category-title" style="margin-bottom: 8px;">🎬 Pre-Flight Checklist</div>
+
+        <div class="preflight-section">
+          <div class="preflight-label">Click to cycle: Available → <span style="color: #c9b8ff;">Primary</span> → <span style="color: #ffb380;">Secondary</span> → Available</div>
+          <div class="chip-grid">
+            ${availableGear.map(id => html`
+              <div class="${this.getChipClass(id)}" @click=${() => this.cycleChip(id)}>
+                ${gearLabels[id] || id}${this.getChipSuffix(id)}
+              </div>
+            `)}
+          </div>
+        </div>
+
+        <div class="preflight-section" style="margin-top: 8px;">
+          <div class="preflight-label">Primary Array (hero devices — steady-state camera targets)</div>
+          <div style="font-size: 0.8rem; color: rgba(255,255,255,0.5); font-style: italic;">
+            ${this.primaryArray.length > 0
+              ? this.primaryArray.map(id => gearLabels[id] || id).join(', ')
+              : 'None selected'}
+          </div>
+        </div>
+
+        <div class="preflight-section">
+          <div class="preflight-label">Secondary Array (accent devices — steady-state alt targets)</div>
+          <div style="font-size: 0.8rem; color: rgba(255,255,255,0.5); font-style: italic;">
+            ${this.secondaryArray.length > 0
+              ? this.secondaryArray.map(id => gearLabels[id] || id).join(', ')
+              : 'None selected'}
+          </div>
+        </div>
+
+        <div class="preflight-section" style="margin-top: 12px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 8px;">
+          <div class="preflight-label">Camera Analysis</div>
+          <div style="display: flex; gap: 12px; align-items: center; margin-top: 6px;">
+            <div style="display: flex; flex-direction: column; gap: 4px; flex: 1;">
+              <div style="font-size: 0.75rem; color: rgba(255,255,255,0.5);">Sensitivity (${this.dioramaSensitivity})</div>
+              <input type="range" class="scrub-slider" min="1" max="100" step="1"
+                     .value=${this.dioramaSensitivity.toString()}
+                     @input=${(e: Event) => this.dioramaSensitivity = parseInt((e.target as HTMLInputElement).value)} />
+            </div>
+            <button
+              class="audio-btn"
+              style="padding: 8px 16px; font-size: 0.8rem; ${this.isAnalyzingDiorama ? 'opacity: 0.5; pointer-events: none;' : ''}"
+              @click=${this.runDioramaAnalysis}>
+              ${this.isAnalyzingDiorama ? '⏳ Analyzing...' : '🎥 Analyze for Camera'}
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   render() {
     const isLoaded = this.audioManager.isLoaded;
     const isPlaying = this.audioManager.isPlaying;
@@ -966,12 +1276,17 @@ export class LofiDashboard extends LitElement {
     return html`
       <lofi-diorama 
         .audioManager="${this.audioManager}" 
+        .audioDirector="${this.showDirector ? this.directorEl : null}"
         .weather="${this.weather}"
         .timeOfDay="${this.timeOfDay}"
         .celestialPosition="${this.celestialPosition}"
         .rainIntensity="${this.rainIntensity}"
         .lightningIntensity="${this.lightningIntensity}"
         .activeGear="${this.activeGear}"
+        .primaryArray="${this.primaryArray}"
+        .secondaryArray="${this.secondaryArray}"
+        .macroShots="${this.macroShots}"
+        .microCuts="${this.microCuts}"
         @toggle-settings="${() => this.togglePanel('gear')}"
         @toggle-gear="${(e: CustomEvent) => this.toggleGear(e.detail.gear)}"
       ></lofi-diorama>
@@ -980,20 +1295,36 @@ export class LofiDashboard extends LitElement {
         <button class="icon-trigger-btn ${this.activePanel === 'gear' ? 'active' : ''}" @click="${() => this.togglePanel('gear')}" title="Decor">🪴</button>
         <button class="icon-trigger-btn ${this.activePanel === 'environment' ? 'active' : ''}" @click="${() => this.togglePanel('environment')}" title="Environment">🌤️</button>
         <button class="icon-trigger-btn ${this.activePanel === 'audio' ? 'active' : ''}" @click="${() => this.togglePanel('audio')}" title="Audio">🎵</button>
+        <button class="icon-trigger-btn ${this.showDirector ? 'active' : ''}" @click="${() => this.showDirector = !this.showDirector}" title="Director Timeline">🎬</button>
+        <button class="icon-trigger-btn ${this.activePanel === 'preflight' ? 'active' : ''}" @click="${() => { this.activePanel = (this.activePanel === 'preflight' ? null : 'preflight'); }}" title="Pre-Flight Checklist">📋</button>
       </div>
 
-      <!-- Frameless Container for Gear & Environment Panels -->
-      <div class="frameless-top-panel ${this.activePanel === 'gear' || this.activePanel === 'environment' ? '' : 'hidden'}">
+      <!-- Frameless Container for Gear, Environment & Preflight Panels -->
+      <div class="frameless-top-panel ${this.activePanel === 'gear' || this.activePanel === 'environment' || this.activePanel === ('preflight') ? '' : 'hidden'}">
         ${this.activePanel === 'gear' ? html`
           ${this.renderDecorTab()}
         ` : ''}
         ${this.activePanel === 'environment' ? html`
           ${this.renderEnvironmentTab()}
         ` : ''}
+        ${this.activePanel === ('preflight') ? html`
+          ${this.renderPreflightTab()}
+        ` : ''}
       </div>
 
       <div class="frameless-bottom-panel ${this.isAudioOpen ? '' : 'hidden'}">
         ${this.renderAudioTab(isLoaded, isPlaying)}
+      </div>
+
+      <!-- Diorama Audio Director Timeline -->
+      <div class="director-overlay ${this.showDirector ? 'visible' : ''}">
+        <audio-director
+          mode="diorama"
+          .availableTargets=${this.dioramaTargets}
+          @close=${this.handleDirectorClose}
+          @change=${this.handleDirectorChange}
+          @apply=${this.applyDioramaScript}>
+        </audio-director>
       </div>
     `;
   }

@@ -1,11 +1,13 @@
+import type { AudioDirector } from '../components/AudioDirector/AudioDirector';
+
 /**
- * Exports an array of configuration events as a downloadable JSON file.
+ * Exports any data payload as a downloadable JSON file.
  * 
- * @param events Array of configuration events (e.g., [{ time: 12.5, type: 'wave-gap', value: 'wide' }])
+ * @param data The data to serialize (array or object)
  * @param filename Name of the downloaded file (defaults to 'config.json')
  */
-export function exportConfigAsJSON(events: any[] = [], filename: string = 'config.json') {
-  const jsonString = JSON.stringify(events, null, 2);
+export function exportConfigAsJSON(data: any = [], filename: string = 'config.json') {
+  const jsonString = JSON.stringify(data, null, 2);
   const blob = new Blob([jsonString], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   
@@ -17,6 +19,25 @@ export function exportConfigAsJSON(events: any[] = [], filename: string = 'confi
   
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+/**
+ * Reads the active state from an <audio-director> element,
+ * stamps it with an "engine" property matching the current mode,
+ * merges optional extras (e.g. primaryArray, secondaryArray),
+ * and triggers a config.json browser download.
+ */
+export function exportDirectorConfig(
+  director: AudioDirector,
+  extras?: Record<string, any>
+): void {
+  const state = director.getState();
+  const payload = {
+    engine: state.mode,
+    ...state,
+    ...(extras || {}),
+  };
+  exportConfigAsJSON(payload, 'config.json');
 }
 
 /**
