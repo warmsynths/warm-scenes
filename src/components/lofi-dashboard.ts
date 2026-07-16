@@ -17,6 +17,26 @@ import whiteRugImg from '../assets/rugs/white_arched_rug.png';
 type Weather = 'sunny' | 'rainy' | 'thunderstorm';
 type TimeOfDay = 'day' | 'sunset' | 'night';
 
+const GEAR_DICTIONARY: Record<string, string> = {
+  polyend: 'Polyend Tracker',
+  circuit_tracks: 'Circuit Tracks',
+  mood: 'MOOD',
+  blooper: 'Blooper',
+  generation_loss: 'Gen Loss',
+  sp404: 'SP-404',
+  m8: 'M8',
+  poster_believe: 'Believe Poster',
+  poster_808: 'TR-808 Poster',
+  poster_mpc: 'MPC Poster',
+  lamp: 'Desk Lamp',
+  cup: 'Coffee Cup',
+  succulent_echeveria: 'Echeveria',
+  succulent_moonstones: 'Moonstones',
+  succulent_haworthia: 'Haworthia',
+  succulent_pearls: 'String of Pearls',
+  succulent_jade: 'Jade Plant'
+};
+
 @customElement('lofi-dashboard')
 export class LofiDashboard extends LitElement {
   @state()
@@ -55,7 +75,7 @@ export class LofiDashboard extends LitElement {
   private getInitialGear(): string[] {
     const saved = localStorage.getItem('lofi_active_gear');
     if (saved) {
-      try { return JSON.parse(saved); } catch(e) {}
+      try { return JSON.parse(saved); } catch (e) { }
     }
     return ['polyend', 'circuit_tracks', 'mood', 'blooper', 'generation_loss', 'sp404', 'm8', 'poster_believe', 'poster_808', 'poster_mpc', 'lamp', 'cup', 'succulent_echeveria', 'succulent_moonstones', 'succulent_haworthia', 'succulent_pearls', 'succulent_jade'];
   }
@@ -638,12 +658,12 @@ export class LofiDashboard extends LitElement {
 
   private handleDocumentClick = (e: MouseEvent) => {
     if (!this.activePanel || this.activePanel === 'audio') return;
-    
+
     const path = e.composedPath() as HTMLElement[];
-    const clickedInsidePanel = path.some(el => 
+    const clickedInsidePanel = path.some(el =>
       el.classList && (el.classList.contains('frameless-top-panel') || el.classList.contains('trigger-group'))
     );
-    
+
     if (!clickedInsidePanel) {
       this.activePanel = null;
       this.requestUpdate();
@@ -711,7 +731,7 @@ export class LofiDashboard extends LitElement {
       this.requestUpdate();
 
       const buffer = await this.audioManager.loadFile(file);
-      
+
       const min = Math.floor(buffer.duration / 60);
       const sec = Math.floor(buffer.duration % 60);
       this.totalTimeStr = `${this.padZero(min)}:${this.padZero(sec)}`;
@@ -755,14 +775,14 @@ export class LofiDashboard extends LitElement {
         if (!this.isScrubbing) {
           const current = this.audioManager.getCurrentTime();
           const duration = this.audioManager.duration;
-          
+
           const min = Math.floor(current / 60);
           const sec = Math.floor(current % 60);
           this.currentTimeStr = `${this.padZero(min)}:${this.padZero(sec)}`;
-          
+
           this.progressPercent = duration > 0 ? (current / duration) * 100 : 0;
         }
-        
+
         this.progressUpdateId = requestAnimationFrame(update);
       }
     };
@@ -819,7 +839,7 @@ export class LofiDashboard extends LitElement {
     const value = parseFloat(slider.value);
     const duration = this.audioManager.duration;
     const seekTime = (value / 100) * duration;
-    
+
     this.audioManager.seek(seekTime);
     this.requestUpdate();
   }
@@ -846,38 +866,48 @@ export class LofiDashboard extends LitElement {
 
   private renderDecorTab() {
     const categories = [
-      { id: 'decor', label: 'Decor', items: [
-        { id: 'lamp', label: 'Desk Lamp', icon: '💡', cat: 'Decor', disabled: false },
-        { id: 'cup', label: 'Coffee Cup', icon: '☕', cat: 'Decor', disabled: false },
-        { id: 'rug_green_arched', label: 'Green Rug', img: greenRugImg, cat: 'Rug', disabled: false },
-        { id: 'rug_pink_arched', label: 'Pink Rug', img: pinkRugImg, cat: 'Rug', disabled: false },
-        { id: 'rug_white_arched', label: 'White Rug', img: whiteRugImg, cat: 'Rug', disabled: false },
-        { id: 'succulent_echeveria', label: 'Echeveria', icon: '🪴', cat: 'Decor', disabled: false },
-        { id: 'succulent_moonstones', label: 'Moonstones', icon: '🪴', cat: 'Decor', disabled: false },
-        { id: 'succulent_haworthia', label: 'Haworthia', icon: '🪴', cat: 'Decor', disabled: false },
-        { id: 'succulent_pearls', label: 'String of Pearls', icon: '🪴', cat: 'Decor', disabled: false },
-        { id: 'succulent_jade', label: 'Jade Plant', icon: '🪴', cat: 'Decor', disabled: false }
-      ]},
-      { id: 'posters', label: 'Posters', items: [
-        { id: 'poster_believe', label: 'UFO Poster', img: ufoPosterImg, cat: 'Poster', disabled: false },
-        { id: 'poster_808', label: '808 Poster', img: tr808PosterImg, cat: 'Poster', disabled: false },
-        { id: 'poster_mpc', label: 'MPC Poster', img: mpcPosterImg, cat: 'Poster', disabled: false }
-      ]},
-      { id: 'other', label: 'Other', items: [
-        { id: 'reel', label: 'Tape Reel', icon: '📼', cat: 'Tape', disabled: true },
-        { id: 'strat', label: 'Strat', icon: '🎸', cat: 'Inst', disabled: true }
-      ]},
-      { id: 'pedals', label: 'Pedals', items: [
-        { id: 'mood', label: 'MOOD', icon: '🎛️', cat: 'Pedal', disabled: false },
-        { id: 'blooper', label: 'Blooper', icon: '🎛️', cat: 'Pedal', disabled: false },
-        { id: 'generation_loss', label: 'Gen Loss', icon: '🎛️', cat: 'Pedal', disabled: false }
-      ]},
-      { id: 'synths', label: 'Synths', items: [
-        { id: 'polyend', label: 'Polyend', icon: '🎹', cat: 'Synth', disabled: false },
-        { id: 'circuit_tracks', label: 'Circuit Tracks', icon: '🎹', cat: 'Synth', disabled: false },
-        { id: 'sp404', label: 'SP-404', icon: '🎹', cat: 'Synth', disabled: false },
-        { id: 'm8', label: 'M8', icon: '🎹', cat: 'Synth', disabled: false }
-      ]}
+      {
+        id: 'decor', label: 'Decor', items: [
+          { id: 'lamp', label: 'Desk Lamp', icon: '💡', cat: 'Decor', disabled: false },
+          { id: 'cup', label: 'Coffee Cup', icon: '☕', cat: 'Decor', disabled: false },
+          { id: 'rug_green_arched', label: 'Green Rug', img: greenRugImg, cat: 'Rug', disabled: false },
+          { id: 'rug_pink_arched', label: 'Pink Rug', img: pinkRugImg, cat: 'Rug', disabled: false },
+          { id: 'rug_white_arched', label: 'White Rug', img: whiteRugImg, cat: 'Rug', disabled: false },
+          { id: 'succulent_echeveria', label: 'Echeveria', icon: '🪴', cat: 'Decor', disabled: false },
+          { id: 'succulent_moonstones', label: 'Moonstones', icon: '🪴', cat: 'Decor', disabled: false },
+          { id: 'succulent_haworthia', label: 'Haworthia', icon: '🪴', cat: 'Decor', disabled: false },
+          { id: 'succulent_pearls', label: 'String of Pearls', icon: '🪴', cat: 'Decor', disabled: false },
+          { id: 'succulent_jade', label: 'Jade Plant', icon: '🪴', cat: 'Decor', disabled: false }
+        ]
+      },
+      {
+        id: 'posters', label: 'Posters', items: [
+          { id: 'poster_believe', label: 'UFO Poster', img: ufoPosterImg, cat: 'Poster', disabled: false },
+          { id: 'poster_808', label: '808 Poster', img: tr808PosterImg, cat: 'Poster', disabled: false },
+          { id: 'poster_mpc', label: 'MPC Poster', img: mpcPosterImg, cat: 'Poster', disabled: false }
+        ]
+      },
+      {
+        id: 'other', label: 'Other', items: [
+          { id: 'reel', label: 'Tape Reel', icon: '📼', cat: 'Tape', disabled: true },
+          { id: 'strat', label: 'Strat', icon: '🎸', cat: 'Inst', disabled: true }
+        ]
+      },
+      {
+        id: 'pedals', label: 'Pedals', items: [
+          { id: 'mood', label: 'MOOD', icon: '🎛️', cat: 'Pedal', disabled: false },
+          { id: 'blooper', label: 'Blooper', icon: '🎛️', cat: 'Pedal', disabled: false },
+          { id: 'generation_loss', label: 'Gen Loss', icon: '🎛️', cat: 'Pedal', disabled: false }
+        ]
+      },
+      {
+        id: 'synths', label: 'Synths', items: [
+          { id: 'polyend', label: 'Polyend', icon: '🎹', cat: 'Synth', disabled: false },
+          { id: 'circuit_tracks', label: 'Circuit Tracks', icon: '🎹', cat: 'Synth', disabled: false },
+          { id: 'sp404', label: 'SP-404', icon: '🎹', cat: 'Synth', disabled: false },
+          { id: 'm8', label: 'M8', icon: '🎹', cat: 'Synth', disabled: false }
+        ]
+      }
     ];
 
     const renderCard = (gear: any) => html`
@@ -887,10 +917,10 @@ export class LofiDashboard extends LitElement {
       >
         <div class="gear-icon">
           ${(gear.cat === 'Poster' || gear.cat === 'Rug') && gear.img
-            ? html`<img src="${gear.img}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 4px;" />`
-            : gear.cat === 'Tape' || gear.cat === 'Inst' || gear.cat === 'Decor'
-            ? html`<div style="font-size: 2rem; display: flex; align-items: center; justify-content: center; height: 100%;">${gear.icon}</div>` 
-            : html`<gear-preview gear="${gear.id}"></gear-preview>`}
+        ? html`<img src="${gear.img}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 4px;" />`
+        : gear.cat === 'Tape' || gear.cat === 'Inst' || gear.cat === 'Decor'
+          ? html`<div style="font-size: 2rem; display: flex; align-items: center; justify-content: center; height: 100%;">${gear.icon}</div>`
+          : html`<gear-preview gear="${gear.id}"></gear-preview>`}
         </div>
         <div class="gear-name">${gear.label}</div>
         <div style="font-size: 0.65rem; color: rgba(255,255,255,0.4); text-transform: uppercase;">${gear.cat}</div>
@@ -1147,26 +1177,13 @@ export class LofiDashboard extends LitElement {
   }
 
   private get dioramaTargets(): AvailableTarget[] {
-    const gearIds = [
-      'polyend', 'circuit_tracks', 'mood', 'blooper',
-      'generation_loss', 'sp404', 'm8',
-      'poster_believe', 'poster_808', 'poster_mpc',
-      'lamp', 'cup', 'succulent_echeveria', 'succulent_moonstones',
-      'succulent_haworthia', 'succulent_pearls', 'succulent_jade'
-    ];
-    const gearLabels: Record<string, string> = {
-      polyend: 'Polyend Tracker', circuit_tracks: 'Circuit Tracks',
-      mood: 'MOOD', blooper: 'Blooper', generation_loss: 'Gen Loss',
-      sp404: 'SP-404', m8: 'M8',
-      poster_believe: 'Believe Poster', poster_808: 'TR-808 Poster', poster_mpc: 'MPC Poster',
-      lamp: 'Desk Lamp', cup: 'Coffee Cup',
-      succulent_echeveria: 'Echeveria', succulent_moonstones: 'Moonstones',
-      succulent_haworthia: 'Haworthia', succulent_pearls: 'String of Pearls',
-      succulent_jade: 'Jade Plant'
-    };
     return this.activeGear
-      .filter(id => gearIds.includes(id))
-      .map(id => ({ id, label: gearLabels[id] || id, type: 'trigger' as const }));
+      .filter(id => GEAR_DICTIONARY[id] !== undefined)
+      .map(id => ({
+        id: id,
+        label: GEAR_DICTIONARY[id],
+        type: 'trigger' as const
+      }));
   }
 
   private cycleChip(gearId: string) {
@@ -1234,8 +1251,8 @@ export class LofiDashboard extends LitElement {
           <div class="preflight-label">Primary Array (hero devices — steady-state camera targets)</div>
           <div style="font-size: 0.8rem; color: rgba(255,255,255,0.5); font-style: italic;">
             ${this.primaryArray.length > 0
-              ? this.primaryArray.map(id => gearLabels[id] || id).join(', ')
-              : 'None selected'}
+        ? this.primaryArray.map(id => gearLabels[id] || id).join(', ')
+        : 'None selected'}
           </div>
         </div>
 
@@ -1243,8 +1260,8 @@ export class LofiDashboard extends LitElement {
           <div class="preflight-label">Secondary Array (accent devices — steady-state alt targets)</div>
           <div style="font-size: 0.8rem; color: rgba(255,255,255,0.5); font-style: italic;">
             ${this.secondaryArray.length > 0
-              ? this.secondaryArray.map(id => gearLabels[id] || id).join(', ')
-              : 'None selected'}
+        ? this.secondaryArray.map(id => gearLabels[id] || id).join(', ')
+        : 'None selected'}
           </div>
         </div>
 
@@ -1272,6 +1289,7 @@ export class LofiDashboard extends LitElement {
   render() {
     const isLoaded = this.audioManager.isLoaded;
     const isPlaying = this.audioManager.isPlaying;
+
 
     return html`
       <lofi-diorama 
