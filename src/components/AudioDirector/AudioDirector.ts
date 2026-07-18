@@ -31,6 +31,7 @@ export interface MacroShot {
   intensity?: number;
   cameraPos?: {x: number, y: number, z: number};
   cameraLookAt?: {x: number, y: number, z: number};
+  transitionType?: 'cut' | 'smooth' | 'whip-pan';
 }
 
 export interface MicroCut {
@@ -674,6 +675,42 @@ export class AudioDirector extends LitElement {
     this.macroShots = this.macroShots.map(s =>
       s.id === this.selectedMarkerId ? { ...s, ...updates } : s
     );
+    if (updates.duration !== undefined) {
+      this.recalculateStartTimes();
+    } else {
+      this.renderRegions();
+      this.dispatchChangeEvent();
+    }
+  }
+
+  private updateMacroShotTransition(id: string, transition: string) {
+    this.macroShots = this.macroShots.map(s =>
+      s.id === id ? { ...s, transitionType: transition as any } : s
+    );
+    this.dispatchChangeEvent();
+  }
+
+  private addNewStoryboardPanel() {
+    const newShot: MacroShot = {
+      id: `macro_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      startTime: 0,
+      duration: 2.0,
+      target: this.availableTargets[0]?.id || '',
+      mood: 'balanced',
+      intensity: 0.5,
+      transitionType: 'smooth'
+    };
+    this.macroShots = [...this.macroShots, newShot];
+    this.recalculateStartTimes();
+  }
+
+  private recalculateStartTimes() {
+    let currentTime = 0;
+    this.macroShots = this.macroShots.map(shot => {
+      const updated = { ...shot, startTime: currentTime };
+      currentTime += shot.duration;
+      return updated;
+    });
     this.renderRegions();
     this.dispatchChangeEvent();
   }
@@ -824,22 +861,8 @@ export class AudioDirector extends LitElement {
 
     return html`
       <div class="toolbar">
-        <div class="title">Audio Director${isDiorama ? ' — Diorama' : ''}</div>
+        <div class="title">Audio Director${isDiorama ? ' — Storyboard' : ''}</div>
         <div class="controls">
-          ${isDiorama ? html`
-            <div class="mode-toggle" style="margin-right: 12px;">
-              <button class="${this.currentView === 'timeline' ? 'active' : ''}"
-                      @click=${() => this.currentView = 'timeline'}>Timeline</button>
-              <button class="${this.currentView === 'storyboard' ? 'active' : ''}"
-                      @click=${() => this.currentView = 'storyboard'}>Storyboard</button>
-            </div>
-            <div class="mode-toggle">
-              <button class="${this.dioramaAddMode === 'macro_shot' ? 'active' : ''}"
-                      @click=${() => this.dioramaAddMode = 'macro_shot'}>📷 Macro</button>
-              <button class="${this.dioramaAddMode === 'micro_cut' ? 'active' : ''}"
-                      @click=${() => this.dioramaAddMode = 'micro_cut'}>✂ Micro</button>
-            </div>
-          ` : ''}
           <button @click=${this.togglePlayback}>
             ${this.isPlaying ? 'Pause' : 'Play'}
           </button>
@@ -879,17 +902,38 @@ export class AudioDirector extends LitElement {
         </div>
       ` : ''}
       
-      ${this.currentView === 'storyboard' && isDiorama ? html`
-        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; padding: 16px; height: 128px; overflow-y: auto; background: #111; box-sizing: border-box;">
-          ${this.macroShots.map(shot => html`
+      ${isDiorama ? html`
+        <div style="display: flex; gap: 16px; padding: 16px; overflow-x: auto; background: #111; box-sizing: border-box; align-items: center; white-space: nowrap; min-height: 160px;">
+          ${this.macroShots.map((shot, i) => html`
             <div @click=${() => this.selectedMarkerId = shot.id}
-                 style="background: ${this.selectedMarkerId === shot.id ? '#333' : '#222'}; padding: 12px; border-radius: 8px; border: 1px solid ${this.selectedMarkerId === shot.id ? '#7c4dff' : '#444'}; cursor: pointer; display: flex; flex-direction: column; gap: 4px;">
-              <div style="font-weight: bold; color: #fff;">${shot.startTime.toFixed(1)}s - ${(shot.startTime + shot.duration).toFixed(1)}s</div>
+                 @dblclick=${() => this.dispatchEvent(new CustomEvent('snap-camera', { detail: { id: shot.id } }))}
+                 style="display: inline-flex; flex-direction: column; gap: 4px; background: ${this.selectedMarkerId === shot.id ? '#333' : '#222'}; padding: 12px; border-radius: 8px; border: 1px solid ${this.selectedMarkerId === shot.id ? '#7c4dff' : '#444'}; cursor: pointer; min-width: 180px;">
+              <div style="font-weight: bold; color: #fff;">Shot ${i + 1} (${shot.duration.toFixed(1)}s)</div>
               <div style="color: #aaa; font-size: 12px;">Target: ${this.availableTargets.find(t => t.id === shot.target)?.label || shot.target || 'None'}</div>
               <div style="color: #aaa; font-size: 12px;">Mood: <span style="text-transform: capitalize;">${shot.mood || 'balanced'}</span></div>
               ${shot.cameraPos ? html`<div style="color: #4caf50; font-size: 12px; font-weight: bold; margin-top: 4px;">📸 Locked</div>` : ''}
             </div>
+            
+            ${i < this.macroShots.length - 1 ? html`
+              <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                <div style="color: #888; font-size: 11px; text-transform: uppercase;">Transition</div>
+                <select @change=${(e: Event) => this.updateMacroShotTransition(this.macroShots[i+1].id, (e.target as HTMLSelectElement).value)}
+                        .value=${this.macroShots[i+1].transitionType || 'smooth'}
+                        style="background: #333; color: white; border: 1px solid #555; border-radius: 4px; padding: 2px 4px; font-size: 11px;">
+                  <option value="cut">Cut</option>
+                  <option value="smooth">Smooth</option>
+                  <option value="whip-pan">Whip Pan</option>
+                </select>
+              </div>
+            ` : ''}
           `)}
+          
+          <div @click=${this.addNewStoryboardPanel}
+               style="display: inline-flex; align-items: center; justify-content: center; background: #222; border: 1px dashed #555; border-radius: 8px; padding: 12px; cursor: pointer; min-width: 100px; height: 90px; color: #888; font-weight: bold; transition: all 0.2s;"
+               onmouseover="this.style.background='#333'; this.style.borderColor='#888';"
+               onmouseout="this.style.background='#222'; this.style.borderColor='#555';">
+            + Add Panel
+          </div>
         </div>
       ` : html`
         <div id="waveform-container">
@@ -901,9 +945,7 @@ export class AudioDirector extends LitElement {
           ` : ''}
           ${!this.isAnalyzing && !this.isDecoding && !hasEvents && this.channelData ? html`
             <div class="loading-overlay" style="background: rgba(0,0,0,0.65);">
-              ${isDiorama
-                ? 'Ready. Click the waveform to add events, or use "Analyze for Camera" from the Pre-Flight panel.'
-                : 'Ready. Adjust Density and click "Analyze Track" above.'}
+              Ready. Adjust Density and click "Analyze Track" above.
             </div>
           ` : ''}
         </div>
@@ -986,10 +1028,9 @@ export class AudioDirector extends LitElement {
           <span>Click region to select. Double-click to delete.</span>
         ` : html`
           <div class="legend">
-            <div class="legend-item"><div class="legend-dot" style="background: #7c4dff;"></div>Macro Shot</div>
-            <div class="legend-item"><div class="legend-dot" style="background: #ff6d00;"></div>Micro Cut</div>
+            <div class="legend-item"><div class="legend-dot" style="background: #7c4dff;"></div>Storyboard Panel</div>
           </div>
-          <span>Click to add. Double-click to delete. Use toggle to switch type.</span>
+          <span>Double-click a panel to snap camera.</span>
         `}
       </div>
     `;

@@ -1182,6 +1182,14 @@ export class LofiDashboard extends LitElement {
     }
   }
 
+  private handleSnapCamera(e: CustomEvent) {
+    const markerId = e.detail.id;
+    const dioramaEl = this.shadowRoot?.querySelector('lofi-diorama') as any;
+    if (dioramaEl && typeof dioramaEl.snapToCamera === 'function') {
+      dioramaEl.snapToCamera(markerId);
+    }
+  }
+
   private runDioramaAnalysis() {
     if (!this.dioramaChannelData) {
       alert('Load an audio file first.');
@@ -1400,7 +1408,8 @@ export class LofiDashboard extends LitElement {
             @close=${this.handleDirectorClose}
             @change=${this.handleDirectorChange}
             @apply=${this.applyDioramaScript}
-            @capture-camera=${this.handleCaptureCamera}>
+            @capture-camera=${this.handleCaptureCamera}
+            @snap-camera=${this.handleSnapCamera}>
           </audio-director>
         </div>
       ` : ''}

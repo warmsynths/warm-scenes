@@ -136,6 +136,7 @@ export class LofiDiorama extends LitElement {
 
   // 1.5s Transition State
   private transitionStartTime = 0;
+  private transitionDuration = 1500;
   private isTransitioning = false;
   private sourceCameraPos = new THREE.Vector3();
   private sourceCameraTarget = new THREE.Vector3();
@@ -3518,6 +3519,40 @@ export class LofiDiorama extends LitElement {
     return { pos: this.camera.position.clone(), target: this.controls.target.clone() };
   }
 
+  public snapToCamera(markerId: string) {
+    if (!this.macroShots) return;
+    const shot = this.macroShots.find((m: any) => m.id === markerId);
+    if (!shot) return;
+
+    if (shot.cameraPos && shot.cameraLookAt) {
+      this.camera.position.set(shot.cameraPos.x, shot.cameraPos.y, shot.cameraPos.z);
+      this.controls.target.set(shot.cameraLookAt.x, shot.cameraLookAt.y, shot.cameraLookAt.z);
+    } else {
+      let targetPosition = new THREE.Vector3(0, 5.6, -7);
+      let cameraOffset = new THREE.Vector3(0, 10, 10);
+      if (shot.target) {
+        const targetObj = this.findGearObject(shot.target);
+        if (targetObj) targetObj.getWorldPosition(targetPosition);
+      }
+      switch (shot.mood) {
+        case 'balanced': cameraOffset.set(0, 15, 12); break;
+        case 'submerged': cameraOffset.set(-4, 6, 6); break;
+        case 'chaotic': cameraOffset.set(0, 7, 0.5); break;
+        case 'ambient': targetPosition.set(0, 16, -19); cameraOffset.set(3, 2, 28); break;
+        default: cameraOffset.set(0, 10, 10);
+      }
+      this.camera.position.copy(targetPosition).add(cameraOffset);
+      this.controls.target.copy(targetPosition);
+    }
+    
+    this.camera.lookAt(this.controls.target);
+    this.isTransitioning = false;
+    this.lastMacroId = markerId; 
+    
+    this.sequencerActive = false;
+    this.controls.enabled = true;
+  }
+
   private updateCameraSequencer() {
     if (!this.macroShots || this.macroShots.length === 0) return;
 
@@ -3605,12 +3640,19 @@ export class LofiDiorama extends LitElement {
         this.targetCameraPos.copy(targetPosition).add(cameraOffset);
       }
 
-      // Initialize 1.5s Transition
-      this.sourceCameraPos.copy(this.camera.position);
-      this.sourceCameraTarget.copy(this.controls.target);
-
-      this.transitionStartTime = performance.now();
-      this.isTransitioning = true;
+      const isCut = (activeMacro as any).transitionType === 'cut';
+      
+      if (isCut) {
+        this.camera.position.copy(this.targetCameraPos);
+        this.controls.target.copy(this.targetCameraTarget);
+        this.isTransitioning = false;
+      } else {
+        this.sourceCameraPos.copy(this.camera.position);
+        this.sourceCameraTarget.copy(this.controls.target);
+        this.transitionStartTime = performance.now();
+        this.isTransitioning = true;
+        this.transitionDuration = (activeMacro as any).transitionType === 'whip-pan' ? 400 : 1500;
+      }
     }
 
     this.sequencerActive = true;
@@ -3634,7 +3676,7 @@ export class LofiDiorama extends LitElement {
     // Apply Macro Transition / Lock
     if (this.isTransitioning) {
       const elapsed = performance.now() - this.transitionStartTime;
-      let t = Math.min(1.0, elapsed / 1500);
+      let t = Math.min(1.0, elapsed / this.transitionDuration);
 
       // Smooth cubic easing
       t = t * t * (3 - 2 * t);
@@ -3642,7 +3684,7 @@ export class LofiDiorama extends LitElement {
       this.camera.position.lerpVectors(this.sourceCameraPos, this.targetCameraPos, t);
       this.controls.target.lerpVectors(this.sourceCameraTarget, this.targetCameraTarget, t);
 
-      if (elapsed >= 1500) {
+      if (elapsed >= this.transitionDuration) {
         this.isTransitioning = false;
       }
     } else {
