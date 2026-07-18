@@ -2,13 +2,14 @@ import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import './diorama-screen';
 import './wavefield-screen';
+import './cinematic-credits';
 import { exportConfigAsJSON, exportDirectorConfig } from '../utils/exportConfig';
 import type { AudioDirector } from './AudioDirector/AudioDirector';
 
 @customElement('main-app')
 export class MainApp extends LitElement {
   @state()
-  private activeScreen: 'diorama' | 'wavefield' = 'diorama';
+  private activeScreen: 'diorama' | 'wavefield' | 'credits' = 'diorama';
 
   static styles = css`
     :host {
@@ -56,7 +57,7 @@ export class MainApp extends LitElement {
 
   private handleScreenChange(e: Event) {
     const select = e.target as HTMLSelectElement;
-    this.activeScreen = select.value as 'diorama' | 'wavefield';
+    this.activeScreen = select.value as 'diorama' | 'wavefield' | 'credits';
   }
 
   private handleExportConfig() {
@@ -93,7 +94,7 @@ export class MainApp extends LitElement {
         
         exportConfigAsJSON(exportData);
       }
-    } else {
+    } else if (this.activeScreen === 'diorama') {
       // Diorama export - will be fully wired in Phase 2
       const dioramaScreen = this.shadowRoot?.querySelector('diorama-screen') as any;
       const dashboard = dioramaScreen?.shadowRoot?.querySelector('lofi-dashboard') as any;
@@ -115,6 +116,7 @@ export class MainApp extends LitElement {
       <select class="screen-switcher" @change="${this.handleScreenChange}">
         <option value="diorama" ?selected="${this.activeScreen === 'diorama'}">Diorama Screen</option>
         <option value="wavefield" ?selected="${this.activeScreen === 'wavefield'}">Wavefield Screen</option>
+        <option value="credits" ?selected="${this.activeScreen === 'credits'}">Cinematic Credits</option>
       </select>
 
       <button id="export-config-btn" class="export-btn" @click="${this.handleExportConfig}">
@@ -124,7 +126,9 @@ export class MainApp extends LitElement {
       <div class="screen-container">
         ${this.activeScreen === 'diorama' 
           ? html`<diorama-screen></diorama-screen>` 
-          : html`<wavefield-screen></wavefield-screen>`}
+          : this.activeScreen === 'wavefield'
+            ? html`<wavefield-screen></wavefield-screen>`
+            : html`<cinematic-credits></cinematic-credits>`}
       </div>
     `;
   }
