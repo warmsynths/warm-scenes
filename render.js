@@ -4,7 +4,7 @@ import path from 'path';
 
 const CONFIG_PATH = path.resolve('config.json');
 const AUDIO_PATH = 'audio.wav';
-const TEMP_HTML_PATH = path.resolve('hyperframes-temp.html');
+const TEMP_HTML_PATH = path.resolve('docs', 'hyperframes-temp.html');
 const OUTPUT_PATH = 'output.mp4';
 
 function main() {
@@ -13,16 +13,20 @@ function main() {
     process.exit(1);
   }
 
-  // 1. Build the Vite app first so we have a bundle that a headless browser can load
-  console.log('Building Vite app for render...');
+  // 1. Build the Vite app with a relative base so import.meta.env.BASE_URL resolves
+  //    to './' at runtime, making texture paths relative to the HTML file location.
+  //    The normal '/warm-scenes/' base in vite.config.ts is for GitHub Pages only.
+  console.log('Building Vite app for render (base=./)...');
   try {
-    execSync('npm run build', { stdio: 'inherit' });
+    execSync('npx vite build --base ./', { stdio: 'inherit' });
   } catch (err) {
     console.error('Build failed', err);
     process.exit(1);
   }
 
-  // 2. Read the generated docs/index.html to find the compiled JS/CSS paths
+  // 2. Read the generated docs/index.html to find the compiled JS/CSS paths.
+  //    The temp HTML is placed inside docs/ alongside the built output,
+  //    so the relative paths (e.g. './assets/index-XXXX.js') work directly.
   const docsIndexPath = path.resolve('docs', 'index.html');
   if (!fs.existsSync(docsIndexPath)) {
     console.error('Error: docs/index.html not found after build.');
@@ -32,8 +36,9 @@ function main() {
   const scriptMatch = indexHtmlStr.match(/<script type="module" crossorigin src="([^"]+)"><\/script>/);
   const cssMatch = indexHtmlStr.match(/<link rel="stylesheet" crossorigin href="([^"]+)">/);
 
-  const scriptSrc = scriptMatch ? scriptMatch[1].replace('/warm-scenes/', './docs/') : '';
-  const cssHref = cssMatch ? cssMatch[1].replace('/warm-scenes/', './docs/') : '';
+  // Paths are relative to docs/ — use them directly (e.g. './assets/index-XXXX.js')
+  const scriptSrc = scriptMatch ? scriptMatch[1] : '';
+  const cssHref = cssMatch ? cssMatch[1] : '';
 
   // 3. Read JSON config
   const configData = fs.readFileSync(CONFIG_PATH, 'utf-8');
@@ -85,7 +90,7 @@ function main() {
     const micros = config.microCuts || [];
     
     const macroHtml = macros.map((evt, i) => {
-      return `      <div id="macro-${i}" class="macro-shot clip" data-target="${evt.target}" data-start="${evt.startTime}" data-duration="${evt.duration}"></div>`;
+      return `      <div id="macro-${i}" class="macro-shot clip" data-target="${evt.target}" data-start="${evt.startTime}" data-duration="${evt.duration}" data-mood="${evt.mood || 'balanced'}"></div>`;
     }).join('\n');
     
     const microHtml = micros.map((evt, i) => {
@@ -116,7 +121,7 @@ function main() {
   <div id="composition" data-composition-id="main" data-width="1920" data-height="1080" data-start="0" data-duration="${duration}" style="width: 1920px; height: 1080px; position: relative; overflow: hidden; background: #000;">
     
     <!-- Audio track (Hyperframes will own this) -->
-    <audio id="main-audio" src="${AUDIO_PATH}" data-start="0"></audio>
+    <audio id="main-audio" src="../audio.wav" data-start="0"></audio>
 
     <!-- Config Events -->
 ${eventsHtml}
@@ -141,8 +146,8 @@ ${eventsHtml}
 
   // 7. Execute hyperframes render
   try {
-    console.log(`Running: npx hyperframes render --composition hyperframes-temp.html --output ${OUTPUT_PATH}`);
-    execSync(`npx hyperframes render --composition hyperframes-temp.html --output ${OUTPUT_PATH}`, { 
+    console.log(`Running: npx hyperframes render --composition docs/hyperframes-temp.html --output ${OUTPUT_PATH}`);
+    execSync(`npx hyperframes render --composition docs/hyperframes-temp.html --output ${OUTPUT_PATH}`, { 
       stdio: 'inherit' 
     });
     console.log('Rendering complete!');

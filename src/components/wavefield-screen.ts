@@ -440,16 +440,24 @@ export class WavefieldScreen extends LitElement {
   private lastFilterVal = 0;
 
   private async loadOfflineAudio() {
-    try {
-      const response = await fetch('audio.wav');
-      const arrayBuffer = await response.arrayBuffer();
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-      this.offlineAudioBuffer = audioBuffer.getChannelData(0);
-      this.offlineSampleRate = audioBuffer.sampleRate;
-    } catch(e) {
-      console.warn("Could not load offline audio", e);
+    // Try ../audio.wav first (render mode: temp HTML is in docs/, audio is at project root)
+    // Fall back to audio.wav for compatibility
+    const paths = ['../audio.wav', 'audio.wav'];
+    for (const audioPath of paths) {
+      try {
+        const response = await fetch(audioPath);
+        if (!response.ok) continue;
+        const arrayBuffer = await response.arrayBuffer();
+        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+        this.offlineAudioBuffer = audioBuffer.getChannelData(0);
+        this.offlineSampleRate = audioBuffer.sampleRate;
+        return;
+      } catch(e) {
+        // Try next path
+      }
     }
+    console.warn("Could not load offline audio from any path");
   }
 
   private handleFileSelect(e: Event) {

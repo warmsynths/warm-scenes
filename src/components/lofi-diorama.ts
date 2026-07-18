@@ -142,6 +142,12 @@ export class LofiDiorama extends LitElement {
   private targetCameraPos = new THREE.Vector3();
   private targetCameraTarget = new THREE.Vector3();
 
+  // HyperFrames Render Mode State
+  private isRenderMode = false;
+  private offlineAudioBuffer: Float32Array | null = null;
+  private offlineSampleRate = 44100;
+  private renderCurrentTime = 0;
+
   private controls!: OrbitControls;
 
   private raycaster = new THREE.Raycaster();
@@ -2598,11 +2604,126 @@ export class LofiDiorama extends LitElement {
   }
 
   private startLoop() {
-    const loop = () => {
+    // Detect HyperFrames offline rendering mode
+    if (window.hasOwnProperty('__timelines') || document.querySelector('.macro-shot') || document.querySelector('.micro-cut')) {
+      this.isRenderMode = true;
+      console.log('[Diorama] HyperFrames render mode detected');
+
+      // Parse macro shots from DOM
+      const macroEls = document.querySelectorAll('.macro-shot');
+      this.macroShots = Array.from(macroEls).map((el, i) => ({
+        id: `macro-${i}`,
+        target: el.getAttribute('data-target') || '',
+        startTime: parseFloat(el.getAttribute('data-start') || '0'),
+        duration: parseFloat(el.getAttribute('data-duration') || '10'),
+        mood: el.getAttribute('data-mood') || 'balanced',
+      }));
+
+      // Parse micro cuts from DOM
+      const microEls = document.querySelectorAll('.micro-cut');
+      this.microCuts = Array.from(microEls).map((el, i) => ({
+        id: `micro-${i}`,
+        target: el.getAttribute('data-target') || '',
+        time: parseFloat(el.getAttribute('data-start') || '0'),
+      }));
+
+      // Parse primary/secondary arrays from diorama-screen element
+      const dioramaHost = document.querySelector('diorama-screen');
+      if (dioramaHost) {
+        const primaryStr = dioramaHost.getAttribute('data-primary-array') || '';
+        const secondaryStr = dioramaHost.getAttribute('data-secondary-array') || '';
+        if (primaryStr) this.primaryArray = primaryStr.split(',').filter(s => s);
+        if (secondaryStr) this.secondaryArray = secondaryStr.split(',').filter(s => s);
+      }
+
+      console.log(`[Diorama] Loaded ${this.macroShots.length} macro shots, ${this.microCuts.length} micro cuts`);
+      console.log(`[Diorama] Primary: [${this.primaryArray}], Secondary: [${this.secondaryArray}]`);
+
+      // Load offline audio buffer for deterministic analysis
+      this.loadOfflineAudio();
+
+      // Listen for HyperFrames seek events
+      window.addEventListener('hf-seek', (e: any) => {
+        this.renderCurrentTime = e.detail.time;
+        this.renderScene();
+      });
+
+      // Initial render
       this.renderScene();
+    } else {
+      // Normal browser mode with requestAnimationFrame
+      const loop = () => {
+        this.renderScene();
+        this.animationFrameId = requestAnimationFrame(loop);
+      };
       this.animationFrameId = requestAnimationFrame(loop);
-    };
-    this.animationFrameId = requestAnimationFrame(loop);
+    }
+  }
+
+  private async loadOfflineAudio() {
+    // Try ../audio.wav first (render mode: temp HTML is in docs/, audio is at project root)
+    // Fall back to audio.wav for compatibility
+    const paths = ['../audio.wav', 'audio.wav'];
+    for (const audioPath of paths) {
+      try {
+        const response = await fetch(audioPath);
+        if (!response.ok) continue;
+        const arrayBuffer = await response.arrayBuffer();
+        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+        this.offlineAudioBuffer = audioBuffer.getChannelData(0);
+        this.offlineSampleRate = audioBuffer.sampleRate;
+        console.log(`[Diorama] Loaded offline audio from '${audioPath}': ${audioBuffer.duration.toFixed(1)}s @ ${this.offlineSampleRate}Hz`);
+        return;
+      } catch (e) {
+        // Try next path
+      }
+    }
+    console.warn('[Diorama] Could not load offline audio from any path');
+  }
+
+  /**
+   * Compute deterministic audio data from the offline buffer at a given time.
+   * Used during HyperFrames render mode instead of the real-time AudioManager.
+   */
+  private getOfflineAudioData(time: number): { amplitude: number; bass: number; freqs: number[] } {
+    if (!this.offlineAudioBuffer) {
+      return { amplitude: 0, bass: 0, freqs: new Array(8).fill(0) };
+    }
+
+    const sampleIndex = Math.floor(time * this.offlineSampleRate);
+    const windowSize = 2048;
+    const startIdx = Math.max(0, sampleIndex - windowSize);
+    const endIdx = Math.min(this.offlineAudioBuffer.length, sampleIndex);
+
+    // RMS amplitude
+    let rms = 0;
+    let bassRms = 0;
+    let count = 0;
+    for (let i = startIdx; i < endIdx; i++) {
+      const val = this.offlineAudioBuffer[i];
+      rms += val * val;
+      // Low-pass approximation for bass
+      if ((i - startIdx) % 4 === 0) bassRms += val * val;
+      count++;
+    }
+    const amplitude = count > 0 ? Math.sqrt(rms / count) : 0;
+    const bass = count > 0 ? Math.min(1.0, Math.sqrt(bassRms / (count / 4)) * 3.0) : 0;
+
+    // Frequency band approximation (8 bands)
+    const freqs: number[] = [];
+    const bandSize = Math.floor(count / 8);
+    for (let band = 0; band < 8; band++) {
+      let bandSum = 0;
+      const bStart = startIdx + band * bandSize;
+      const bEnd = Math.min(bStart + bandSize, endIdx);
+      for (let i = bStart; i < bEnd; i++) {
+        bandSum += Math.abs(this.offlineAudioBuffer[i]);
+      }
+      freqs.push(bandSize > 0 ? Math.min(1.0, (bandSum / bandSize) * 5.0) : 0);
+    }
+
+    return { amplitude, bass, freqs };
   }
 
   private renderScene() {
@@ -2641,7 +2762,14 @@ export class LofiDiorama extends LitElement {
       this.backroomsWallMat.opacity += (targetOpacity - this.backroomsWallMat.opacity) * 0.1;
     }
 
-    if (this.audioManager && this.audioManager.isLoaded) {
+    // --- Audio data source selection ---
+    if (this.isRenderMode) {
+      // HyperFrames render mode: compute deterministic audio from offline buffer
+      const data = this.getOfflineAudioData(this.renderCurrentTime);
+      amplitude = data.amplitude;
+      bass = data.bass;
+      freqs = data.freqs;
+    } else if (this.audioManager && this.audioManager.isLoaded) {
       if (this.audioManager.isPlaying) {
         const rt = this.audioManager.getRealTimeData();
         amplitude = rt.amplitude;
@@ -2762,7 +2890,7 @@ export class LofiDiorama extends LitElement {
     const isTimelinePlaying = this.audioDirector && this.audioDirector.isPlaying;
     const isGlobalPlaying = this.audioManager && this.audioManager.isPlaying;
 
-    if (isTimelinePlaying || isGlobalPlaying) {
+    if (this.isRenderMode || isTimelinePlaying || isGlobalPlaying) {
       this.updateCameraSequencer();
     } else if (this.sequencerActive) {
       // Release camera to orbit controls
@@ -3386,12 +3514,17 @@ export class LofiDiorama extends LitElement {
     return deepMatch;
   }
 
+  public getCameraState() {
+    return { pos: this.camera.position.clone(), target: this.controls.target.clone() };
+  }
 
   private updateCameraSequencer() {
     if (!this.macroShots || this.macroShots.length === 0) return;
 
     let time = 0;
-    if (this.audioDirector && this.audioDirector.isPlaying) {
+    if (this.isRenderMode) {
+      time = this.renderCurrentTime;
+    } else if (this.audioDirector && this.audioDirector.isPlaying) {
       time = this.audioDirector.getCurrentTime();
     } else if (this.audioManager && this.audioManager.isPlaying) {
       time = this.audioManager.getCurrentTime();
@@ -3422,54 +3555,59 @@ export class LofiDiorama extends LitElement {
     if (activeMacro && activeMacro.id !== this.lastMacroId) {
       this.lastMacroId = activeMacro.id;
 
-      let targetPosition = new THREE.Vector3(0, 5.6, -7); // Default: desk center
-      let cameraOffset = new THREE.Vector3(0, 10, 10);
-
-      // Dynamically locate the event target's 3D mesh and extract its position
-      if (activeMacro.target) {
-        const targetObj = this.findGearObject(activeMacro.target);
-        if (targetObj) {
-          targetObj.getWorldPosition(targetPosition);
-          console.log(`[CameraSeq] Found target '${activeMacro.target}' -> obj.name='${targetObj.name}', worldPos=(${targetPosition.x.toFixed(2)}, ${targetPosition.y.toFixed(2)}, ${targetPosition.z.toFixed(2)})`);
-        } else {
-          console.warn(`[CameraSeq] Could not find 3D object for target '${activeMacro.target}'. Falling back to desk center.`);
-          // Log all gearGroup children for debugging
-          console.warn(`[CameraSeq] gearGroup has ${this.gearGroup.children.length} children:`, 
-            this.gearGroup.children.map(c => `'${c.name}'`).join(', '));
-        }
+      if (activeMacro.cameraPos && activeMacro.cameraLookAt) {
+        this.targetCameraPos.set(activeMacro.cameraPos.x, activeMacro.cameraPos.y, activeMacro.cameraPos.z);
+        this.targetCameraTarget.set(activeMacro.cameraLookAt.x, activeMacro.cameraLookAt.y, activeMacro.cameraLookAt.z);
       } else {
-        console.warn(`[CameraSeq] activeMacro has no target property. mood=${activeMacro.mood}`);
-      }
+        let targetPosition = new THREE.Vector3(0, 5.6, -7); // Default: desk center
+        let cameraOffset = new THREE.Vector3(0, 10, 10);
 
-      // Mood State Machine (offsets only — targetPosition is always the found device)
-      switch (activeMacro.mood) {
-        case 'balanced':
-          cameraOffset.set(0, 15, 12);
-          break;
-        case 'submerged':
-          cameraOffset.set(-4, 6, 6);
-          break;
-        case 'chaotic':
-          cameraOffset.set(0, 7, 0.5);
-          break;
-        case 'ambient':
-          // B-roll: Frame the window from inside the room
-          // Window center is roughly (0, 16.2, -20), frame spans ~16.5 wide, ~8.4 tall
-          targetPosition.set(0, 16, -19);
-          cameraOffset.set(3, 2, 28);
-          break;
-        default:
-          cameraOffset.set(0, 10, 10);
-      }
+        // Dynamically locate the event target's 3D mesh and extract its position
+        if (activeMacro.target) {
+          const targetObj = this.findGearObject(activeMacro.target);
+          if (targetObj) {
+            targetObj.getWorldPosition(targetPosition);
+            console.log(`[CameraSeq] Found target '${activeMacro.target}' -> obj.name='${targetObj.name}', worldPos=(${targetPosition.x.toFixed(2)}, ${targetPosition.y.toFixed(2)}, ${targetPosition.z.toFixed(2)})`);
+          } else {
+            console.warn(`[CameraSeq] Could not find 3D object for target '${activeMacro.target}'. Falling back to desk center.`);
+            // Log all gearGroup children for debugging
+            console.warn(`[CameraSeq] gearGroup has ${this.gearGroup.children.length} children:`, 
+              this.gearGroup.children.map(c => `'${c.name}'`).join(', '));
+          }
+        } else {
+          console.warn(`[CameraSeq] activeMacro has no target property. mood=${activeMacro.mood}`);
+        }
 
-      console.log(`[CameraSeq] Final: mood='${activeMacro.mood}', target=(${targetPosition.x.toFixed(2)}, ${targetPosition.y.toFixed(2)}, ${targetPosition.z.toFixed(2)}), offset=(${cameraOffset.x.toFixed(2)}, ${cameraOffset.y.toFixed(2)}, ${cameraOffset.z.toFixed(2)}), camPos=(${(targetPosition.x + cameraOffset.x).toFixed(2)}, ${(targetPosition.y + cameraOffset.y).toFixed(2)}, ${(targetPosition.z + cameraOffset.z).toFixed(2)})`);
+        // Mood State Machine (offsets only — targetPosition is always the found device)
+        switch (activeMacro.mood) {
+          case 'balanced':
+            cameraOffset.set(0, 15, 12);
+            break;
+          case 'submerged':
+            cameraOffset.set(-4, 6, 6);
+            break;
+          case 'chaotic':
+            cameraOffset.set(0, 7, 0.5);
+            break;
+          case 'ambient':
+            // B-roll: Frame the window from inside the room
+            // Window center is roughly (0, 16.2, -20), frame spans ~16.5 wide, ~8.4 tall
+            targetPosition.set(0, 16, -19);
+            cameraOffset.set(3, 2, 28);
+            break;
+          default:
+            cameraOffset.set(0, 10, 10);
+        }
+
+        console.log(`[CameraSeq] Final: mood='${activeMacro.mood}', target=(${targetPosition.x.toFixed(2)}, ${targetPosition.y.toFixed(2)}, ${targetPosition.z.toFixed(2)}), offset=(${cameraOffset.x.toFixed(2)}, ${cameraOffset.y.toFixed(2)}, ${cameraOffset.z.toFixed(2)}), camPos=(${(targetPosition.x + cameraOffset.x).toFixed(2)}, ${(targetPosition.y + cameraOffset.y).toFixed(2)}, ${(targetPosition.z + cameraOffset.z).toFixed(2)})`);
+
+        this.targetCameraTarget.copy(targetPosition);
+        this.targetCameraPos.copy(targetPosition).add(cameraOffset);
+      }
 
       // Initialize 1.5s Transition
       this.sourceCameraPos.copy(this.camera.position);
       this.sourceCameraTarget.copy(this.controls.target);
-
-      this.targetCameraTarget.copy(targetPosition);
-      this.targetCameraPos.copy(targetPosition).add(cameraOffset);
 
       this.transitionStartTime = performance.now();
       this.isTransitioning = true;

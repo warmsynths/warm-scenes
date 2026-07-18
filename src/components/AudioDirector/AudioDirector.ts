@@ -29,6 +29,8 @@ export interface MacroShot {
   label?: string;
   mood?: 'chaotic' | 'submerged' | 'balanced' | 'ambient';
   intensity?: number;
+  cameraPos?: {x: number, y: number, z: number};
+  cameraLookAt?: {x: number, y: number, z: number};
 }
 
 export interface MicroCut {
@@ -275,6 +277,7 @@ export class AudioDirector extends LitElement {
   @state() private macroShots: MacroShot[] = [];
   @state() private microCuts: MicroCut[] = [];
   @state() private dioramaAddMode: 'macro_shot' | 'micro_cut' = 'micro_cut';
+  @state() private currentView: 'timeline' | 'storyboard' = 'timeline';
   @state() private isAnalyzing = false;
   @state() private isDecoding = false;
   @state() public isPlaying = false;
@@ -824,6 +827,12 @@ export class AudioDirector extends LitElement {
         <div class="title">Audio Director${isDiorama ? ' — Diorama' : ''}</div>
         <div class="controls">
           ${isDiorama ? html`
+            <div class="mode-toggle" style="margin-right: 12px;">
+              <button class="${this.currentView === 'timeline' ? 'active' : ''}"
+                      @click=${() => this.currentView = 'timeline'}>Timeline</button>
+              <button class="${this.currentView === 'storyboard' ? 'active' : ''}"
+                      @click=${() => this.currentView = 'storyboard'}>Storyboard</button>
+            </div>
             <div class="mode-toggle">
               <button class="${this.dioramaAddMode === 'macro_shot' ? 'active' : ''}"
                       @click=${() => this.dioramaAddMode = 'macro_shot'}>📷 Macro</button>
@@ -870,21 +879,35 @@ export class AudioDirector extends LitElement {
         </div>
       ` : ''}
       
-      <div id="waveform-container">
-        ${this.isDecoding ? html`
-          <div class="loading-overlay">Loading & Decoding Audio...</div>
-        ` : ''}
-        ${this.isAnalyzing ? html`
-          <div class="loading-overlay">Analyzing Audio Spectrum & Transients...</div>
-        ` : ''}
-        ${!this.isAnalyzing && !this.isDecoding && !hasEvents && this.channelData ? html`
-          <div class="loading-overlay" style="background: rgba(0,0,0,0.65);">
-            ${isDiorama
-              ? 'Ready. Click the waveform to add events, or use "Analyze for Camera" from the Pre-Flight panel.'
-              : 'Ready. Adjust Density and click "Analyze Track" above.'}
-          </div>
-        ` : ''}
-      </div>
+      ${this.currentView === 'storyboard' && isDiorama ? html`
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; padding: 16px; height: 128px; overflow-y: auto; background: #111; box-sizing: border-box;">
+          ${this.macroShots.map(shot => html`
+            <div @click=${() => this.selectedMarkerId = shot.id}
+                 style="background: ${this.selectedMarkerId === shot.id ? '#333' : '#222'}; padding: 12px; border-radius: 8px; border: 1px solid ${this.selectedMarkerId === shot.id ? '#7c4dff' : '#444'}; cursor: pointer; display: flex; flex-direction: column; gap: 4px;">
+              <div style="font-weight: bold; color: #fff;">${shot.startTime.toFixed(1)}s - ${(shot.startTime + shot.duration).toFixed(1)}s</div>
+              <div style="color: #aaa; font-size: 12px;">Target: ${this.availableTargets.find(t => t.id === shot.target)?.label || shot.target || 'None'}</div>
+              <div style="color: #aaa; font-size: 12px;">Mood: <span style="text-transform: capitalize;">${shot.mood || 'balanced'}</span></div>
+              ${shot.cameraPos ? html`<div style="color: #4caf50; font-size: 12px; font-weight: bold; margin-top: 4px;">📸 Locked</div>` : ''}
+            </div>
+          `)}
+        </div>
+      ` : html`
+        <div id="waveform-container">
+          ${this.isDecoding ? html`
+            <div class="loading-overlay">Loading & Decoding Audio...</div>
+          ` : ''}
+          ${this.isAnalyzing ? html`
+            <div class="loading-overlay">Analyzing Audio Spectrum & Transients...</div>
+          ` : ''}
+          ${!this.isAnalyzing && !this.isDecoding && !hasEvents && this.channelData ? html`
+            <div class="loading-overlay" style="background: rgba(0,0,0,0.65);">
+              ${isDiorama
+                ? 'Ready. Click the waveform to add events, or use "Analyze for Camera" from the Pre-Flight panel.'
+                : 'Ready. Adjust Density and click "Analyze Track" above.'}
+            </div>
+          ` : ''}
+        </div>
+      `}
 
       ${!isDiorama && this.selectedMarkerId ? html`
         <div class="selected-marker-panel">
@@ -928,6 +951,10 @@ export class AudioDirector extends LitElement {
                   <label style="margin-left: 8px;">Intensity:</label>
                   <input type="number" step="0.05" min="0" max="1" .value=${(shot.intensity ?? 0.5).toFixed(2)}
                          @input=${(e: Event) => this.updateSelectedMacroShot({ intensity: parseFloat((e.target as HTMLInputElement).value) || 0.0 })} style="width: 50px;" />
+                  <button style="background: #2196f3; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; margin-left: 8px;"
+                          @click=${() => this.dispatchEvent(new CustomEvent('capture-camera', { detail: { id: this.selectedMarkerId } }))}>
+                    📸 Capture Current Camera
+                  </button>
                 </div>
                 <button class="delete-btn" @click=${this.removeSelectedDioramaEvent}>Delete</button>
               </div>

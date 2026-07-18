@@ -678,8 +678,41 @@ export class LofiDashboard extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     document.addEventListener('click', this.handleDocumentClick);
-    if (window.hasOwnProperty('__timelines') || document.querySelector('.config-event')) {
+
+    // Detect HyperFrames render mode for both wavefield and diorama engines
+    const hasWavefieldEvents = !!document.querySelector('.config-event');
+    const hasDioramaEvents = !!document.querySelector('.macro-shot') || !!document.querySelector('.micro-cut');
+
+    if (window.hasOwnProperty('__timelines') || hasWavefieldEvents || hasDioramaEvents) {
       this.isRenderMode = true;
+    }
+
+    // In diorama render mode, parse macro/micro shots and arrays from the DOM
+    if (this.isRenderMode && hasDioramaEvents) {
+      const macroEls = document.querySelectorAll('.macro-shot');
+      this.macroShots = Array.from(macroEls).map((el, i) => ({
+        id: `macro-${i}`,
+        target: el.getAttribute('data-target') || '',
+        startTime: parseFloat(el.getAttribute('data-start') || '0'),
+        duration: parseFloat(el.getAttribute('data-duration') || '10'),
+        mood: el.getAttribute('data-mood') || 'balanced',
+      }));
+
+      const microEls = document.querySelectorAll('.micro-cut');
+      this.microCuts = Array.from(microEls).map((el, i) => ({
+        id: `micro-${i}`,
+        target: el.getAttribute('data-target') || '',
+        time: parseFloat(el.getAttribute('data-start') || '0'),
+      }));
+
+      // Read primary/secondary arrays from diorama-screen host element
+      const dioramaHost = document.querySelector('diorama-screen');
+      if (dioramaHost) {
+        const primaryStr = dioramaHost.getAttribute('data-primary-array') || '';
+        const secondaryStr = dioramaHost.getAttribute('data-secondary-array') || '';
+        if (primaryStr) this.primaryArray = primaryStr.split(',').filter(s => s);
+        if (secondaryStr) this.secondaryArray = secondaryStr.split(',').filter(s => s);
+      }
     }
   }
 
@@ -1133,6 +1166,22 @@ export class LofiDashboard extends LitElement {
     this.showDirector = false;
   }
 
+  private handleCaptureCamera(e: CustomEvent) {
+    const markerId = e.detail.id;
+    const dioramaEl = this.shadowRoot?.querySelector('lofi-diorama') as any;
+    if (dioramaEl && typeof dioramaEl.getCameraState === 'function') {
+      const camState = dioramaEl.getCameraState();
+      this.macroShots = this.macroShots.map(shot => 
+        shot.id === markerId 
+          ? { ...shot, cameraPos: camState.pos, cameraLookAt: camState.target }
+          : shot
+      );
+      if (this.directorEl) {
+        this.directorEl.setMacroShots(this.macroShots);
+      }
+    }
+  }
+
   private runDioramaAnalysis() {
     if (!this.dioramaChannelData) {
       alert('Load an audio file first.');
@@ -1350,7 +1399,8 @@ export class LofiDashboard extends LitElement {
             .availableTargets=${this.dioramaTargets}
             @close=${this.handleDirectorClose}
             @change=${this.handleDirectorChange}
-            @apply=${this.applyDioramaScript}>
+            @apply=${this.applyDioramaScript}
+            @capture-camera=${this.handleCaptureCamera}>
           </audio-director>
         </div>
       ` : ''}
