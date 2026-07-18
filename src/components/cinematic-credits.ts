@@ -52,7 +52,7 @@ export class CinematicCredits extends LitElement {
   firstUpdated() {
     this.initScene();
     this.createBackground();
-    this.createCowboy();
+    this.createSilhouette();
     this.createCredits();
     this.setupPostProcessing();
     
@@ -102,21 +102,23 @@ export class CinematicCredits extends LitElement {
       varying vec2 vUv;
 
       void main() {
-        // Since the plane is square (20x20), UVs are square. 
-        // No aspect ratio adjustment needed here to keep the sun round in 3D.
-        vec2 p = vUv * 2.0 - 1.0;
+        // Use screen coordinates so it's independent of plane size
+        vec2 screenUv = gl_FragCoord.xy / uResolution.xy;
+        vec2 p = screenUv * 2.0 - 1.0;
+        p.x *= uResolution.x / uResolution.y;
 
         // Background gradient (sunset sky)
         vec3 topColor = vec3(0.1, 0.05, 0.1); 
         vec3 bottomColor = vec3(0.5, 0.15, 0.05); // Darker so it doesn't bloom
-        vec3 color = mix(bottomColor, topColor, vUv.y);
+        vec3 color = mix(bottomColor, topColor, screenUv.y);
 
         // Heat haze / rippling effect
         float heat = sin(p.y * 40.0 - uTime * 4.0) * 0.015;
         heat += sin(p.x * 30.0 + uTime * 2.5) * 0.01;
 
-        // Sun (glowing orb) - Much larger to dominate the frame
-        vec2 sunPos = vec2(0.0, -0.7); // Low on the horizon
+        // Sun (glowing orb) - slowly setting
+        float sunY = -0.3 - uTime * 0.015; 
+        vec2 sunPos = vec2(0.0, sunY);
         float d = length(p - sunPos + vec2(heat, 0.0));
         float sunMask = smoothstep(0.4, 0.38, d); // Large core
         float sunGlow = smoothstep(1.2, 0.2, d);
@@ -126,9 +128,10 @@ export class CinematicCredits extends LitElement {
         color += sunColor * sunMask;
         color += sunColor * sunGlow * 0.5;
 
-        // Horizon line/terrain base gradient
-        if (vUv.y < 0.2) {
-          color = mix(vec3(0.0), color, vUv.y / 0.2);
+        // Silhouetted desert terrain
+        float terrain = sin(p.x * 2.0) * 0.05 + sin(p.x * 5.5 + 2.0) * 0.02 - 0.55;
+        if (p.y < terrain) {
+          color = vec3(0.0);
         }
 
         gl_FragColor = vec4(color, 1.0);
@@ -149,10 +152,10 @@ export class CinematicCredits extends LitElement {
     this.scene.add(mesh);
   }
 
-  private createCowboy() {
+  private createSilhouette() {
     const textureLoader = new THREE.TextureLoader();
     // Switched back to root path to ensure Vite dev server finds it reliably
-    textureLoader.load('/cowboy_silhouette.png', (texture) => {
+    textureLoader.load('/empty_chairs_silhouette.png', (texture) => {
       // Custom shader to guarantee the white background becomes transparent and the black silhouette is drawn.
       const material = new THREE.ShaderMaterial({
         uniforms: { tDiffuse: { value: texture } },
@@ -168,8 +171,9 @@ export class CinematicCredits extends LitElement {
           varying vec2 vUv;
           void main() {
             vec4 texel = texture2D(tDiffuse, vUv);
-            // The image is a black silhouette on a white background.
-            if (texel.r > 0.5) {
+            // The image might be black on white, or have a transparent background.
+            // Discard if it's transparent or if it's bright (white background).
+            if (texel.a < 0.5 || texel.r > 0.5) {
               discard;
             }
             gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
@@ -180,13 +184,13 @@ export class CinematicCredits extends LitElement {
       });
       
       const aspect = texture.image.width / texture.image.height;
-      const height = 2.5; // Adjusted for new Z depth
+      const height = 1.8; // Smaller for the chairs
       const width = height * aspect;
       const geometry = new THREE.PlaneGeometry(width, height);
       
       const mesh = new THREE.Mesh(geometry, material);
-      // Moved in front of credits (z = -2)
-      mesh.position.set(0, -2.5, -2); 
+      // Moved in front of credits (z = -2), offset left, anchored exactly on the horizon terrain line
+      mesh.position.set(-1.2, -1.32, -2); 
       this.scene.add(mesh);
     });
   }
