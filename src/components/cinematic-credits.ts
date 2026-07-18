@@ -5,6 +5,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { FilmPass } from 'three/examples/jsm/postprocessing/FilmPass.js';
+import floatingCoupleImage from '../assets/floating_couple_silhouette.png';
 
 @customElement('cinematic-credits')
 export class CinematicCredits extends LitElement {
@@ -48,6 +49,8 @@ export class CinematicCredits extends LitElement {
   private creditsCtx!: CanvasRenderingContext2D;
   private creditsTexture!: THREE.CanvasTexture;
   private creditsOffset = 0;
+  private silhouetteMesh!: THREE.Mesh;
+  private silhouetteBaseY = 0.5;
 
   firstUpdated() {
     this.initScene();
@@ -153,46 +156,67 @@ export class CinematicCredits extends LitElement {
   }
 
   private createSilhouette() {
+    // Create a fallback mesh immediately so it's guaranteed to be in the scene
+    const height = 1.0; // Scaled up slightly for the couple
+    const geometry = new THREE.PlaneGeometry(height, height);
+    const material = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.5 });
+    this.silhouetteMesh = new THREE.Mesh(geometry, material);
+    
+    // Positioned floating in the sky near the sun
+    this.silhouetteBaseY = 0.5;
+    this.silhouetteMesh.position.set(-1.0, this.silhouetteBaseY, -2); 
+    this.scene.add(this.silhouetteMesh);
+
     const textureLoader = new THREE.TextureLoader();
-    // Switched back to root path to ensure Vite dev server finds it reliably
-    textureLoader.load('/empty_chairs_silhouette.png', (texture) => {
-      // Custom shader to guarantee the white background becomes transparent and the black silhouette is drawn.
-      const material = new THREE.ShaderMaterial({
-        uniforms: { tDiffuse: { value: texture } },
-        vertexShader: `
-          varying vec2 vUv;
-          void main() {
-            vUv = uv;
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-          }
-        `,
-        fragmentShader: `
-          uniform sampler2D tDiffuse;
-          varying vec2 vUv;
-          void main() {
-            vec4 texel = texture2D(tDiffuse, vUv);
-            // The image might be black on white, or have a transparent background.
-            // Discard if it's transparent or if it's bright (white background).
-            if (texel.a < 0.5 || texel.r > 0.5) {
-              discard;
+    textureLoader.load(
+      floatingCoupleImage, 
+      (texture) => {
+        // Swap to the actual texture and correct aspect ratio
+        const aspect = texture.image.width / texture.image.height;
+        this.silhouetteMesh.geometry.dispose();
+        this.silhouetteMesh.geometry = new THREE.PlaneGeometry(height * aspect, height);
+        
+        // Custom shader to extract the black silhouette smoothly
+        const shaderMaterial = new THREE.ShaderMaterial({
+          uniforms: { tDiffuse: { value: texture } },
+          vertexShader: `
+            varying vec2 vUv;
+            void main() {
+              vUv = uv;
+              gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
             }
-            gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
-          }
-        `,
-        transparent: true,
-        depthTest: false
-      });
-      
-      const aspect = texture.image.width / texture.image.height;
-      const height = 1.8; // Smaller for the chairs
-      const width = height * aspect;
-      const geometry = new THREE.PlaneGeometry(width, height);
-      
-      const mesh = new THREE.Mesh(geometry, material);
-      // Moved in front of credits (z = -2), offset left, anchored exactly on the horizon terrain line
-      mesh.position.set(-1.2, -1.32, -2); 
-      this.scene.add(mesh);
-    });
+          `,
+          fragmentShader: `
+            uniform sampler2D tDiffuse;
+            varying vec2 vUv;
+            void main() {
+              vec4 texel = texture2D(tDiffuse, vUv);
+              
+              // Handle both transparent PNGs and solid white backgrounds.
+              // We want black pixels to be opaque (alpha=1) and white pixels to be transparent (alpha=0).
+              float alpha = texel.a;
+              if (alpha > 0.9) {
+                // If it has a solid background, invert the brightness to get the alpha mask
+                alpha = 1.0 - ((texel.r + texel.g + texel.b) / 3.0);
+              }
+              
+              if (alpha < 0.05) discard;
+              
+              gl_FragColor = vec4(0.0, 0.0, 0.0, alpha);
+            }
+          `,
+          transparent: true,
+          depthTest: false
+        });
+        
+        this.silhouetteMesh.material.dispose();
+        this.silhouetteMesh.material = shaderMaterial;
+      },
+      undefined,
+      (err) => {
+        console.error("Failed to load silhouette texture, keeping fallback mesh:", err);
+      }
+    );
   }
 
   private createCredits() {
@@ -318,6 +342,13 @@ export class CinematicCredits extends LitElement {
     if (this.creditsTexture) {
       this.creditsOffset += 0.001; 
       this.creditsTexture.offset.y = -this.creditsOffset; 
+    }
+    
+    // Animate floating couple
+    if (this.silhouetteMesh) {
+      // Gently drift upwards and bob slightly in the air
+      this.silhouetteBaseY += 0.0003;
+      this.silhouetteMesh.position.y = this.silhouetteBaseY + Math.sin(time * 2.0) * 0.1;
     }
     
     this.composer.render();
