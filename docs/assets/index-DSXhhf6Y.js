@@ -6303,46 +6303,43 @@ void main() {
         <audio id="audio" src="${`/warm-scenes/`}sample.wav" loop hidden></audio>
       </div>
       `}
-    `}};$([Me(`.canvas-container`)],Ng.prototype,`container`,void 0),$([Me(`#audio`)],Ng.prototype,`audioElement`,void 0),$([z()],Ng.prototype,`isPlaying`,void 0),$([z()],Ng.prototype,`showDirector`,void 0),$([z()],Ng.prototype,`isRenderMode`,void 0),$([z()],Ng.prototype,`playbackMode`,void 0),$([z()],Ng.prototype,`audioInitialized`,void 0),$([z()],Ng.prototype,`mode`,void 0),$([z()],Ng.prototype,`rippleDir`,void 0),$([z()],Ng.prototype,`scrollSpeed`,void 0),$([z()],Ng.prototype,`device`,void 0),$([z()],Ng.prototype,`theme`,void 0),$([z()],Ng.prototype,`lineGap`,void 0),$([z()],Ng.prototype,`gridHeight`,void 0),Ng=$([De(`wavefield-screen`)],Ng);var Pg={name:`FilmShader`,uniforms:{tDiffuse:{value:null},time:{value:0},intensity:{value:.5},grayscale:{value:!1}},vertexShader:`
+    `}};$([Me(`.canvas-container`)],Ng.prototype,`container`,void 0),$([Me(`#audio`)],Ng.prototype,`audioElement`,void 0),$([z()],Ng.prototype,`isPlaying`,void 0),$([z()],Ng.prototype,`showDirector`,void 0),$([z()],Ng.prototype,`isRenderMode`,void 0),$([z()],Ng.prototype,`playbackMode`,void 0),$([z()],Ng.prototype,`audioInitialized`,void 0),$([z()],Ng.prototype,`mode`,void 0),$([z()],Ng.prototype,`rippleDir`,void 0),$([z()],Ng.prototype,`scrollSpeed`,void 0),$([z()],Ng.prototype,`device`,void 0),$([z()],Ng.prototype,`theme`,void 0),$([z()],Ng.prototype,`lineGap`,void 0),$([z()],Ng.prototype,`gridHeight`,void 0),Ng=$([De(`wavefield-screen`)],Ng);var Pg=`/warm-scenes/assets/couple_forward_silhouette-C2vRnhGn.png`,Fg={uniforms:{tDiffuse:{value:null},uTime:{value:0},uAmount:{value:.05},uLuminanceWeight:{value:1}},vertexShader:`
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,fragmentShader:`
+    uniform sampler2D tDiffuse;
+    uniform float uTime;
+    uniform float uAmount;
+    uniform float uLuminanceWeight;
+    varying vec2 vUv;
 
-		varying vec2 vUv;
+    float hash(vec2 p) {
+      p = fract(p * vec2(123.34, 456.21));
+      p += dot(p, p + 45.32);
+      return fract(p.x * p.y);
+    }
 
-		void main() {
-
-			vUv = uv;
-			gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
-
-		}`,fragmentShader:`
-
-		#include <common>
-
-		uniform float intensity;
-		uniform bool grayscale;
-		uniform float time;
-
-		uniform sampler2D tDiffuse;
-
-		varying vec2 vUv;
-
-		void main() {
-
-			vec4 base = texture2D( tDiffuse, vUv );
-
-			float noise = rand( fract( vUv + time ) );
-
-			vec3 color = base.rgb + base.rgb * clamp( 0.1 + noise, 0.0, 1.0 );
-
-			color = mix( base.rgb, color, intensity );
-
-			if ( grayscale ) {
-
-				color = vec3( luminance( color ) ); // assuming linear-srgb
-
-			}
-
-			gl_FragColor = vec4( color, base.a );
-
-		}`},Fg=class extends $m{constructor(e=.5,t=!1){super();let n=Pg;this.uniforms=ac.clone(n.uniforms),this.material=new cc({name:n.name,uniforms:this.uniforms,vertexShader:n.vertexShader,fragmentShader:n.fragmentShader}),this.uniforms.intensity.value=e,this.uniforms.grayscale.value=t,this._fsQuad=new nh(this.material)}render(e,t,n,r){this.uniforms.tDiffuse.value=n.texture,this.uniforms.time.value+=r,this.renderToScreen?(e.setRenderTarget(null),this._fsQuad.render(e)):(e.setRenderTarget(t),this.clear&&e.clear(),this._fsQuad.render(e))}dispose(){this.material.dispose(),this._fsQuad.dispose()}},Ig=`/warm-scenes/assets/floating_couple_silhouette-BDgjry_y.png`,Lg=class extends R{constructor(...e){super(...e),this.showConfigPanel=!1,this.sunSize=.4,this.grainAmount=.35,this.selectedFigure=`couple`,this.sunsetSpeed=.015,this.sunsetManualProgress=0,this.syncToAudio=!1,this.isSunsetRunning=!0,this.isAudioPlaying=!1,this.audioName=``,this.audioTime=0,this.audioDuration=0,this.audioVolume=.5,this.audioLoop=!1,this.audioManager=new Ne,this.lastFrameTime=0,this.sunY=.3,this.animationFrameId=0,this.clock=new Ll,this.creditsOffset=0,this.silhouetteBaseY=.5,this.handleResize=()=>{this.camera.aspect=this.clientWidth/this.clientHeight,this.camera.updateProjectionMatrix(),this.renderer.setSize(this.clientWidth,this.clientHeight),this.composer.setSize(this.clientWidth,this.clientHeight),this.backgroundUniforms&&this.backgroundUniforms.uResolution.value.set(this.clientWidth,this.clientHeight)},this.renderLoop=()=>{this.animationFrameId=requestAnimationFrame(this.renderLoop);let e=this.clock.getElapsedTime(),t=performance.now()/1e3,n=this.lastFrameTime===0?0:t-this.lastFrameTime;if(this.lastFrameTime=t,this.audioManager.isLoaded&&(this.audioTime=this.audioManager.getCurrentTime(),this.isAudioPlaying=this.audioManager.isPlaying),this.syncToAudio&&this.audioDuration>0){let e=this.audioTime/this.audioDuration;this.sunsetManualProgress=Math.max(0,Math.min(1,e)),this.sunY=.3-this.sunsetManualProgress*1.1}else this.isSunsetRunning&&(this.sunsetManualProgress+=this.sunsetSpeed*n/1.1,this.sunsetManualProgress>1&&(this.sunsetManualProgress=1,this.isSunsetRunning=!1)),this.sunY=.3-this.sunsetManualProgress*1.1;this.backgroundUniforms&&(this.backgroundUniforms.uTime.value=e,this.backgroundUniforms.uSunY.value=this.sunY,this.backgroundUniforms.uSunSize.value=this.sunSize),this.creditsTexture&&(this.creditsOffset+=.001,this.creditsTexture.offset.y=-this.creditsOffset),this.silhouetteMesh&&(this.selectedFigure===`couple`?(this.silhouetteBaseY+=3e-4,this.silhouetteMesh.position.y=this.silhouetteBaseY+Math.sin(e*2)*.1):this.silhouetteMesh.position.y=this.silhouetteBaseY),this.composer.render()}}static{this.styles=o`
+    void main() {
+      vec4 texColor = texture2D(tDiffuse, vUv);
+      
+      float luminance = dot(texColor.rgb, vec3(0.299, 0.587, 0.114));
+      
+      float weight = 1.0 - abs(luminance - 0.5) * 2.0; 
+      weight = mix(1.0, weight, uLuminanceWeight);
+      
+      vec2 seed = vUv + fract(uTime * 1.3453);
+      
+      float noise = hash(seed) * 0.5 + hash(seed + vec2(0.123, 0.456)) * 0.25 + hash(seed - vec2(0.321, 0.654)) * 0.25;
+      noise = (noise - 0.5) * 2.0;
+      
+      texColor.rgb += noise * (uAmount / 5.0) * weight;
+      
+      gl_FragColor = texColor;
+    }
+  `},Ig=class extends R{constructor(...e){super(...e),this.showConfigPanel=!1,this.sunSize=.4,this.sunGlowAmount=1,this.grainAmount=3.5,this.selectedFigure=`couple`,this.sunsetSpeed=.015,this.sunsetManualProgress=.7,this.creditsSpeed=.001,this.syncToAudio=!1,this.isSunsetRunning=!0,this.isAudioPlaying=!1,this.audioName=``,this.audioTime=0,this.audioDuration=0,this.audioVolume=.5,this.audioLoop=!1,this.audioManager=new Ne,this.lastFrameTime=0,this.sunY=-.47,this.animationFrameId=0,this.clock=new Ll,this.creditsOffset=0,this.silhouetteBaseY=.5,this.handleResize=()=>{this.camera.aspect=this.clientWidth/this.clientHeight,this.camera.updateProjectionMatrix(),this.renderer.setSize(this.clientWidth,this.clientHeight),this.composer.setSize(this.clientWidth,this.clientHeight),this.backgroundUniforms&&this.backgroundUniforms.uResolution.value.set(this.clientWidth,this.clientHeight)},this.renderLoop=()=>{this.animationFrameId=requestAnimationFrame(this.renderLoop);let e=this.clock.getElapsedTime(),t=performance.now()/1e3,n=this.lastFrameTime===0?0:t-this.lastFrameTime;if(this.lastFrameTime=t,this.audioManager.isLoaded&&(this.audioTime=this.audioManager.getCurrentTime(),this.isAudioPlaying=this.audioManager.isPlaying),this.syncToAudio&&this.audioDuration>0){let e=this.audioTime/this.audioDuration;this.sunsetManualProgress=Math.max(0,Math.min(1,e)),this.sunY=.3-this.sunsetManualProgress*1.1}else this.isSunsetRunning&&(this.sunsetManualProgress+=this.sunsetSpeed*n/1.1,this.sunsetManualProgress>1&&(this.sunsetManualProgress=1,this.isSunsetRunning=!1)),this.sunY=.3-this.sunsetManualProgress*1.1;if(this.backgroundUniforms&&(this.backgroundUniforms.uTime.value=e,this.backgroundUniforms.uSunY.value=this.sunY,this.backgroundUniforms.uSunSize.value=this.sunSize,this.backgroundUniforms.uSunGlowAmount.value=this.sunGlowAmount),this.customGrainPass&&(this.customGrainPass.uniforms.uTime.value=e),this.creditsTexture)if(this.syncToAudio&&this.audioDuration>0){let e=this.audioTime/this.audioDuration;this.creditsTexture.offset.y=-e}else this.creditsOffset+=this.creditsSpeed*(n*60),this.creditsTexture.offset.y=-this.creditsOffset;if(this.silhouetteMesh)if(this.selectedFigure===`couple`){let t=Math.sin(e*.4)*.03+Math.sin(e*.15)*.02,n=Math.cos(e*.3)*.02;this.silhouetteMesh.position.y=this.silhouetteBaseY+t,this.silhouetteMesh.position.x=-1.2+n}else this.silhouetteMesh.position.y=this.silhouetteBaseY;this.composer.render()}}static{this.styles=o`
     :host {
       display: block;
       width: 100%;
@@ -6721,7 +6718,7 @@ void main() {
       border-radius: 2px;
       width: 0%;
     }
-  `}firstUpdated(){this.initScene(),this.createBackground(),this.createSilhouette(),this.loadSilhouette(this.selectedFigure),this.createCredits(),this.setupPostProcessing(),window.addEventListener(`resize`,this.handleResize),this.clock.start(),this.lastFrameTime=performance.now()/1e3,this.renderLoop()}disconnectedCallback(){super.disconnectedCallback(),cancelAnimationFrame(this.animationFrameId),window.removeEventListener(`resize`,this.handleResize),this.renderer?.dispose(),this.creditsTexture?.dispose(),this.audioManager.stop(),this.audioManager.clear()}initScene(){this.renderer=new ap({canvas:this.canvas,antialias:!1}),this.renderer.setSize(this.clientWidth,this.clientHeight),this.renderer.setPixelRatio(Math.min(window.devicePixelRatio,2)),this.scene=new ti,this.camera=new il(60,this.clientWidth/this.clientHeight,.1,1e3),this.camera.position.z=5}createBackground(){this.backgroundUniforms={uTime:{value:0},uResolution:{value:new H(this.clientWidth,this.clientHeight)},uSunY:{value:this.sunY},uSunSize:{value:this.sunSize}};let e=new cc({vertexShader:`
+  `}async firstUpdated(){this.initScene(),this.createBackground(),this.createSilhouette(),this.loadSilhouette(this.selectedFigure);try{await document.fonts.load(`bold 36px Chivo`)}catch(e){console.warn(`Font loading failed`,e)}this.createCredits(),this.setupPostProcessing(),window.addEventListener(`resize`,this.handleResize),this.clock.start(),this.lastFrameTime=performance.now()/1e3,this.renderLoop()}disconnectedCallback(){super.disconnectedCallback(),cancelAnimationFrame(this.animationFrameId),window.removeEventListener(`resize`,this.handleResize),this.renderer?.dispose(),this.creditsTexture?.dispose(),this.audioManager.stop(),this.audioManager.clear()}initScene(){this.renderer=new ap({canvas:this.canvas,antialias:!1}),this.renderer.setSize(this.clientWidth,this.clientHeight),this.renderer.setPixelRatio(Math.min(window.devicePixelRatio,2)),this.scene=new ti,this.camera=new il(60,this.clientWidth/this.clientHeight,.1,1e3),this.camera.position.z=5}createBackground(){this.backgroundUniforms={uTime:{value:0},uResolution:{value:new H(this.clientWidth,this.clientHeight)},uSunY:{value:this.sunY},uSunSize:{value:this.sunSize},uSunGlowAmount:{value:this.sunGlowAmount}};let e=new cc({vertexShader:`
       varying vec2 vUv;
       void main() {
         vUv = uv;
@@ -6732,6 +6729,7 @@ void main() {
       uniform vec2 uResolution;
       uniform float uSunY;
       uniform float uSunSize;
+      uniform float uSunGlowAmount;
       varying vec2 vUv;
 
       void main() {
@@ -6749,16 +6747,16 @@ void main() {
         float heat = sin(p.y * 40.0 - uTime * 4.0) * 0.015;
         heat += sin(p.x * 30.0 + uTime * 2.5) * 0.01;
 
-        // Sun (glowing orb)
+        // Sun (distinct but hazy orb)
         vec2 sunPos = vec2(0.0, uSunY);
         float d = length(p - sunPos + vec2(heat, 0.0));
-        float sunMask = smoothstep(uSunSize, uSunSize - 0.02, d); // Adjustable core
-        float sunGlow = smoothstep(uSunSize * 3.0, uSunSize * 0.5, d);
+        float sunMask = smoothstep(uSunSize, uSunSize - 0.02, d); // Distinct core
+        float sunGlow = smoothstep(uSunSize * 3.0, uSunSize * 0.2, d); // Hazy glow
         
-        vec3 sunColor = vec3(2.0, 1.1, 0.2); // Warm intense sun
+        vec3 sunColor = vec3(0.88, 0.48, 0.12); // Kept strictly below 0.9 bloom threshold to prevent bleeding over horizon
         
-        color += sunColor * sunMask;
-        color += sunColor * sunGlow * 0.5;
+        color += sunColor * sunGlow * 0.4 * uSunGlowAmount; // Add glow modulated by slider
+        color = mix(color, sunColor, sunMask); // Solid distinct core
 
         // Silhouetted desert terrain
         float terrain = sin(p.x * 2.0) * 0.05 + sin(p.x * 5.5 + 2.0) * 0.02 - 0.55;
@@ -6768,7 +6766,7 @@ void main() {
 
         gl_FragColor = vec4(color, 1.0);
       }
-    `,uniforms:this.backgroundUniforms,depthWrite:!1}),t=new J(new Zs(100,100),e);t.position.z=-10,this.scene.add(t)}createSilhouette(){let e=new Zs(1,1),t=new Ta({color:0,transparent:!0,opacity:0});this.silhouetteMesh=new J(e,t),this.silhouetteBaseY=.5,this.silhouetteMesh.position.set(-1,this.silhouetteBaseY,-2),this.scene.add(this.silhouetteMesh)}loadSilhouette(e){let t=``;e===`couple`?t=Ig:e===`cowboy`?t=`/warm-scenes/cowboy_silhouette.png`:e===`chairs`&&(t=`/warm-scenes/empty_chairs_silhouette.png`),new Wc().load(t,t=>{let n=t.image.width/t.image.height,r=e===`couple`||e===`cowboy`?1:.8;this.silhouetteMesh.geometry.dispose(),this.silhouetteMesh.geometry=new Zs(r*n,r);let i=new cc({uniforms:{tDiffuse:{value:t}},vertexShader:`
+    `,uniforms:this.backgroundUniforms,depthWrite:!1}),t=new J(new Zs(100,100),e);t.position.z=-10,this.scene.add(t)}createSilhouette(){let e=new Zs(1,1),t=new Ta({color:0,transparent:!0,opacity:0});this.silhouetteMesh=new J(e,t),this.silhouetteBaseY=.5,this.silhouetteMesh.position.set(-1,this.silhouetteBaseY,-2),this.scene.add(this.silhouetteMesh)}loadSilhouette(e){let t=``;e===`couple`?t=Pg:e===`cowboy`?t=`/warm-scenes/cowboy_silhouette.png`:e===`chairs`&&(t=`/warm-scenes/empty_chairs_silhouette.png`),new Wc().load(t,t=>{let n=t.image.width/t.image.height,r=e===`couple`||e===`cowboy`?1:.8;this.silhouetteMesh.geometry.dispose(),this.silhouetteMesh.geometry=new Zs(r*n,r);let i=new cc({uniforms:{tDiffuse:{value:t}},vertexShader:`
             varying vec2 vUv;
             void main() {
               vUv = uv;
@@ -6792,7 +6790,7 @@ void main() {
               
               gl_FragColor = vec4(0.0, 0.0, 0.0, alpha);
             }
-          `,transparent:!0,depthTest:!1}),a=this.silhouetteMesh.material;this.silhouetteMesh.material=i,Array.isArray(a)?a.forEach(e=>e.dispose()):a.dispose(),e===`couple`?(this.silhouetteBaseY=.5,this.silhouetteMesh.position.set(-1.2,this.silhouetteBaseY,-2)):e===`cowboy`?(this.silhouetteBaseY=-.58,this.silhouetteMesh.position.set(-1,this.silhouetteBaseY,-2)):e===`chairs`&&(this.silhouetteBaseY=-.68,this.silhouetteMesh.position.set(-.8,this.silhouetteBaseY,-2))},void 0,e=>{console.error(`Failed to load silhouette texture:`,e)})}createCredits(){this.creditsCanvas=document.createElement(`canvas`),this.creditsCanvas.width=1024,this.creditsCanvas.height=4096,this.creditsCtx=this.creditsCanvas.getContext(`2d`),this.drawCreditsText(),this.creditsTexture=new Do(this.creditsCanvas),this.creditsTexture.minFilter=Ue,this.creditsTexture.magFilter=Ue,this.creditsTexture.wrapS=Re,this.creditsTexture.wrapT=Le;let e=new J(new Zs(8,32),new Ta({map:this.creditsTexture,transparent:!0,blending:1,opacity:.9,depthTest:!1}));e.position.set(0,0,-4),this.scene.add(e)}drawCreditsText(){let e=this.creditsCtx;e.clearRect(0,0,this.creditsCanvas.width,this.creditsCanvas.height),e.fillStyle=`rgba(255, 200, 150, 1.0)`,e.textAlign=`center`;let t=500,n=this.creditsCanvas.width/2;[`DIRECTED BY`,`PRODUCED BY`,`EXECUTIVE PRODUCERS`,`WRITTEN BY`,`MUSIC BY`,`DIRECTOR OF PHOTOGRAPHY`,`EDITED BY`,`PRODUCTION DESIGNER`,`CAST`,`CREW`].forEach(r=>{e.font=`bold 36px "Arial Narrow", "Helvetica Condensed", Helvetica, sans-serif`,e.globalAlpha=.9,e.shadowBlur=0;let i=r.split(``).join(` `);e.fillText(i,n,t),t+=60;let a=Math.floor(Math.random()*3)+1;for(let r=0;r<a;r++){let r=Math.random()*200+150;e.globalAlpha=.8,e.fillStyle=`rgba(255, 200, 150, 0.7)`,e.shadowColor=`rgba(255, 200, 150, 0.9)`,e.shadowBlur=12,e.beginPath(),e.roundRect(n-r/2,t-24,r,24,12),e.fill(),e.shadowBlur=0,e.fillStyle=`rgba(255, 200, 150, 1.0)`,t+=60}t+=140})}setupPostProcessing(){this.composer=new oh(this.renderer);let e=new sh(this.scene,this.camera);this.composer.addPass(e);let t=new Mg(new H(this.clientWidth,this.clientHeight),1.5,.5,.9);this.composer.addPass(t),this.filmPass=new Fg(this.grainAmount,!1),this.composer.addPass(this.filmPass)}toggleConfigPanel(){this.showConfigPanel=!this.showConfigPanel}handleSunSizeChange(e){let t=e.target;this.sunSize=parseFloat(t.value)}handleGrainChange(e){let t=e.target;this.grainAmount=parseFloat(t.value),this.filmPass&&(this.filmPass.uniforms.nIntensity.value=this.grainAmount)}changeFigure(e){this.selectedFigure=e,this.loadSilhouette(e)}toggleSyncToAudio(){this.syncToAudio=!this.syncToAudio,this.syncToAudio&&(this.isSunsetRunning=!1)}handleSunsetSpeedChange(e){let t=e.target;this.sunsetSpeed=parseFloat(t.value)}handleSunsetProgressChange(e){let t=e.target;this.sunsetManualProgress=parseFloat(t.value),this.isSunsetRunning=!1}toggleSunsetPlayState(){this.isSunsetRunning=!this.isSunsetRunning}resetSunset(){this.sunsetManualProgress=0,this.isSunsetRunning=!0}triggerAudioUpload(){(this.shadowRoot?.getElementById(`sunset-audio-loader`))?.click()}async handleAudioUpload(e){let t=e.target;if(t.files&&t.files[0]){let e=t.files[0];this.audioName=e.name;try{await this.audioManager.loadFile(e),this.audioDuration=this.audioManager.duration,this.audioTime=0,this.audioVolume=this.audioManager.volume,this.audioLoop=this.audioManager.loop,this.audioManager.play(),this.isAudioPlaying=!0}catch(e){console.error(`Error loading audio file:`,e),alert(`Failed to load audio file.`)}}}toggleAudioPlay(){this.audioManager.isLoaded&&(this.audioManager.isPlaying?(this.audioManager.pause(),this.isAudioPlaying=!1):(this.audioManager.play(),this.isAudioPlaying=!0))}stopAudio(){this.audioManager.isLoaded&&(this.audioManager.stop(),this.isAudioPlaying=!1,this.audioTime=0)}toggleAudioLoop(){this.audioManager.isLoaded&&(this.audioLoop=!this.audioLoop,this.audioManager.loop=this.audioLoop)}handleVolumeChange(e){let t=e.target;this.audioVolume=parseFloat(t.value),this.audioManager.volume=this.audioVolume}handleProgressClick(e){if(!this.audioDuration)return;let t=e.currentTarget.getBoundingClientRect(),n=(e.clientX-t.left)/t.width*this.audioDuration;this.audioManager.seek(n),this.audioTime=n}clearAudio(){this.audioManager.clear(),this.audioName=``,this.audioTime=0,this.audioDuration=0,this.isAudioPlaying=!1;let e=this.shadowRoot?.getElementById(`sunset-audio-loader`);e&&(e.value=``)}formatTime(e){if(isNaN(e)||e===0)return`0:00`;let t=Math.floor(e/60),n=Math.floor(e%60);return`${t}:${n<10?`0`:``}${n}`}render(){return F`
+          `,transparent:!0,depthTest:!1}),a=this.silhouetteMesh.material;this.silhouetteMesh.material=i,Array.isArray(a)?a.forEach(e=>e.dispose()):a.dispose(),e===`couple`?(this.silhouetteBaseY=.5,this.silhouetteMesh.position.set(-1.2,this.silhouetteBaseY,-2)):e===`cowboy`?(this.silhouetteBaseY=-.58,this.silhouetteMesh.position.set(-1,this.silhouetteBaseY,-2)):e===`chairs`&&(this.silhouetteBaseY=-.68,this.silhouetteMesh.position.set(-.8,this.silhouetteBaseY,-2))},void 0,e=>{console.error(`Failed to load silhouette texture:`,e)})}createCredits(){this.creditsCanvas=document.createElement(`canvas`),this.creditsCanvas.width=1024,this.creditsCanvas.height=8192,this.creditsCtx=this.creditsCanvas.getContext(`2d`),this.drawCreditsText(),this.creditsTexture=new Do(this.creditsCanvas),this.creditsTexture.minFilter=Ue,this.creditsTexture.magFilter=Ue,this.creditsTexture.wrapS=Re,this.creditsTexture.wrapT=Le;let e=6/9,t=new J(new Zs(8*e,64*e),new Ta({map:this.creditsTexture,transparent:!0,blending:1,opacity:.9,depthTest:!1}));t.position.set(0,0,-1),this.scene.add(t)}drawCreditsText(){let e=this.creditsCtx;e.clearRect(0,0,this.creditsCanvas.width,this.creditsCanvas.height),e.fillStyle=`rgba(255, 200, 150, 1.0)`,e.textAlign=`center`;let t=500,n=this.creditsCanvas.width/2,r=[`DIRECTED BY`,`PRODUCED BY`,`EXECUTIVE PRODUCERS`,`WRITTEN BY`,`BASED ON THE NOVEL BY`,`MUSIC BY`,`DIRECTOR OF PHOTOGRAPHY`,`EDITED BY`,`PRODUCTION DESIGNER`,`ART DIRECTOR`,`COSTUME DESIGNER`,`MAKEUP AND HAIR DESIGNER`,`SOUND MIXER`,`SOUND DESIGNER`,`VISUAL EFFECTS SUPERVISOR`,`CAST`,`STUNT COORDINATOR`,`FIRST ASSISTANT DIRECTOR`,`CAMERA OPERATOR`,`KEY GRIP`,`GAFFER`,`LOCATION MANAGER`,`CREW`],i=`Leonardo.Brad.Tom.Meryl.Denzel.Scarlett.Morgan.Harrison.Natalie.Joaquin.Charlize.Christian.Viola.Ryan.Emma.Chris.Jennifer.Samuel.Cate.Matthew.Anne.Hugh.Julia.Daniel.Keanu.Halle`.split(`.`),a=`DiCaprio.Pitt.Hanks.Streep.Washington.Johansson.Freeman.Ford.Portman.Phoenix.Theron.Bale.Davis.Gosling.Stone.Evans.Lawrence.Jackson.Blanchett.McConaughey.Hathaway.Jackman.Roberts.Day-Lewis.Reeves.Berry`.split(`.`),o=[`Adam`,`Sarah`,`John`,`Emily`,`Michael`,`Jessica`,`David`,`Laura`,`James`,`Rachel`],s=[`Red`,`Green`,`Black`,`White`,`Silver`,`Gold`,`Grey`,`Brown`,`Crimson`,`Violet`],c=[`stone`,`wood`,`water`,`smith`,`bridge`,`field`,`hill`,`brook`,`heart`,`man`],l=()=>`${i[Math.floor(Math.random()*i.length)]} ${a[Math.floor(Math.random()*a.length)]}`,u=()=>`${o[Math.floor(Math.random()*o.length)]} ${s[Math.floor(Math.random()*s.length)]}${c[Math.floor(Math.random()*c.length)]}`;r.forEach(r=>{e.font=`bold 36px "Chivo", "Arial Narrow", "Helvetica Condensed", Helvetica, sans-serif`,e.globalAlpha=.9,e.fillStyle=`rgba(255, 200, 150, 1.0)`,e.shadowBlur=0,e.textAlign=`center`;let i=r.split(``).join(` `);e.fillText(i,n,t),t+=60;let a=Math.floor(Math.random()*3)+1;r===`CAST`&&(a=12),r===`CREW`&&(a=15);for(let i=0;i<a;i++){if(e.font=`normal 32px "Chivo", "Arial Narrow", sans-serif`,e.globalAlpha=.8,r===`CAST`){let r=l(),i=u();e.textAlign=`right`,e.fillText(r,n-30,t),e.textAlign=`left`,e.fillText(i,n+30,t)}else e.textAlign=`center`,e.fillText(l(),n,t);t+=50}t+=120})}setupPostProcessing(){this.composer=new oh(this.renderer);let e=new sh(this.scene,this.camera);this.composer.addPass(e);let t=new Mg(new H(this.clientWidth,this.clientHeight),1.5,.5,.9);this.composer.addPass(t),this.customGrainPass=new rh(Fg),this.customGrainPass.uniforms.uAmount.value=this.grainAmount,this.composer.addPass(this.customGrainPass)}toggleConfigPanel(){this.showConfigPanel=!this.showConfigPanel}handleSunSizeChange(e){let t=e.target;this.sunSize=parseFloat(t.value)}handleGlowChange(e){let t=e.target;this.sunGlowAmount=parseFloat(t.value)}handleGrainChange(e){let t=e.target;this.grainAmount=parseFloat(t.value),this.customGrainPass&&(this.customGrainPass.uniforms.uAmount.value=this.grainAmount)}changeFigure(e){this.selectedFigure=e,this.loadSilhouette(e)}toggleSyncToAudio(){this.syncToAudio=!this.syncToAudio,this.syncToAudio&&(this.isSunsetRunning=!1)}handleSunsetSpeedChange(e){let t=e.target;this.sunsetSpeed=parseFloat(t.value)}handleCreditsSpeedChange(e){let t=e.target;this.creditsSpeed=parseFloat(t.value)}handleSunsetProgressChange(e){let t=e.target;this.sunsetManualProgress=parseFloat(t.value),this.isSunsetRunning=!1}toggleSunsetPlayState(){this.isSunsetRunning=!this.isSunsetRunning}resetSunset(){this.sunsetManualProgress=.7,this.isSunsetRunning=!0}triggerAudioUpload(){(this.shadowRoot?.getElementById(`sunset-audio-loader`))?.click()}async handleAudioUpload(e){let t=e.target;if(t.files&&t.files[0]){let e=t.files[0];this.audioName=e.name;try{await this.audioManager.loadFile(e),this.audioDuration=this.audioManager.duration,this.audioTime=0,this.audioVolume=this.audioManager.volume,this.audioLoop=this.audioManager.loop,this.audioManager.play(),this.isAudioPlaying=!0}catch(e){console.error(`Error loading audio file:`,e),alert(`Failed to load audio file.`)}}}toggleAudioPlay(){this.audioManager.isLoaded&&(this.audioManager.isPlaying?(this.audioManager.pause(),this.isAudioPlaying=!1):(this.audioManager.play(),this.isAudioPlaying=!0))}stopAudio(){this.audioManager.isLoaded&&(this.audioManager.stop(),this.isAudioPlaying=!1,this.audioTime=0)}toggleAudioLoop(){this.audioManager.isLoaded&&(this.audioLoop=!this.audioLoop,this.audioManager.loop=this.audioLoop)}handleVolumeChange(e){let t=e.target;this.audioVolume=parseFloat(t.value),this.audioManager.volume=this.audioVolume}handleProgressClick(e){if(!this.audioDuration)return;let t=e.currentTarget.getBoundingClientRect(),n=(e.clientX-t.left)/t.width*this.audioDuration;this.audioManager.seek(n),this.audioTime=n}clearAudio(){this.audioManager.clear(),this.audioName=``,this.audioTime=0,this.audioDuration=0,this.isAudioPlaying=!1;let e=this.shadowRoot?.getElementById(`sunset-audio-loader`);e&&(e.value=``)}formatTime(e){if(isNaN(e)||e===0)return`0:00`;let t=Math.floor(e/60),n=Math.floor(e%60);return`${t}:${n<10?`0`:``}${n}`}render(){return F`
       <div class="letterbox top"></div>
       
       <!-- Settings Toggle Button -->
@@ -6826,6 +6824,22 @@ void main() {
             />
           </div>
 
+          <!-- Sun Glow Control -->
+          <div class="control-group">
+            <div class="control-label">
+              <span>Sun Glow</span>
+              <span class="control-value">${this.sunGlowAmount.toFixed(2)}</span>
+            </div>
+            <input 
+              type="range" 
+              min="0.0" 
+              max="5.0" 
+              step="0.1" 
+              .value="${this.sunGlowAmount}" 
+              @input="${this.handleGlowChange}"
+            />
+          </div>
+
           <!-- Film Grain Control -->
           <div class="control-group">
             <div class="control-label">
@@ -6835,8 +6849,8 @@ void main() {
             <input 
               type="range" 
               min="0.0" 
-              max="1.0" 
-              step="0.05" 
+              max="25.0" 
+              step="0.1" 
               .value="${this.grainAmount}" 
               @input="${this.handleGrainChange}"
             />
@@ -6878,7 +6892,7 @@ void main() {
             </div>
           </div>
 
-          <!-- Sunset Speed (Only if not synced) -->
+          <!-- Sunset Speed & Credits Speed (Only if not synced) -->
           ${this.syncToAudio?``:F`
             <div class="control-group">
               <div class="control-label">
@@ -6892,6 +6906,21 @@ void main() {
                 step="0.005" 
                 .value="${this.sunsetSpeed}" 
                 @input="${this.handleSunsetSpeedChange}"
+              />
+            </div>
+            
+            <div class="control-group">
+              <div class="control-label">
+                <span>Credits Speed</span>
+                <span class="control-value">${this.creditsSpeed.toFixed(4)}</span>
+              </div>
+              <input 
+                type="range" 
+                min="0.0" 
+                max="0.01" 
+                step="0.0001" 
+                .value="${this.creditsSpeed}" 
+                @input="${this.handleCreditsSpeedChange}"
               />
             </div>
 
@@ -7006,7 +7035,7 @@ void main() {
 
       <canvas></canvas>
       <div class="letterbox bottom"></div>
-    `}};$([Me(`canvas`)],Lg.prototype,`canvas`,void 0),$([z()],Lg.prototype,`showConfigPanel`,void 0),$([z()],Lg.prototype,`sunSize`,void 0),$([z()],Lg.prototype,`grainAmount`,void 0),$([z()],Lg.prototype,`selectedFigure`,void 0),$([z()],Lg.prototype,`sunsetSpeed`,void 0),$([z()],Lg.prototype,`sunsetManualProgress`,void 0),$([z()],Lg.prototype,`syncToAudio`,void 0),$([z()],Lg.prototype,`isSunsetRunning`,void 0),$([z()],Lg.prototype,`isAudioPlaying`,void 0),$([z()],Lg.prototype,`audioName`,void 0),$([z()],Lg.prototype,`audioTime`,void 0),$([z()],Lg.prototype,`audioDuration`,void 0),$([z()],Lg.prototype,`audioVolume`,void 0),$([z()],Lg.prototype,`audioLoop`,void 0),Lg=$([De(`cinematic-credits`)],Lg);function Rg(e=[],t=`config.json`){let n=JSON.stringify(e,null,2),r=new Blob([n],{type:`application/json`}),i=URL.createObjectURL(r),a=document.createElement(`a`);a.href=i,a.download=t,document.body.appendChild(a),a.click(),document.body.removeChild(a),URL.revokeObjectURL(i)}function zg(e,t){let n=e.getState();Rg({engine:n.mode,...n,...t||{}},`config.json`)}var Bg=class extends R{constructor(...e){super(...e),this.activeScreen=`diorama`}static{this.styles=o`
+    `}};$([Me(`canvas`)],Ig.prototype,`canvas`,void 0),$([z()],Ig.prototype,`showConfigPanel`,void 0),$([z()],Ig.prototype,`sunSize`,void 0),$([z()],Ig.prototype,`sunGlowAmount`,void 0),$([z()],Ig.prototype,`grainAmount`,void 0),$([z()],Ig.prototype,`selectedFigure`,void 0),$([z()],Ig.prototype,`sunsetSpeed`,void 0),$([z()],Ig.prototype,`sunsetManualProgress`,void 0),$([z()],Ig.prototype,`creditsSpeed`,void 0),$([z()],Ig.prototype,`syncToAudio`,void 0),$([z()],Ig.prototype,`isSunsetRunning`,void 0),$([z()],Ig.prototype,`isAudioPlaying`,void 0),$([z()],Ig.prototype,`audioName`,void 0),$([z()],Ig.prototype,`audioTime`,void 0),$([z()],Ig.prototype,`audioDuration`,void 0),$([z()],Ig.prototype,`audioVolume`,void 0),$([z()],Ig.prototype,`audioLoop`,void 0),Ig=$([De(`cinematic-credits`)],Ig);function Lg(e=[],t=`config.json`){let n=JSON.stringify(e,null,2),r=new Blob([n],{type:`application/json`}),i=URL.createObjectURL(r),a=document.createElement(`a`);a.href=i,a.download=t,document.body.appendChild(a),a.click(),document.body.removeChild(a),URL.revokeObjectURL(i)}function Rg(e,t){let n=e.getState();Lg({engine:n.mode,...n,...t||{}},`config.json`)}var zg=class extends R{constructor(...e){super(...e),this.activeScreen=`diorama`}static{this.styles=o`
     :host {
       display: block;
       width: 100vw;
@@ -7048,7 +7077,7 @@ void main() {
       width: 100%;
       height: 100%;
     }
-  `}handleScreenChange(e){let t=e.target;this.activeScreen=t.value}handleExportConfig(){if(this.activeScreen===`wavefield`){let e=this.shadowRoot?.querySelector(`wavefield-screen`),t=e?.shadowRoot?.querySelector(`audio-director`);if(t)zg(t);else if(e){let t=e.activeScriptEvents||[],n=[];if(t.length===0){let t=e.currentState;n=[{time:0,type:`theme`,value:t.theme},{time:0,type:`device`,value:t.device},{time:0,type:`speed`,value:t.speed},{time:0,type:`gap`,value:t.gap},{time:0,type:`height`,value:t.height},{time:0,type:`mode`,value:t.mode},{time:0,type:`rippleDir`,value:t.rippleDir}]}else n=t.map(e=>({time:e.time,type:e.config.target,value:e.config.amount}));Rg(n)}}else if(this.activeScreen===`diorama`){let e=(this.shadowRoot?.querySelector(`diorama-screen`))?.shadowRoot?.querySelector(`lofi-dashboard`),t=e?.shadowRoot?.querySelector(`audio-director`);t?zg(t,{primaryArray:e.primaryArray||[],secondaryArray:e.secondaryArray||[]}):alert(`Load an audio file in the Diorama timeline first.`)}}render(){return F`
+  `}handleScreenChange(e){let t=e.target;this.activeScreen=t.value}handleExportConfig(){if(this.activeScreen===`wavefield`){let e=this.shadowRoot?.querySelector(`wavefield-screen`),t=e?.shadowRoot?.querySelector(`audio-director`);if(t)Rg(t);else if(e){let t=e.activeScriptEvents||[],n=[];if(t.length===0){let t=e.currentState;n=[{time:0,type:`theme`,value:t.theme},{time:0,type:`device`,value:t.device},{time:0,type:`speed`,value:t.speed},{time:0,type:`gap`,value:t.gap},{time:0,type:`height`,value:t.height},{time:0,type:`mode`,value:t.mode},{time:0,type:`rippleDir`,value:t.rippleDir}]}else n=t.map(e=>({time:e.time,type:e.config.target,value:e.config.amount}));Lg(n)}}else if(this.activeScreen===`diorama`){let e=(this.shadowRoot?.querySelector(`diorama-screen`))?.shadowRoot?.querySelector(`lofi-dashboard`),t=e?.shadowRoot?.querySelector(`audio-director`);t?Rg(t,{primaryArray:e.primaryArray||[],secondaryArray:e.secondaryArray||[]}):alert(`Load an audio file in the Diorama timeline first.`)}}render(){return F`
       <select class="screen-switcher" @change="${this.handleScreenChange}">
         <option value="diorama" ?selected="${this.activeScreen===`diorama`}">Diorama Screen</option>
         <option value="wavefield" ?selected="${this.activeScreen===`wavefield`}">Wavefield Screen</option>
@@ -7062,4 +7091,4 @@ void main() {
       <div class="screen-container">
         ${this.activeScreen===`diorama`?F`<diorama-screen></diorama-screen>`:this.activeScreen===`wavefield`?F`<wavefield-screen></wavefield-screen>`:F`<cinematic-credits></cinematic-credits>`}
       </div>
-    `}};$([z()],Bg.prototype,`activeScreen`,void 0),Bg=$([De(`main-app`)],Bg);
+    `}};$([z()],zg.prototype,`activeScreen`,void 0),zg=$([De(`main-app`)],zg);
