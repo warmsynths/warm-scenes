@@ -899,9 +899,11 @@ export class CinematicCredits extends LitElement {
     // Animate floating couple
     if (this.silhouetteMesh) {
       if (this.selectedFigure === 'couple') {
-        // Gently drift upwards and bob slightly in the air
-        this.silhouetteBaseY += 0.0003;
-        this.silhouetteMesh.position.y = this.silhouetteBaseY + Math.sin(time * 2.0) * 0.1;
+        // Liminal, slow realistic floating physics
+        const floatY = Math.sin(time * 0.4) * 0.03 + Math.sin(time * 0.15) * 0.02;
+        const floatX = Math.cos(time * 0.3) * 0.02;
+        this.silhouetteMesh.position.y = this.silhouetteBaseY + floatY;
+        this.silhouetteMesh.position.x = -1.2 + floatX;
       } else {
         // Cowboy and chairs are stationary on the ground
         this.silhouetteMesh.position.y = this.silhouetteBaseY;
