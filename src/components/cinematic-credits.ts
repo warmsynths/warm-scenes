@@ -4,10 +4,9 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
-import { FilmPass } from 'three/examples/jsm/postprocessing/FilmPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { AudioManager } from '../utils/audio-manager';
-import floatingCoupleImage from '../assets/floating_couple_silhouette.png';
+import floatingCoupleImage from '../assets/couple_forward_silhouette.png';
 
 const CinematicGrainShader = {
   uniforms: {
@@ -449,6 +448,7 @@ export class CinematicCredits extends LitElement {
   @state() private selectedFigure: 'couple' | 'cowboy' | 'chairs' = 'couple';
   @state() private sunsetSpeed = 0.015;
   @state() private sunsetManualProgress = 0.7; // Start halfway down the horizon
+  @state() private creditsSpeed = 0.001;
   @state() private syncToAudio = false;
   @state() private isSunsetRunning = true;
 
@@ -480,11 +480,18 @@ export class CinematicCredits extends LitElement {
   private silhouetteMesh!: THREE.Mesh;
   private silhouetteBaseY = 0.5;
 
-  firstUpdated() {
+  async firstUpdated() {
     this.initScene();
     this.createBackground();
     this.createSilhouette();
     this.loadSilhouette(this.selectedFigure);
+    
+    try {
+      await document.fonts.load('bold 36px Chivo');
+    } catch (e) {
+      console.warn("Font loading failed", e);
+    }
+    
     this.createCredits();
     this.setupPostProcessing();
     
@@ -688,7 +695,7 @@ export class CinematicCredits extends LitElement {
   private createCredits() {
     this.creditsCanvas = document.createElement('canvas');
     this.creditsCanvas.width = 1024;
-    this.creditsCanvas.height = 4096;
+    this.creditsCanvas.height = 8192;
     this.creditsCtx = this.creditsCanvas.getContext('2d')!;
     
     // Draw text onto the canvas
@@ -700,7 +707,12 @@ export class CinematicCredits extends LitElement {
     this.creditsTexture.wrapS = THREE.ClampToEdgeWrapping;
     this.creditsTexture.wrapT = THREE.RepeatWrapping;
 
-    const geometry = new THREE.PlaneGeometry(8, 32); 
+    // Credits are moved to z = -1 so they render IN FRONT of the silhouette (at z = -2).
+    // Original was at z = -4 (distance 9 from camera at z=5). New distance is 6.
+    // Scale by 6/9 to maintain the same visual size on screen. 
+    // Height is 64 because canvas is 8192 (twice the original 4096/32).
+    const scale = 6.0 / 9.0;
+    const geometry = new THREE.PlaneGeometry(8 * scale, 64 * scale); 
     const material = new THREE.MeshBasicMaterial({
       map: this.creditsTexture,
       transparent: true,
@@ -710,8 +722,7 @@ export class CinematicCredits extends LitElement {
     });
 
     const mesh = new THREE.Mesh(geometry, material);
-    // Pushed behind cowboy
-    mesh.position.set(0, 0, -4);
+    mesh.position.set(0, 0, -1);
     this.scene.add(mesh);
   }
 
@@ -726,45 +737,81 @@ export class CinematicCredits extends LitElement {
     const centerX = this.creditsCanvas.width / 2;
     
     const jobs = [
-      "DIRECTED BY",
-      "PRODUCED BY",
-      "EXECUTIVE PRODUCERS",
-      "WRITTEN BY",
-      "MUSIC BY",
-      "DIRECTOR OF PHOTOGRAPHY",
-      "EDITED BY",
-      "PRODUCTION DESIGNER",
-      "CAST",
-      "CREW"
+      "DIRECTED BY", "PRODUCED BY", "EXECUTIVE PRODUCERS", "WRITTEN BY",
+      "BASED ON THE NOVEL BY", "MUSIC BY", "DIRECTOR OF PHOTOGRAPHY",
+      "EDITED BY", "PRODUCTION DESIGNER", "ART DIRECTOR", "COSTUME DESIGNER",
+      "MAKEUP AND HAIR DESIGNER", "SOUND MIXER", "SOUND DESIGNER",
+      "VISUAL EFFECTS SUPERVISOR", "CAST", "STUNT COORDINATOR",
+      "FIRST ASSISTANT DIRECTOR", "CAMERA OPERATOR", "KEY GRIP", "GAFFER",
+      "LOCATION MANAGER", "CREW"
     ];
 
+    const famousFirsts = [
+      "Leonardo", "Brad", "Tom", "Meryl", "Denzel", "Scarlett", "Morgan",
+      "Harrison", "Natalie", "Joaquin", "Charlize", "Christian", "Viola", 
+      "Ryan", "Emma", "Chris", "Jennifer", "Samuel", "Cate", "Matthew",
+      "Anne", "Hugh", "Julia", "Daniel", "Keanu", "Halle"
+    ];
+    
+    const famousLasts = [
+      "DiCaprio", "Pitt", "Hanks", "Streep", "Washington", "Johansson", "Freeman",
+      "Ford", "Portman", "Phoenix", "Theron", "Bale", "Davis",
+      "Gosling", "Stone", "Evans", "Lawrence", "Jackson", "Blanchett", "McConaughey",
+      "Hathaway", "Jackman", "Roberts", "Day-Lewis", "Reeves", "Berry"
+    ];
+
+    const firstNames = ["Adam", "Sarah", "John", "Emily", "Michael", "Jessica", "David", "Laura", "James", "Rachel"];
+    const colors = ["Red", "Green", "Black", "White", "Silver", "Gold", "Grey", "Brown", "Crimson", "Violet"];
+    const nouns = ["stone", "wood", "water", "smith", "bridge", "field", "hill", "brook", "heart", "man"];
+
+    const generateActorName = () => {
+      const first = famousFirsts[Math.floor(Math.random() * famousFirsts.length)];
+      const last = famousLasts[Math.floor(Math.random() * famousLasts.length)];
+      return `${first} ${last}`;
+    };
+
+    const generateCharacterName = () => {
+      const first = firstNames[Math.floor(Math.random() * firstNames.length)];
+      const color = colors[Math.floor(Math.random() * colors.length)];
+      const noun = nouns[Math.floor(Math.random() * nouns.length)];
+      return `${first} ${color}${noun}`;
+    };
+
     jobs.forEach(job => {
-      ctx.font = 'bold 36px "Arial Narrow", "Helvetica Condensed", Helvetica, sans-serif'; 
+      ctx.font = 'bold 36px "Chivo", "Arial Narrow", "Helvetica Condensed", Helvetica, sans-serif'; 
       ctx.globalAlpha = 0.9;
+      ctx.fillStyle = 'rgba(255, 200, 150, 1.0)';
       ctx.shadowBlur = 0;
+      ctx.textAlign = 'center';
+      
       const spacedJob = job.split('').join(' ');
       ctx.fillText(spacedJob, centerX, y);
       y += 60;
       
-      const numNames = Math.floor(Math.random() * 3) + 1;
+      let numNames = Math.floor(Math.random() * 3) + 1;
+      if (job === "CAST") numNames = 12;
+      if (job === "CREW") numNames = 15;
+
       for (let i = 0; i < numNames; i++) {
-        // Draw blurred, indistinct lines of varying lengths instead of legible names
-        const lineWidth = Math.random() * 200 + 150; // Random length between 150 and 350
-        
+        ctx.font = 'normal 32px "Chivo", "Arial Narrow", sans-serif'; 
         ctx.globalAlpha = 0.8;
-        ctx.fillStyle = 'rgba(255, 200, 150, 0.7)';
-        ctx.shadowColor = 'rgba(255, 200, 150, 0.9)';
-        ctx.shadowBlur = 12;
         
-        ctx.beginPath();
-        ctx.roundRect(centerX - lineWidth/2, y - 24, lineWidth, 24, 12);
-        ctx.fill();
-        
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = 'rgba(255, 200, 150, 1.0)';
-        y += 60;
+        if (job === "CAST") {
+          const actor = generateActorName();
+          const character = generateCharacterName();
+          
+          ctx.textAlign = 'right';
+          ctx.fillText(actor, centerX - 30, y);
+          
+          ctx.textAlign = 'left';
+          ctx.fillText(character, centerX + 30, y);
+        } else {
+          ctx.textAlign = 'center';
+          ctx.fillText(generateActorName(), centerX, y);
+        }
+        y += 50;
       }
-      y += 140;
+      y += 120;
     });
   }
 
@@ -840,8 +887,13 @@ export class CinematicCredits extends LitElement {
     
     // Scroll credits
     if (this.creditsTexture) {
-      this.creditsOffset += 0.001; 
-      this.creditsTexture.offset.y = -this.creditsOffset; 
+      if (this.syncToAudio && this.audioDuration > 0) {
+        const progress = this.audioTime / this.audioDuration;
+        this.creditsTexture.offset.y = -progress;
+      } else {
+        this.creditsOffset += this.creditsSpeed * (delta * 60.0); 
+        this.creditsTexture.offset.y = -this.creditsOffset; 
+      }
     }
     
     // Animate floating couple
@@ -896,6 +948,11 @@ export class CinematicCredits extends LitElement {
   private handleSunsetSpeedChange(e: Event) {
     const target = e.target as HTMLInputElement;
     this.sunsetSpeed = parseFloat(target.value);
+  }
+
+  private handleCreditsSpeedChange(e: Event) {
+    const target = e.target as HTMLInputElement;
+    this.creditsSpeed = parseFloat(target.value);
   }
 
   private handleSunsetProgressChange(e: Event) {
@@ -1104,7 +1161,7 @@ export class CinematicCredits extends LitElement {
             </div>
           </div>
 
-          <!-- Sunset Speed (Only if not synced) -->
+          <!-- Sunset Speed & Credits Speed (Only if not synced) -->
           ${!this.syncToAudio ? html`
             <div class="control-group">
               <div class="control-label">
@@ -1118,6 +1175,21 @@ export class CinematicCredits extends LitElement {
                 step="0.005" 
                 .value="${this.sunsetSpeed}" 
                 @input="${this.handleSunsetSpeedChange}"
+              />
+            </div>
+            
+            <div class="control-group">
+              <div class="control-label">
+                <span>Credits Speed</span>
+                <span class="control-value">${this.creditsSpeed.toFixed(4)}</span>
+              </div>
+              <input 
+                type="range" 
+                min="0.0" 
+                max="0.01" 
+                step="0.0001" 
+                .value="${this.creditsSpeed}" 
+                @input="${this.handleCreditsSpeedChange}"
               />
             </div>
 
