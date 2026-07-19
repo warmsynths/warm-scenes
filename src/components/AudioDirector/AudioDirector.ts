@@ -278,7 +278,7 @@ export class AudioDirector extends LitElement {
   @state() private macroShots: MacroShot[] = [];
   @state() private microCuts: MicroCut[] = [];
   @state() private dioramaAddMode: 'macro_shot' | 'micro_cut' = 'micro_cut';
-  @state() private currentView: 'timeline' | 'storyboard' = 'timeline';
+  @state() public currentView: 'timeline' | 'storyboard' = 'timeline';
   @state() private isAnalyzing = false;
   @state() private isDecoding = false;
   @state() public isPlaying = false;
