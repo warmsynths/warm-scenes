@@ -96,6 +96,9 @@ export class LofiDashboard extends LitElement {
   private showDirector = false;
 
   @state()
+  private sceneMode: 'normal' | 'liminal' = 'normal';
+
+  @state()
   private primaryArray: string[] = [];
 
   @state()
@@ -996,6 +999,28 @@ export class LofiDashboard extends LitElement {
   private renderEnvironmentTab() {
     return html`
       <div class="gear-section">
+        <div class="gear-category-title">Diorama Style</div>
+        <div class="carousel-container" style="padding-top: 4px;">
+          <div class="weather-grid" style="width: auto;">
+            <div 
+              class="weather-card ${this.sceneMode === 'normal' ? 'active' : ''}"
+              @click="${() => this.sceneMode = 'normal'}"
+            >
+              <div class="weather-icon">🏠</div>
+              <div class="weather-label">Cozy Room</div>
+            </div>
+            <div 
+              class="weather-card ${this.sceneMode === 'liminal' ? 'active' : ''}"
+              @click="${() => this.sceneMode = 'liminal'}"
+            >
+              <div class="weather-icon">🫥</div>
+              <div class="weather-label">Liminal Space</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="gear-section">
         <div class="gear-category-title">Time of Day</div>
         <div class="carousel-container" style="padding-top: 4px;">
           <div class="weather-grid" style="width: auto;">
@@ -1362,6 +1387,7 @@ export class LofiDashboard extends LitElement {
         .audioDirector="${this.showDirector ? this.directorEl : null}"
         .weather="${this.weather}"
         .timeOfDay="${this.timeOfDay}"
+        .sceneMode="${this.sceneMode}"
         .celestialPosition="${this.celestialPosition}"
         .rainIntensity="${this.rainIntensity}"
         .lightningIntensity="${this.lightningIntensity}"
