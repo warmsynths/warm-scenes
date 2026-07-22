@@ -7,9 +7,9 @@ import mpcPosterImg from '../assets/posters/mpc.jpg';
 import greenRugImg from '../assets/rugs/green_arched_rug.png';
 import pinkRugImg from '../assets/rugs/pink_arched_rug.png';
 import whiteRugImg from '../assets/rugs/white_arched_rug.png';
-import backroomsAlbedoImg from '../assets/backrooms_albedo.png';
-import backroomsEmissionImg from '../assets/backrooms_emission.png';
-import backroomsRoughnessImg from '../assets/backrooms_roughness.png';
+import yellowWallpaperImg from '../assets/textures/yellow_wallpaper.png';
+import dampCarpetImg from '../assets/textures/damp_carpet.png';
+import dropCeilingImg from '../assets/textures/drop_ceiling.png';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
@@ -96,8 +96,8 @@ export class LofiDiorama extends LitElement {
   private clutterGroup!: THREE.Group;
   private cosyRoomGroup!: THREE.Group;
   private backroomsGroup!: THREE.Group;
+  private backroomsWallMeshes: THREE.Mesh[] = [];
   private bloomPass!: UnrealBloomPass;
-  private liminalSkybox!: THREE.Mesh;
 
   @state()
   private activeConfigDevice: THREE.Object3D | null = null;
@@ -514,43 +514,99 @@ export class LofiDiorama extends LitElement {
 
   private buildBackrooms() {
     const textureLoader = new THREE.TextureLoader();
+    this.backroomsWallMeshes = [];
 
-    // 1. Texture Loader
-    const albedo = textureLoader.load(backroomsAlbedoImg);
-    const emission = textureLoader.load(backroomsEmissionImg);
-    const roughness = textureLoader.load(backroomsRoughnessImg);
+    // Carpet Floor
+    const carpetTex = textureLoader.load(dampCarpetImg);
+    carpetTex.wrapS = THREE.RepeatWrapping;
+    carpetTex.wrapT = THREE.RepeatWrapping;
+    carpetTex.repeat.set(40, 40);
+    const carpetMat = new THREE.MeshStandardMaterial({ map: carpetTex, roughness: 0.9, color: 0xbbbbbb });
+    const carpet = new THREE.Mesh(new THREE.BoxGeometry(400, 2, 400), carpetMat);
+    carpet.position.set(0, -6.01, 0);
+    carpet.receiveShadow = true;
+    carpet.name = 'backroomsCarpet';
+    this.backroomsGroup.add(carpet);
+    this.surfaceObjects.push(carpet);
 
-    // Important: Set color space correctly for color map (Vite/Three.js handles this, but explicitly SRGB is good)
-    albedo.colorSpace = THREE.SRGBColorSpace;
+    // Drop Ceiling (Plane facing down so it's invisible from above due to backface culling)
+    const ceilingTex = textureLoader.load(dropCeilingImg);
+    ceilingTex.wrapS = THREE.RepeatWrapping;
+    ceilingTex.wrapT = THREE.RepeatWrapping;
+    ceilingTex.repeat.set(20, 20);
+    const ceilingMat = new THREE.MeshStandardMaterial({ map: ceilingTex, roughness: 0.8, color: 0xcccccc });
+    const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), ceilingMat);
+    ceiling.rotation.x = Math.PI / 2; // Face downwards
+    ceiling.position.set(0, 35, 0); // 40 units high relative to floor
+    ceiling.receiveShadow = true;
+    this.backroomsGroup.add(ceiling);
 
-    // 2. Material Setup
-    const material = new THREE.MeshStandardMaterial({
-        map: albedo,
-        emissiveMap: emission,
-        emissive: new THREE.Color(0xffffff),
-        emissiveIntensity: 1.5, // Controls glow brightness
-        roughnessMap: roughness,
-        side: THREE.BackSide // Render inside of the sphere
+    // Labyrinth Generation
+    const wallTex = textureLoader.load(yellowWallpaperImg);
+    wallTex.wrapS = THREE.RepeatWrapping;
+    wallTex.wrapT = THREE.RepeatWrapping;
+    wallTex.repeat.set(2, 4); // per 20x20 block
+    const baseWallMat = new THREE.MeshStandardMaterial({
+      map: wallTex,
+      roughness: 0.7,
+      color: 0xaaaaaa,
+      transparent: true,
+      opacity: 1.0
     });
 
-    // 3. Geometry (Inverted Sphere)
-    const geometry = new THREE.SphereGeometry(500, 60, 40);
-    // Invert geometry to see inside
-    geometry.scale(-1, 1, 1); 
+    const maze = [
+      "11111111111",
+      "10001000001",
+      "10101011101",
+      "10100010001",
+      "10111110111",
+      "10000000001",
+      "11101111101",
+      "10001000101",
+      "10111010001",
+      "10000011101",
+      "11111111111"
+    ];
 
-    this.liminalSkybox = new THREE.Mesh(geometry, material);
-    // Center it roughly around the camera's default target
-    this.liminalSkybox.position.set(14, 5.6, 0); 
-    this.backroomsGroup.add(this.liminalSkybox);
+    const blockSize = 20;
+    const offsetX = -((maze[0].length * blockSize) / 2) + 14;
+    const offsetZ = -((maze.length * blockSize) / 2);
 
-    // 4. Invisible Collision Floor
-    // This allows the user to still place gear onto a flat surface even though the visual room is a sphere
-    const floorGeo = new THREE.BoxGeometry(120, 2, 120);
-    const floorMat = new THREE.MeshBasicMaterial({ color: 0xff0000, visible: false });
-    const floor = new THREE.Mesh(floorGeo, floorMat);
-    floor.position.set(14, -6.01, 0); // Y position matches previous floor height
-    this.backroomsGroup.add(floor);
-    this.surfaceObjects.push(floor); 
+    for (let row = 0; row < maze.length; row++) {
+      for (let col = 0; col < maze[row].length; col++) {
+        const x = offsetX + (col * blockSize) + (blockSize / 2);
+        const z = offsetZ + (row * blockSize) + (blockSize / 2);
+
+        if (maze[row][col] === "1") {
+          const wallMat = baseWallMat.clone();
+          const wallBlock = new THREE.Mesh(new THREE.BoxGeometry(blockSize, 40, blockSize), wallMat);
+          wallBlock.position.set(x, 14, z);
+          wallBlock.receiveShadow = true;
+          wallBlock.castShadow = true;
+          wallBlock.userData.targetOpacity = 1.0;
+          this.backroomsGroup.add(wallBlock);
+          this.backroomsWallMeshes.push(wallBlock);
+        } else if (maze[row][col] === "0") {
+          // Every few empty spaces, place a fluorescent light
+          if ((row + col) % 3 === 0) {
+            const fluoro = new THREE.RectAreaLight(0xffffff, 3, 15, 5);
+            fluoro.position.set(x, 33.9, z);
+            fluoro.lookAt(x, 0, z);
+            this.backroomsGroup.add(fluoro);
+
+            const fluoroMeshMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            const fluoroMesh = new THREE.Mesh(new THREE.BoxGeometry(16, 0.5, 6), fluoroMeshMat);
+            fluoroMesh.position.set(x, 34, z);
+            fluoroMesh.userData.isFluoro = true;
+            this.backroomsGroup.add(fluoroMesh);
+          }
+        }
+      }
+    }
+
+    // Ambient light specifically for the backrooms to prevent pitch black
+    const backroomsAmbient = new THREE.AmbientLight(0xcccc99, 1.2);
+    this.backroomsGroup.add(backroomsAmbient);
   }
 
   private buildRoom() {
@@ -2607,6 +2663,85 @@ export class LofiDiorama extends LitElement {
     let bass = 0;
     let freqs: number[] = new Array(8).fill(0);
 
+    if (this.sceneMode === 'liminal' && Math.random() < 0.02) {
+      this.backroomsGroup.children.forEach(child => {
+        if (child instanceof THREE.RectAreaLight) {
+          child.intensity = Math.random() > 0.5 ? 5 : 0.5;
+        }
+        if (child.userData && child.userData.isFluoro) {
+          ((child as THREE.Mesh).material as THREE.MeshBasicMaterial).color.setHex(Math.random() > 0.5 ? 0xffffff : 0x555555);
+        }
+      });
+    } else if (this.sceneMode === 'liminal') {
+      this.backroomsGroup.children.forEach(child => {
+        if (child instanceof THREE.RectAreaLight) {
+          child.intensity = 5;
+        }
+        if (child.userData && child.userData.isFluoro) {
+          ((child as THREE.Mesh).material as THREE.MeshBasicMaterial).color.setHex(0xffffff);
+        }
+      });
+    }
+
+    // Camera raycast wall occlusion in liminal mode
+    if (this.sceneMode === 'liminal' && this.backroomsWallMeshes.length > 0 && this.camera && this.controls) {
+      // Default target opacity to 1.0 for all walls
+      this.backroomsWallMeshes.forEach(w => {
+        w.userData.targetOpacity = 1.0;
+      });
+
+      const camPos = this.camera.position.clone();
+      const targetPos = this.controls.target.clone();
+      const dir = targetPos.clone().sub(camPos);
+      const dist = dir.length();
+
+      if (dist > 0.001) {
+        dir.normalize();
+
+        const up = new THREE.Vector3(0, 1, 0);
+        const right = new THREE.Vector3().crossVectors(dir, up).normalize();
+        const camUp = new THREE.Vector3().crossVectors(right, dir).normalize();
+
+        const offsetDist = Math.min(6.0, dist * 0.1);
+        const rayOrigins = [
+          camPos,
+          camPos.clone().addScaledVector(right, offsetDist),
+          camPos.clone().addScaledVector(right, -offsetDist),
+          camPos.clone().addScaledVector(camUp, offsetDist),
+          camPos.clone().addScaledVector(camUp, -offsetDist)
+        ];
+
+        const raycaster = new THREE.Raycaster();
+        raycaster.far = dist;
+
+        rayOrigins.forEach((origin, index) => {
+          const rayDir = targetPos.clone().sub(origin).normalize();
+          raycaster.set(origin, rayDir);
+          const hits = raycaster.intersectObjects(this.backroomsWallMeshes, false);
+
+          hits.forEach(hit => {
+            if (hit.object instanceof THREE.Mesh) {
+              const targetOp = index === 0 ? 0.15 : 0.3;
+              hit.object.userData.targetOpacity = Math.min(
+                hit.object.userData.targetOpacity ?? 1.0,
+                targetOp
+              );
+            }
+          });
+        });
+      }
+
+      // Smoothly animate opacity and set depthWrite
+      this.backroomsWallMeshes.forEach(w => {
+        const mat = w.material as THREE.MeshStandardMaterial;
+        if (mat) {
+          const targetOp = w.userData.targetOpacity ?? 1.0;
+          mat.opacity += (targetOp - mat.opacity) * 0.15;
+          mat.depthWrite = mat.opacity > 0.9;
+        }
+      });
+    }
+
     // --- Audio data source selection ---
     if (this.isRenderMode) {
       // HyperFrames render mode: compute deterministic audio from offline buffer
@@ -3570,36 +3705,20 @@ export class LofiDiorama extends LitElement {
             }
           } else {
             // Default position if no save for this mode
-            child.position.set(14 + (Math.random() * 10 - 5), 5.6, (Math.random() * 10 - 5));
+            const defaultY = this.sceneMode === 'liminal' ? -4.4 : 5.6;
+            child.position.set(14 + (Math.random() * 10 - 5), defaultY, (Math.random() * 10 - 5));
           }
         }
       });
 
-      // Lighting and Environment adjustments
+      // Lighting adjustments
       if (this.sceneMode === 'liminal') {
         this.deskLight.intensity = 0;
         this.windowLight.intensity = 0;
-        if (this.ambientLight) this.ambientLight.intensity = 0.05;
-        if (this.hemiLight) this.hemiLight.intensity = 0.05;
-        this.scene.background = new THREE.Color(0x000000);
-        if (this.bloomPass) this.bloomPass.strength = 1.5;
-        
-        // Hide normal environment
-        if (this.yardGroup) this.yardGroup.visible = false;
-        if (this.rainDrops) this.rainDrops.visible = false;
-        this.clouds.forEach(c => c.visible = false);
-        // The sky plane is just a mesh, let's hide it by toggling material visibility
-        if (this.skyMat) this.skyMat.visible = false;
+        this.scene.background = new THREE.Color(0x999999);
       } else {
-        this.updateEnvironment(); // Restore normal lighting and weather
+        this.updateEnvironment(); // Restore normal lighting
         this.scene.background = new THREE.Color(0x1a1520);
-        if (this.ambientLight) this.ambientLight.intensity = 0.3;
-        if (this.hemiLight) this.hemiLight.intensity = 0.8;
-        if (this.bloomPass) this.bloomPass.strength = 0;
-        
-        if (this.yardGroup) this.yardGroup.visible = true;
-        if (this.skyMat) this.skyMat.visible = true;
-        // Clouds and rain visibility is handled by updateEnvironment() based on weather state
       }
 
       // Fade in
