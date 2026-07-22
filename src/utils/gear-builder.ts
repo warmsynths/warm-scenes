@@ -18,7 +18,6 @@ export async function createGearModel(id: string): Promise<THREE.Object3D> {
     case 'mood': return buildMood();
     case 'blooper': return buildBlooper();
     case 'generation_loss': return buildGenerationLoss();
-    case 'reel': return buildReel();
     case 'sp404': return buildSP404();
     case 'strat': return buildStrat();
     case 'm8': return buildM8();
@@ -163,57 +162,7 @@ function buildBasePedal(colorHex: number, topTexturePath?: string) {
   return pedal;
 }
 
-function buildReel() {
-  const reelGroup = new THREE.Group();
-  const woodMat = new THREE.MeshStandardMaterial({ color: 0x4a3018, roughness: 0.8, metalness: 0.1 });
-  const sideL = new THREE.Mesh(new THREE.BoxGeometry(0.3, 4.5, 1.5), woodMat);
-  sideL.position.set(-1.6, 0, 0);
-  reelGroup.add(sideL);
-  
-  const sideR = new THREE.Mesh(new THREE.BoxGeometry(0.3, 4.5, 1.5), woodMat);
-  sideR.position.set(1.6, 0, 0);
-  reelGroup.add(sideR);
 
-  const faceMat = new THREE.MeshStandardMaterial({ color: 0xd0d0d0, metalness: 0.8, roughness: 0.3 });
-  const face = new THREE.Mesh(new THREE.BoxGeometry(2.9, 4.5, 1.3), faceMat);
-  face.position.set(0, 0, 0);
-  reelGroup.add(face);
-
-  const spoolMat = new THREE.MeshStandardMaterial({ color: 0xc0c0c0, metalness: 0.9, roughness: 0.2 });
-  const tapeMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 });
-  
-  const createSpool = (x: number, y: number) => {
-    const spoolGroup = new THREE.Group();
-    spoolGroup.position.set(x, y, 0.75);
-    const flange = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, 0.05, 32), spoolMat);
-    flange.rotation.x = Math.PI / 2;
-    spoolGroup.add(flange);
-    const tape = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.85, 0.06, 32), tapeMat);
-    tape.rotation.x = Math.PI / 2;
-    spoolGroup.add(tape);
-    return spoolGroup;
-  };
-
-  const spool1 = createSpool(-0.75, 0.8);
-  const spool2 = createSpool(0.75, 0.8);
-  reelGroup.add(spool1, spool2);
-
-  const headMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.5 });
-  const headStack = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.6, 0.2), headMat);
-  headStack.position.set(0, -0.6, 0.75);
-  reelGroup.add(headStack);
-
-  const vuMat = new THREE.MeshStandardMaterial({ color: 0xeeeedd, emissive: 0x333322 });
-  const vu1 = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.4, 0.1), vuMat);
-  vu1.position.set(-0.4, -1.5, 0.7);
-  reelGroup.add(vu1);
-  
-  const vu2 = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.4, 0.1), vuMat);
-  vu2.position.set(0.4, -1.5, 0.7);
-  reelGroup.add(vu2);
-  
-  return reelGroup;
-}
 
 function buildSP404() {
   const textureLoader = new THREE.TextureLoader();

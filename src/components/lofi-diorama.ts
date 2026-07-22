@@ -123,6 +123,7 @@ export class LofiDiorama extends LitElement {
   // Click/raycasting properties
   private clickableObjects: THREE.Object3D[] = [];
   private draggableObjects: THREE.Object3D[] = [];
+  private shelfObjects: THREE.Object3D[] = [];
   private staticCollisionObjects: THREE.Object3D[] = [];
   private surfaceObjects: THREE.Object3D[] = [];
   private dragObject: THREE.Object3D | null = null;
@@ -1371,6 +1372,7 @@ export class LofiDiorama extends LitElement {
 
     // Clear old gear
     this.draggableObjects = this.draggableObjects.filter(obj => !this.gearGroup.children.includes(obj));
+    this.shelfObjects = [];
     this.gearGroup.clear();
     this.tapeSpools = [];
     this.circuitPads = [];
@@ -1380,7 +1382,6 @@ export class LofiDiorama extends LitElement {
     this.buildMood(this.activeGear.includes('mood'));
     this.buildBlooper(this.activeGear.includes('blooper'));
     this.buildGenerationLoss(this.activeGear.includes('generation_loss'));
-    this.buildReel(this.activeGear.includes('reel'));
     this.buildSP404(this.activeGear.includes('sp404'));
     this.buildStrat(this.activeGear.includes('strat'));
     this.buildM8(this.activeGear.includes('m8'));
@@ -1434,6 +1435,7 @@ export class LofiDiorama extends LitElement {
     } else {
       trackerBody.position.set(-21, 18.06, -7.5); // Shelf slot, facing out
       trackerBody.rotation.set(Math.PI / 2, 0.15, -Math.PI / 2);
+      this.shelfObjects.push(trackerBody);
     }
 
     // Tracker Screen Overlay (Dynamic)
@@ -1485,6 +1487,7 @@ export class LofiDiorama extends LitElement {
     } else {
       ctBody.position.set(-21, 18.09, -2.5); // Shelf slot, facing out
       ctBody.rotation.set(Math.PI / 2, 0.15, -Math.PI / 2);
+      this.shelfObjects.push(ctBody);
     }
 
     // Circuit Tracks Pads Overlay (Dynamic Additive Blending)
@@ -1541,6 +1544,7 @@ export class LofiDiorama extends LitElement {
     } else {
       pedal.position.set(-21, 12.81, shelfZ); // Lower shelf, facing out
       pedal.rotation.set(Math.PI / 2, 0.15, -Math.PI / 2);
+      this.shelfObjects.push(pedal);
     }
 
     const pSize = GET_GEAR_SIZE(64, 124, 60); // 64mm W x 124mm D x 60mm H
@@ -1609,85 +1613,7 @@ export class LofiDiorama extends LitElement {
     return pedal;
   }
 
-  private buildReel(isActive: boolean) {
-    const reelGroup = new THREE.Group();
-    reelGroup.name = 'reel';
 
-    if (isActive) {
-      reelGroup.rotation.y = -0.2;
-      this.loadOrPlaceObject(reelGroup, 'reel', 8.5, 8.25, -10);
-    } else {
-      reelGroup.position.set(-21, 18.45, -12); // Top shelf slot
-      reelGroup.rotation.y = Math.PI / 2;
-    }
-
-    // Wood sides
-    const woodMat = new THREE.MeshStandardMaterial({ color: 0x4a3018, roughness: 0.8, metalness: 0.1 });
-    const sideL = new THREE.Mesh(new THREE.BoxGeometry(0.3, 4.5, 1.5), woodMat);
-    sideL.position.set(-1.6, 0, 0);
-    reelGroup.add(sideL);
-
-    const sideR = new THREE.Mesh(new THREE.BoxGeometry(0.3, 4.5, 1.5), woodMat);
-    sideR.position.set(1.6, 0, 0);
-    reelGroup.add(sideR);
-
-    // Silver Faceplate
-    const faceMat = new THREE.MeshStandardMaterial({ color: 0xd0d0d0, metalness: 0.8, roughness: 0.3 });
-    const face = new THREE.Mesh(new THREE.BoxGeometry(2.9, 4.5, 1.3), faceMat);
-    face.position.set(0, 0, 0);
-    reelGroup.add(face);
-
-    // Tape Spools
-    const spoolMat = new THREE.MeshStandardMaterial({ color: 0xc0c0c0, metalness: 0.9, roughness: 0.2 });
-    const tapeMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 });
-
-    const createSpool = (x: number, y: number) => {
-      const spoolGroup = new THREE.Group();
-      spoolGroup.position.set(x, y, 0.75);
-
-      const flange = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, 0.05, 32), spoolMat);
-      flange.rotation.x = Math.PI / 2;
-      spoolGroup.add(flange);
-
-      const tape = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.85, 0.06, 32), tapeMat);
-      tape.rotation.x = Math.PI / 2;
-      spoolGroup.add(tape);
-
-      return spoolGroup;
-    };
-
-    const spool1 = createSpool(-0.75, 0.8);
-    const spool2 = createSpool(0.75, 0.8);
-    reelGroup.add(spool1, spool2);
-    if (isActive) {
-      this.tapeSpools.push(spool1, spool2);
-    }
-
-    // Head stack block
-    const headMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.5 });
-    const headStack = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.6, 0.2), headMat);
-    headStack.position.set(0, -0.6, 0.75);
-    reelGroup.add(headStack);
-
-    // VU Meters
-    const vuMat = new THREE.MeshStandardMaterial({ color: 0xeeeedd, emissive: 0x333322 });
-    const vu1 = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.4, 0.1), vuMat);
-    vu1.position.set(-0.4, -1.5, 0.7);
-    reelGroup.add(vu1);
-
-    const vu2 = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.4, 0.1), vuMat);
-    vu2.position.set(0.4, -1.5, 0.7);
-    reelGroup.add(vu2);
-
-    reelGroup.traverse((child) => {
-      if ((child as THREE.Mesh).isMesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
-      }
-    });
-
-    this.gearGroup.add(reelGroup);
-  }
 
   private buildSP404(isActive: boolean) {
     const textureLoader = new THREE.TextureLoader();
@@ -1718,6 +1644,7 @@ export class LofiDiorama extends LitElement {
     } else {
       spBody.position.set(-21, 18.68, 2.5); // Shelf slot, facing out
       spBody.rotation.set(Math.PI / 2, 0.15, -Math.PI / 2);
+      this.shelfObjects.push(spBody);
     }
 
     // SP-404 Pads Overlay (Dynamic Additive Blending)
@@ -1761,6 +1688,7 @@ export class LofiDiorama extends LitElement {
     } else {
       m8Group.position.set(-21, 12.9, -10); // Lower shelf, facing out
       m8Group.rotation.set(Math.PI / 2, 0.15, -Math.PI / 2);
+      this.shelfObjects.push(m8Group);
     }
 
     // M8 Dimensions: 96mm × 133mm × 20mm
@@ -1879,6 +1807,7 @@ export class LofiDiorama extends LitElement {
         } else {
           this.stratModel.position.set(-20, 12, 10);
           this.stratModel.rotation.set(-0.2, Math.PI / 2, 0);
+          this.shelfObjects.push(this.stratModel);
         }
         this.gearGroup.add(this.stratModel);
       }
@@ -1958,6 +1887,7 @@ export class LofiDiorama extends LitElement {
       } else {
         stratGroup.rotation.set(-0.2, Math.PI / 2, 0);
         stratGroup.position.set(-20, 12, 10);
+        this.shelfObjects.push(stratGroup);
       }
 
       this.stratModel = stratGroup;
@@ -2999,17 +2929,17 @@ export class LofiDiorama extends LitElement {
       return; // Skip hover state if we are dragging
     }
 
-    const intersects = this.raycaster.intersectObjects([...this.clickableObjects, ...this.draggableObjects], true);
+    const intersects = this.raycaster.intersectObjects([...this.clickableObjects, ...this.draggableObjects, ...this.shelfObjects], true);
     if (intersects.length > 0) {
       this.renderer.domElement.style.cursor = 'pointer';
 
       const object = intersects[0].object;
       let target: THREE.Object3D | null = object;
-      while (target && !this.draggableObjects.includes(target) && target !== this.scene) {
+      while (target && !this.draggableObjects.includes(target) && !this.shelfObjects.includes(target) && target !== this.scene) {
         target = target.parent;
       }
 
-      if (target && this.draggableObjects.includes(target) && this.activeGear.includes(target.name)) {
+      if (target && (this.draggableObjects.includes(target) || this.shelfObjects.includes(target))) {
         if (!target.userData.isPoster) {
           this.hoveredSynth = target;
 
@@ -3056,7 +2986,7 @@ export class LofiDiorama extends LitElement {
     this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
     this.raycaster.setFromCamera(this.mouse, this.camera);
-    const intersects = this.raycaster.intersectObjects([...this.clickableObjects, ...this.draggableObjects], true);
+    const intersects = this.raycaster.intersectObjects([...this.clickableObjects, ...this.draggableObjects, ...this.shelfObjects], true);
 
     // Close config panel if clicking elsewhere
     if (this.activeConfigDevice) {
@@ -3076,10 +3006,20 @@ export class LofiDiorama extends LitElement {
     if (intersects.length > 0) {
       const object = intersects[0].object;
 
-      // Bubble up to find if it's a draggable gear
+      // Bubble up to find if it's a draggable or shelf gear
       let dragTarget: THREE.Object3D | null = object;
-      while (dragTarget && !this.draggableObjects.includes(dragTarget) && dragTarget !== this.scene) {
+      while (dragTarget && !this.draggableObjects.includes(dragTarget) && !this.shelfObjects.includes(dragTarget) && dragTarget !== this.scene) {
         dragTarget = dragTarget.parent;
+      }
+
+      if (dragTarget && this.shelfObjects.includes(dragTarget)) {
+        // Direct click on a shelf item -> Move it back to desk!
+        this.dispatchEvent(new CustomEvent('toggle-gear', {
+          detail: { gear: dragTarget.name },
+          bubbles: true,
+          composed: true
+        }));
+        return;
       }
 
       if (dragTarget && this.draggableObjects.includes(dragTarget)) {

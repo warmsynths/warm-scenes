@@ -726,7 +726,6 @@ export class LofiDashboard extends LitElement {
   }
 
   private toggleGear(gear: string) {
-    if (gear === 'strat' || gear === 'reel') return;
     if (this.activeGear.includes(gear)) {
       this.activeGear = this.activeGear.filter(g => g !== gear);
     } else {
@@ -933,8 +932,7 @@ export class LofiDashboard extends LitElement {
       },
       {
         id: 'other', label: 'Other', items: [
-          { id: 'reel', label: 'Tape Reel', icon: '📼', cat: 'Tape', disabled: true },
-          { id: 'strat', label: 'Strat', icon: '🎸', cat: 'Inst', disabled: true }
+          { id: 'strat', label: 'Strat', icon: '🎸', cat: 'Inst', disabled: false }
         ]
       },
       {
