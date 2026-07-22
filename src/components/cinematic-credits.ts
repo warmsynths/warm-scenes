@@ -5,6 +5,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { AudioManager } from '../utils/audio-manager';
 import floatingCoupleImage from '../assets/couple_forward_silhouette.png';
 
@@ -516,6 +517,8 @@ export class CinematicCredits extends LitElement {
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: false });
     this.renderer.setSize(this.clientWidth, this.clientHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.0;
 
     this.scene = new THREE.Scene();
     
@@ -832,6 +835,9 @@ export class CinematicCredits extends LitElement {
     this.customGrainPass = new ShaderPass(CinematicGrainShader);
     this.customGrainPass.uniforms.uAmount.value = this.grainAmount;
     this.composer.addPass(this.customGrainPass);
+
+    const outputPass = new OutputPass();
+    this.composer.addPass(outputPass);
   }
 
   private handleResize = () => {

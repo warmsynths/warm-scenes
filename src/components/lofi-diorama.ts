@@ -7,9 +7,6 @@ import mpcPosterImg from '../assets/posters/mpc.jpg';
 import greenRugImg from '../assets/rugs/green_arched_rug.png';
 import pinkRugImg from '../assets/rugs/pink_arched_rug.png';
 import whiteRugImg from '../assets/rugs/white_arched_rug.png';
-import yellowWallpaperImg from '../assets/textures/yellow_wallpaper.png';
-import dampCarpetImg from '../assets/textures/damp_carpet.png';
-import dropCeilingImg from '../assets/textures/drop_ceiling.png';
 import backroomsAlbedoImg from '../assets/backrooms_albedo.png';
 import backroomsEmissionImg from '../assets/backrooms_emission.png';
 import backroomsRoughnessImg from '../assets/backrooms_roughness.png';
@@ -99,7 +96,6 @@ export class LofiDiorama extends LitElement {
   private clutterGroup!: THREE.Group;
   private cosyRoomGroup!: THREE.Group;
   private backroomsGroup!: THREE.Group;
-  private backroomsWallMat!: THREE.MeshStandardMaterial;
   private bloomPass!: UnrealBloomPass;
   private liminalSkybox!: THREE.Mesh;
 
@@ -418,14 +414,14 @@ export class LofiDiorama extends LitElement {
     this.composer.addPass(renderPass);
 
     const ssaoPass = new SSAOPass(this.scene, this.camera, width, height);
-    ssaoPass.kernelRadius = 1.2;
-    ssaoPass.minDistance = 0.002;
-    ssaoPass.maxDistance = 0.1;
+    ssaoPass.kernelRadius = 16.0;
+    ssaoPass.minDistance = 0.005;
+    ssaoPass.maxDistance = 5.0;
     this.composer.addPass(ssaoPass);
 
     this.bloomPass = new UnrealBloomPass(
         new THREE.Vector2(width, height),
-        0.0,   // strength (default 0, enable in liminal mode)
+        0.15,  // strength (subtle ambient glow for warm lights and screens)
         0.4,   // radius
         0.85   // threshold
     );
@@ -3437,33 +3433,58 @@ export class LofiDiorama extends LitElement {
     return { pos: this.camera.position.clone(), target: this.controls.target.clone() };
   }
 
+  private resolveCameraTransform(shot: { target?: string; mood?: string; cameraPos?: any; cameraLookAt?: any }) {
+    if (shot.cameraPos && shot.cameraLookAt) {
+      return {
+        pos: new THREE.Vector3(shot.cameraPos.x, shot.cameraPos.y, shot.cameraPos.z),
+        target: new THREE.Vector3(shot.cameraLookAt.x, shot.cameraLookAt.y, shot.cameraLookAt.z)
+      };
+    }
+
+    let targetPosition = new THREE.Vector3(0, 5.6, -7);
+    let cameraOffset = new THREE.Vector3(0, 10, 10);
+
+    if (shot.target) {
+      const targetObj = this.findGearObject(shot.target);
+      if (targetObj) {
+        targetObj.getWorldPosition(targetPosition);
+      } else {
+        console.warn(`[CameraSeq] Target '${shot.target}' unresolvable. Falling back to desk center.`);
+      }
+    }
+
+    switch (shot.mood) {
+      case 'balanced':
+        cameraOffset.set(0, 15, 12);
+        break;
+      case 'submerged':
+        cameraOffset.set(-4, 6, 6);
+        break;
+      case 'chaotic':
+        cameraOffset.set(0, 7, 0.5);
+        break;
+      case 'ambient':
+        targetPosition.set(0, 16, -19);
+        cameraOffset.set(3, 2, 28);
+        break;
+      default:
+        cameraOffset.set(0, 10, 10);
+    }
+
+    const pos = targetPosition.clone().add(cameraOffset);
+    return { pos, target: targetPosition };
+  }
+
   public snapToCamera(markerId: string) {
     if (!this.macroShots) return;
     const shot = this.macroShots.find((m: any) => m.id === markerId);
     if (!shot) return;
 
-    if (shot.cameraPos && shot.cameraLookAt) {
-      this.camera.position.set(shot.cameraPos.x, shot.cameraPos.y, shot.cameraPos.z);
-      this.controls.target.set(shot.cameraLookAt.x, shot.cameraLookAt.y, shot.cameraLookAt.z);
-    } else {
-      let targetPosition = new THREE.Vector3(0, 5.6, -7);
-      let cameraOffset = new THREE.Vector3(0, 10, 10);
-      if (shot.target) {
-        const targetObj = this.findGearObject(shot.target);
-        if (targetObj) targetObj.getWorldPosition(targetPosition);
-      }
-      switch (shot.mood) {
-        case 'balanced': cameraOffset.set(0, 15, 12); break;
-        case 'submerged': cameraOffset.set(-4, 6, 6); break;
-        case 'chaotic': cameraOffset.set(0, 7, 0.5); break;
-        case 'ambient': targetPosition.set(0, 16, -19); cameraOffset.set(3, 2, 28); break;
-        default: cameraOffset.set(0, 10, 10);
-      }
-      this.camera.position.copy(targetPosition).add(cameraOffset);
-      this.controls.target.copy(targetPosition);
-    }
-    
+    const transform = this.resolveCameraTransform(shot);
+    this.camera.position.copy(transform.pos);
+    this.controls.target.copy(transform.target);
     this.camera.lookAt(this.controls.target);
+    
     this.isTransitioning = false;
     this.lastMacroId = markerId; 
     
@@ -3508,55 +3529,9 @@ export class LofiDiorama extends LitElement {
     if (activeMacro && activeMacro.id !== this.lastMacroId) {
       this.lastMacroId = activeMacro.id;
 
-      if (activeMacro.cameraPos && activeMacro.cameraLookAt) {
-        this.targetCameraPos.set(activeMacro.cameraPos.x, activeMacro.cameraPos.y, activeMacro.cameraPos.z);
-        this.targetCameraTarget.set(activeMacro.cameraLookAt.x, activeMacro.cameraLookAt.y, activeMacro.cameraLookAt.z);
-      } else {
-        let targetPosition = new THREE.Vector3(0, 5.6, -7); // Default: desk center
-        let cameraOffset = new THREE.Vector3(0, 10, 10);
-
-        // Dynamically locate the event target's 3D mesh and extract its position
-        if (activeMacro.target) {
-          const targetObj = this.findGearObject(activeMacro.target);
-          if (targetObj) {
-            targetObj.getWorldPosition(targetPosition);
-            console.log(`[CameraSeq] Found target '${activeMacro.target}' -> obj.name='${targetObj.name}', worldPos=(${targetPosition.x.toFixed(2)}, ${targetPosition.y.toFixed(2)}, ${targetPosition.z.toFixed(2)})`);
-          } else {
-            console.warn(`[CameraSeq] Could not find 3D object for target '${activeMacro.target}'. Falling back to desk center.`);
-            // Log all gearGroup children for debugging
-            console.warn(`[CameraSeq] gearGroup has ${this.gearGroup.children.length} children:`, 
-              this.gearGroup.children.map(c => `'${c.name}'`).join(', '));
-          }
-        } else {
-          console.warn(`[CameraSeq] activeMacro has no target property. mood=${activeMacro.mood}`);
-        }
-
-        // Mood State Machine (offsets only — targetPosition is always the found device)
-        switch (activeMacro.mood) {
-          case 'balanced':
-            cameraOffset.set(0, 15, 12);
-            break;
-          case 'submerged':
-            cameraOffset.set(-4, 6, 6);
-            break;
-          case 'chaotic':
-            cameraOffset.set(0, 7, 0.5);
-            break;
-          case 'ambient':
-            // B-roll: Frame the window from inside the room
-            // Window center is roughly (0, 16.2, -20), frame spans ~16.5 wide, ~8.4 tall
-            targetPosition.set(0, 16, -19);
-            cameraOffset.set(3, 2, 28);
-            break;
-          default:
-            cameraOffset.set(0, 10, 10);
-        }
-
-        console.log(`[CameraSeq] Final: mood='${activeMacro.mood}', target=(${targetPosition.x.toFixed(2)}, ${targetPosition.y.toFixed(2)}, ${targetPosition.z.toFixed(2)}), offset=(${cameraOffset.x.toFixed(2)}, ${cameraOffset.y.toFixed(2)}, ${cameraOffset.z.toFixed(2)}), camPos=(${(targetPosition.x + cameraOffset.x).toFixed(2)}, ${(targetPosition.y + cameraOffset.y).toFixed(2)}, ${(targetPosition.z + cameraOffset.z).toFixed(2)})`);
-
-        this.targetCameraTarget.copy(targetPosition);
-        this.targetCameraPos.copy(targetPosition).add(cameraOffset);
-      }
+      const transform = this.resolveCameraTransform(activeMacro);
+      this.targetCameraPos.copy(transform.pos);
+      this.targetCameraTarget.copy(transform.target);
 
       const isCut = (activeMacro as any).transitionType === 'cut';
       

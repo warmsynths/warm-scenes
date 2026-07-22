@@ -97,48 +97,55 @@ self.onmessage = (e: MessageEvent<DioramaWorkerMessage>) => {
         energyDelta.push(Math.abs(rmsValues[i] - rmsValues[i - 1]));
       }
 
-      // ── Adaptive thresholds ────────────────────────────────────
+      // ── Windowed Adaptive Thresholding ───────────────────────────
 
-      // Compute median and std of energy delta for adaptive thresholding
-      const sortedDelta = [...energyDelta].sort((a, b) => a - b);
-      const medianDelta = sortedDelta[Math.floor(sortedDelta.length / 2)];
-      
-      let sumSq = 0;
-      for (const d of energyDelta) {
-        sumSq += (d - medianDelta) * (d - medianDelta);
-      }
-      const stdDelta = Math.sqrt(sumSq / energyDelta.length);
-
-      // Sensitivity 1 = very few events, 100 = many events
       const normalizedSensitivity = Math.max(0, Math.min(1, (sensitivity - 1) / 99));
-      
-      // Transient threshold: higher sensitivity = lower threshold
       const transientMultiplier = 2.5 - (normalizedSensitivity * 2.0); // range: 2.5 down to 0.5
-      const transientThreshold = medianDelta + (stdDelta * transientMultiplier);
-
-      // ZCR threshold for confirming percussive onsets
-      const sortedZcr = [...zcrValues].sort((a, b) => a - b);
-      const medianZcr = sortedZcr[Math.floor(sortedZcr.length / 2)];
-      const zcrThreshold = medianZcr * (1.5 - normalizedSensitivity * 0.5);
 
       // Minimum hold-off between micro cuts (seconds)
       const microHoldOff = 0.3 - (normalizedSensitivity * 0.2); // 0.3s to 0.1s
 
-      // ── Pass 3: Classify frames ────────────────────────────────
+      // Scale minMacroDuration with sensitivity (0.5s at high sensitivity up to 1.2s at low sensitivity)
+      const minMacroDuration = Math.max(0.4, 1.2 - (normalizedSensitivity * 0.7));
 
-      const isTransient: boolean[] = energyDelta.map(
-        (d, i) => d > transientThreshold && zcrValues[i] > zcrThreshold
-      );
+      // Compute windowed (segment-based) adaptive thresholds over a sliding 200-frame window
+      const isTransient: boolean[] = new Array(totalFrames).fill(false);
+      const windowRadius = 100; // 200 frames total window (~2.3 seconds at 512 samples/frame 44.1kHz)
+
+      for (let i = 0; i < totalFrames; i++) {
+        const start = Math.max(0, i - windowRadius);
+        const end = Math.min(totalFrames, i + windowRadius);
+
+        // Window energy deltas
+        const winDeltas = energyDelta.slice(start, end).sort((a, b) => a - b);
+        const winMedianDelta = winDeltas[Math.floor(winDeltas.length / 2)] || 0;
+        
+        let sumSq = 0;
+        for (let k = start; k < end; k++) {
+          const diff = energyDelta[k] - winMedianDelta;
+          sumSq += diff * diff;
+        }
+        const winStdDelta = Math.sqrt(sumSq / (end - start));
+        const winTransientThreshold = winMedianDelta + (winStdDelta * transientMultiplier);
+
+        // Window ZCR
+        const winZcr = zcrValues.slice(start, end).sort((a, b) => a - b);
+        const winMedianZcr = winZcr[Math.floor(winZcr.length / 2)] || 0;
+        const winZcrThreshold = winMedianZcr * (1.4 - normalizedSensitivity * 0.4);
+
+        if (energyDelta[i] > winTransientThreshold && zcrValues[i] > winZcrThreshold) {
+          isTransient[i] = true;
+        }
+      }
 
       // ── Pass 4: Generate Macro Shots from steady-state regions ─
 
       const macroShots: DioramaAnalyzeResult['payload']['macroShots'] = [];
       const microCuts: DioramaAnalyzeResult['payload']['microCuts'] = [];
 
-      // Merge steady frames into contiguous blocks
       let blockStart: number | null = null;
       let macroCounter = 0;
-      const minMacroDuration = 1.0; // minimum macro shot duration in seconds
+      let lastMacroTarget = '';
 
       for (let i = 0; i < totalFrames; i++) {
         if (!isTransient[i]) {
@@ -160,9 +167,14 @@ self.onmessage = (e: MessageEvent<DioramaWorkerMessage>) => {
                 ? (primaryArray.length > 0 ? primaryArray : secondaryArray)
                 : (secondaryArray.length > 0 ? secondaryArray : primaryArray);
               
-              const targetId = arrayToUse.length > 0 
-                ? arrayToUse[Math.floor(Math.random() * arrayToUse.length)] 
-                : '';
+              let targetId = '';
+              if (arrayToUse.length > 0) {
+                // Anti-repeat target selection
+                const candidates = arrayToUse.filter(t => t !== lastMacroTarget);
+                const pickPool = candidates.length > 0 ? candidates : arrayToUse;
+                targetId = pickPool[Math.floor(Math.random() * pickPool.length)];
+                lastMacroTarget = targetId;
+              }
 
               // Calculate average RMS and spectral centroid for mood matrix
               let rmsSum = 0;
@@ -185,7 +197,8 @@ self.onmessage = (e: MessageEvent<DioramaWorkerMessage>) => {
                 mood = 'submerged';
               }
 
-              const intensity = Math.min(1.0, Math.max(0.0, avgRms * 3.0));
+              // Reconciled intensity scale (relative to track's peak RMS)
+              const intensity = Math.min(1.0, Math.max(0.0, maxRMS > 0 ? (avgRms / (maxRMS * 0.75)) : 0));
 
               macroShots.push({
                 id: `macro_${macroCounter}_${Math.random().toString(36).substr(2, 5)}`,
@@ -213,11 +226,14 @@ self.onmessage = (e: MessageEvent<DioramaWorkerMessage>) => {
             ? (primaryArray.length > 0 ? primaryArray : secondaryArray)
             : (secondaryArray.length > 0 ? secondaryArray : primaryArray);
           
-          const targetId = arrayToUse.length > 0 
-            ? arrayToUse[Math.floor(Math.random() * arrayToUse.length)] 
-            : '';
+          let targetId = '';
+          if (arrayToUse.length > 0) {
+            const candidates = arrayToUse.filter(t => t !== lastMacroTarget);
+            const pickPool = candidates.length > 0 ? candidates : arrayToUse;
+            targetId = pickPool[Math.floor(Math.random() * pickPool.length)];
+            lastMacroTarget = targetId;
+          }
 
-          // Calculate average RMS and spectral centroid for mood matrix (final block)
           let rmsSum = 0;
           let centroidSum = 0;
           let count = 0;
@@ -238,7 +254,7 @@ self.onmessage = (e: MessageEvent<DioramaWorkerMessage>) => {
             mood = 'submerged';
           }
 
-          const intensity = Math.min(1.0, Math.max(0.0, avgRms * 3.0));
+          const intensity = Math.min(1.0, Math.max(0.0, maxRMS > 0 ? (avgRms / (maxRMS * 0.75)) : 0));
 
           macroShots.push({
             id: `macro_${macroCounter}_${Math.random().toString(36).substr(2, 5)}`,

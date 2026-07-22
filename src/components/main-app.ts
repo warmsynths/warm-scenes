@@ -108,6 +108,8 @@ export class MainApp extends LitElement {
       } else {
         alert("Load an audio file in the Diorama timeline first.");
       }
+    } else if (this.activeScreen === 'credits') {
+      alert("Cinematic Credits rendering path is not currently supported by the video render engine.");
     }
   }
 

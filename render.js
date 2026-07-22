@@ -76,38 +76,43 @@ function main() {
   let eventsHtml = '';
   let targetScreen = '';
 
-  if (engine === 'wave_field') {
-    const script = config.script || [];
-    eventsHtml = script.map((evt, i) => {
-      // Handle legacy { time, type, value } vs new { time, config: { target, amount } }
-      const type = isLegacy ? evt.type : evt.config.target;
-      const value = isLegacy ? evt.value : evt.config.amount;
-      return `      <div id="event-${i}" class="config-event clip" data-type="${type}" data-value="${value}" data-start="${evt.time}"></div>`;
-    }).join('\n');
-    targetScreen = `<wavefield-screen style="width: 100%; height: 100%; display: block;"></wavefield-screen>`;
-  } else if (engine === 'diorama') {
-    const macros = config.macroShots || [];
-    const micros = config.microCuts || [];
-    
-    const macroHtml = macros.map((evt, i) => {
-      return `      <div id="macro-${i}" class="macro-shot clip" data-target="${evt.target}" data-start="${evt.startTime}" data-duration="${evt.duration}" data-mood="${evt.mood || 'balanced'}"></div>`;
-    }).join('\n');
-    
-    const microHtml = micros.map((evt, i) => {
-      return `      <div id="micro-${i}" class="micro-cut clip" data-target="${evt.target}" data-start="${evt.time}"></div>`;
-    }).join('\n');
-    
-    eventsHtml = macroHtml + '\n' + microHtml;
-    // Add primary/secondary arrays as attributes or global window vars if needed, 
-    // but the dashboard relies on localStorage. We'll pass them as data-attributes.
-    targetScreen = `<diorama-screen 
-      data-primary-array="${(config.primaryArray || []).join(',')}" 
-      data-secondary-array="${(config.secondaryArray || []).join(',')}" 
-      style="width: 100%; height: 100%; display: block;">
-    </diorama-screen>`;
+  try {
+    if (engine === 'wave_field') {
+      const script = config.script || [];
+      eventsHtml = script.map((evt, i) => {
+        const type = isLegacy ? evt.type : (evt.config ? evt.config.target : 'trigger');
+        const value = isLegacy ? evt.value : (evt.config ? evt.config.amount : 0);
+        return `      <div id="event-${i}" class="config-event clip" data-type="${type}" data-value="${value}" data-start="${evt.time}"></div>`;
+      }).join('\n');
+      targetScreen = `<wavefield-screen style="width: 100%; height: 100%; display: block;"></wavefield-screen>`;
+    } else if (engine === 'diorama') {
+      const macros = config.macroShots || [];
+      const micros = config.microCuts || [];
+      
+      const macroHtml = macros.map((evt, i) => {
+        return `      <div id="macro-${i}" class="macro-shot clip" data-target="${evt.target || ''}" data-start="${evt.startTime}" data-duration="${evt.duration}" data-mood="${evt.mood || 'balanced'}"></div>`;
+      }).join('\n');
+      
+      const microHtml = micros.map((evt, i) => {
+        return `      <div id="micro-${i}" class="micro-cut clip" data-target="${evt.target || ''}" data-start="${evt.time}"></div>`;
+      }).join('\n');
+      
+      eventsHtml = macroHtml + '\n' + microHtml;
+      targetScreen = `<diorama-screen 
+        data-primary-array="${(config.primaryArray || []).join(',')}" 
+        data-secondary-array="${(config.secondaryArray || []).join(',')}" 
+        style="width: 100%; height: 100%; display: block;">
+      </diorama-screen>`;
+    } else {
+      console.error(`Error: Unsupported engine '${engine}' in config.json. Supported engines are 'wave_field' and 'diorama'.`);
+      process.exit(1);
+    }
+  } catch (err) {
+    console.error('Error generating event markup from config.json:', err);
+    process.exit(1);
   }
 
-  // 5. Wrap in standard HTML5 with Audio and target screen
+  // 5. Wrap in standard HTML5 with Audio and target screen (offline, bundled JS handles GSAP)
   const htmlContent = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -115,7 +120,6 @@ function main() {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hyperframes Render Temp (${engine})</title>
   ${cssHref ? `<link rel="stylesheet" href="${cssHref}">` : ''}
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
 </head>
 <body style="margin: 0; padding: 0;">
   <div id="composition" data-composition-id="main" data-width="1920" data-height="1080" data-start="0" data-duration="${duration}" style="width: 1920px; height: 1080px; position: relative; overflow: hidden; background: #000;">
@@ -132,7 +136,6 @@ ${eventsHtml}
 
   <script>
     window.__timelines = window.__timelines || {};
-    window.__timelines['main'] = gsap.timeline({ paused: true });
   </script>
 
   <!-- App logic containing Three.js and HyperFrames initialization -->
@@ -145,20 +148,31 @@ ${eventsHtml}
   console.log(`Generated temporary HTML template: ${TEMP_HTML_PATH}`);
 
   // 7. Execute hyperframes render
+  let renderFailed = false;
   try {
     console.log(`Running: npx hyperframes render --composition docs/hyperframes-temp.html --output ${OUTPUT_PATH}`);
     execSync(`npx hyperframes render --composition docs/hyperframes-temp.html --output ${OUTPUT_PATH}`, { 
       stdio: 'inherit' 
     });
-    console.log('Rendering complete!');
+    if (!fs.existsSync(OUTPUT_PATH)) {
+      console.error(`Error: Render command completed but expected output file '${OUTPUT_PATH}' was not created.`);
+      renderFailed = true;
+    } else {
+      console.log('Rendering complete!');
+    }
   } catch (err) {
     console.error('Error during HyperFrames rendering:', err.message);
+    renderFailed = true;
   } finally {
     // 8. Cleanup temp file
     if (fs.existsSync(TEMP_HTML_PATH)) {
       fs.unlinkSync(TEMP_HTML_PATH);
       console.log(`Cleaned up temporary file: ${TEMP_HTML_PATH}`);
     }
+  }
+
+  if (renderFailed) {
+    process.exit(1);
   }
 }
 
