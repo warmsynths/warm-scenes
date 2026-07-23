@@ -27,6 +27,7 @@ import { AudioManager } from '../utils/audio-manager';
 import { TrackerScreen } from '../utils/tracker-screen';
 import { M8Screen } from '../utils/m8-screen';
 import { QuantumCube } from '../utils/quantum-cube';
+import type { DioramaSceneState } from '../types/diorama';
 
 const MM_TO_UNITS = 0.018;
 const GET_GEAR_SIZE = (wMm: number, dMm: number, hMm: number) => {
@@ -42,41 +43,72 @@ export class LofiDiorama extends LitElement {
   @property({ type: Object })
   audioManager: AudioManager | null = null;
 
-  @property({ type: String })
-  weather: 'sunny' | 'rainy' | 'thunderstorm' = 'sunny';
-
-  @property({ type: String })
-  timeOfDay: 'day' | 'sunset' | 'night' = 'day';
-
-  @property({ type: Number })
-  celestialPosition: number = 50;
-
-  @property({ type: Number })
-  rainIntensity: number = 50;
-
-  @property({ type: Number })
-  lightningIntensity: number = 50;
-
-  @property({ type: String })
-  sceneMode: 'normal' | 'liminal' = 'normal';
-
-  @property({ type: Array })
-  activeGear: string[] = ['polyend', 'circuit_tracks', 'mood', 'blooper', 'generation_loss', 'sp404', 'm8', 'poster_believe', 'poster_808', 'poster_mpc', 'lamp', 'cup', 'succulent_echeveria', 'succulent_moonstones', 'succulent_haworthia', 'succulent_pearls', 'succulent_jade'];
-
   @property({ type: Object })
   audioDirector: any | null = null;
 
-  @property({ type: Array })
-  primaryArray: string[] = [];
+  @property({ type: Object })
+  sceneState: DioramaSceneState | null = null;
 
-  @property({ type: Array })
-  secondaryArray: string[] = [];
+  get weather(): 'sunny' | 'rainy' | 'thunderstorm' {
+    return this.sceneState?.environment.weather ?? 'sunny';
+  }
 
-  @property({ type: Array })
-  macroShots: any[] = [];
+  get timeOfDay(): 'day' | 'sunset' | 'night' {
+    return this.sceneState?.environment.timeOfDay ?? 'day';
+  }
 
-  @property({ type: Array })
-  microCuts: any[] = [];
+  get sceneMode(): 'normal' | 'liminal' {
+    return this.sceneState?.environment.sceneMode ?? 'normal';
+  }
+
+  get celestialPosition(): number {
+    return this.sceneState?.environment.celestialPosition ?? 50;
+  }
+
+  get rainIntensity(): number {
+    return this.sceneState?.environment.rainIntensity ?? 50;
+  }
+
+  get lightningIntensity(): number {
+    return this.sceneState?.environment.lightningIntensity ?? 50;
+  }
+
+  get activeGear(): string[] {
+    return this.sceneState?.gear.activeGear ?? ['polyend', 'circuit_tracks', 'mood', 'blooper', 'generation_loss', 'sp404', 'm8', 'poster_believe', 'poster_808', 'poster_mpc', 'lamp', 'cup', 'succulent_echeveria', 'succulent_moonstones', 'succulent_haworthia', 'succulent_pearls', 'succulent_jade'];
+  }
+
+  private _primaryArrayOverride: string[] | null = null;
+  private _secondaryArrayOverride: string[] | null = null;
+  private _macroShotsOverride: any[] | null = null;
+  private _microCutsOverride: any[] | null = null;
+
+  get primaryArray(): string[] {
+    return this._primaryArrayOverride ?? this.sceneState?.gear.primaryArray ?? [];
+  }
+  set primaryArray(val: string[]) {
+    this._primaryArrayOverride = val;
+  }
+
+  get secondaryArray(): string[] {
+    return this._secondaryArrayOverride ?? this.sceneState?.gear.secondaryArray ?? [];
+  }
+  set secondaryArray(val: string[]) {
+    this._secondaryArrayOverride = val;
+  }
+
+  get macroShots(): any[] {
+    return this._macroShotsOverride ?? this.sceneState?.gear.macroShots ?? [];
+  }
+  set macroShots(val: any[]) {
+    this._macroShotsOverride = val;
+  }
+
+  get microCuts(): any[] {
+    return this._microCutsOverride ?? this.sceneState?.gear.microCuts ?? [];
+  }
+  set microCuts(val: any[]) {
+    this._microCutsOverride = val;
+  }
 
   @query('.canvas-container')
   container!: HTMLDivElement;

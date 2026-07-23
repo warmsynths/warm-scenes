@@ -1,5 +1,5 @@
 import { LitElement, html, css } from 'lit';
-import { customElement, state, property, query } from 'lit/decorators.js';
+import { customElement, state, query } from 'lit/decorators.js';
 import { AudioManager } from '../utils/audio-manager';
 import './lofi-diorama';
 import './gear-preview';
@@ -8,6 +8,7 @@ import type { AudioDirector, AvailableTarget } from './AudioDirector/AudioDirect
 import type { DioramaAnalyzeResult, DioramaAnalyzeError } from './AudioDirector/diorama-analyzer.worker';
 import { exportDirectorConfig } from '../utils/exportConfig';
 import type { ExportableScreen } from '../types/screen';
+import type { DioramaSceneState } from '../types/diorama';
 
 import ufoPosterImg from '../assets/posters/iwanttobelieve_.jpg';
 import tr808PosterImg from '../assets/posters/tr808.png';
@@ -59,21 +60,6 @@ export class LofiDashboard extends LitElement implements ExportableScreen {
   @state()
   private progressPercent = 0;
 
-  @state()
-  private weather: Weather = 'sunny';
-
-  @state()
-  private timeOfDay: TimeOfDay = 'day';
-
-  @state()
-  private celestialPosition: number = 50;
-
-  @state()
-  private rainIntensity: number = 50;
-
-  @state()
-  private lightningIntensity: number = 50;
-
   private getInitialGear(): string[] {
     const saved = localStorage.getItem('lofi_active_gear');
     if (saved) {
@@ -82,8 +68,112 @@ export class LofiDashboard extends LitElement implements ExportableScreen {
     return ['polyend', 'circuit_tracks', 'mood', 'blooper', 'generation_loss', 'sp404', 'm8', 'poster_believe', 'poster_808', 'poster_mpc', 'lamp', 'cup', 'succulent_echeveria', 'succulent_moonstones', 'succulent_haworthia', 'succulent_pearls', 'succulent_jade'];
   }
 
-  @property({ type: Array })
-  private activeGear: string[] = this.getInitialGear();
+  @state()
+  private sceneState: DioramaSceneState = {
+    environment: {
+      weather: 'sunny',
+      timeOfDay: 'day',
+      sceneMode: 'normal',
+      celestialPosition: 50,
+      rainIntensity: 50,
+      lightningIntensity: 50,
+    },
+    gear: {
+      activeGear: this.getInitialGear(),
+      primaryArray: [],
+      secondaryArray: [],
+      macroShots: [],
+      microCuts: [],
+    }
+  };
+
+  get weather(): Weather { return this.sceneState.environment.weather; }
+  set weather(val: Weather) {
+    this.sceneState = {
+      ...this.sceneState,
+      environment: { ...this.sceneState.environment, weather: val }
+    };
+  }
+
+  get timeOfDay(): TimeOfDay { return this.sceneState.environment.timeOfDay; }
+  set timeOfDay(val: TimeOfDay) {
+    this.sceneState = {
+      ...this.sceneState,
+      environment: { ...this.sceneState.environment, timeOfDay: val }
+    };
+  }
+
+  get sceneMode(): 'normal' | 'liminal' { return this.sceneState.environment.sceneMode; }
+  set sceneMode(val: 'normal' | 'liminal') {
+    this.sceneState = {
+      ...this.sceneState,
+      environment: { ...this.sceneState.environment, sceneMode: val }
+    };
+  }
+
+  get celestialPosition(): number { return this.sceneState.environment.celestialPosition; }
+  set celestialPosition(val: number) {
+    this.sceneState = {
+      ...this.sceneState,
+      environment: { ...this.sceneState.environment, celestialPosition: val }
+    };
+  }
+
+  get rainIntensity(): number { return this.sceneState.environment.rainIntensity; }
+  set rainIntensity(val: number) {
+    this.sceneState = {
+      ...this.sceneState,
+      environment: { ...this.sceneState.environment, rainIntensity: val }
+    };
+  }
+
+  get lightningIntensity(): number { return this.sceneState.environment.lightningIntensity; }
+  set lightningIntensity(val: number) {
+    this.sceneState = {
+      ...this.sceneState,
+      environment: { ...this.sceneState.environment, lightningIntensity: val }
+    };
+  }
+
+  get activeGear(): string[] { return this.sceneState.gear.activeGear; }
+  set activeGear(val: string[]) {
+    this.sceneState = {
+      ...this.sceneState,
+      gear: { ...this.sceneState.gear, activeGear: val }
+    };
+  }
+
+  get primaryArray(): string[] { return this.sceneState.gear.primaryArray; }
+  set primaryArray(val: string[]) {
+    this.sceneState = {
+      ...this.sceneState,
+      gear: { ...this.sceneState.gear, primaryArray: val }
+    };
+  }
+
+  get secondaryArray(): string[] { return this.sceneState.gear.secondaryArray; }
+  set secondaryArray(val: string[]) {
+    this.sceneState = {
+      ...this.sceneState,
+      gear: { ...this.sceneState.gear, secondaryArray: val }
+    };
+  }
+
+  get macroShots(): any[] { return this.sceneState.gear.macroShots; }
+  set macroShots(val: any[]) {
+    this.sceneState = {
+      ...this.sceneState,
+      gear: { ...this.sceneState.gear, macroShots: val }
+    };
+  }
+
+  get microCuts(): any[] { return this.sceneState.gear.microCuts; }
+  set microCuts(val: any[]) {
+    this.sceneState = {
+      ...this.sceneState,
+      gear: { ...this.sceneState.gear, microCuts: val }
+    };
+  }
 
   @state()
   private activePanel: 'gear' | 'environment' | 'audio' | 'preflight' | null = null;
@@ -97,15 +187,6 @@ export class LofiDashboard extends LitElement implements ExportableScreen {
   @state()
   private showDirector = false;
 
-  @state()
-  private sceneMode: 'normal' | 'liminal' = 'normal';
-
-  @state()
-  private primaryArray: string[] = [];
-
-  @state()
-  private secondaryArray: string[] = [];
-
   @query('audio-director')
   private directorEl!: AudioDirector;
 
@@ -114,12 +195,6 @@ export class LofiDashboard extends LitElement implements ExportableScreen {
 
   @state()
   private isAnalyzingDiorama = false;
-
-  @state()
-  private macroShots: any[] = [];
-
-  @state()
-  private microCuts: any[] = [];
 
   private dioramaWorker: Worker | null = null;
   private dioramaChannelData: Float32Array | null = null;
@@ -1397,17 +1472,7 @@ export class LofiDashboard extends LitElement implements ExportableScreen {
       <lofi-diorama 
         .audioManager="${this.audioManager}" 
         .audioDirector="${this.showDirector ? this.directorEl : null}"
-        .weather="${this.weather}"
-        .timeOfDay="${this.timeOfDay}"
-        .sceneMode="${this.sceneMode}"
-        .celestialPosition="${this.celestialPosition}"
-        .rainIntensity="${this.rainIntensity}"
-        .lightningIntensity="${this.lightningIntensity}"
-        .activeGear="${this.activeGear}"
-        .primaryArray="${this.primaryArray}"
-        .secondaryArray="${this.secondaryArray}"
-        .macroShots="${this.macroShots}"
-        .microCuts="${this.microCuts}"
+        .sceneState="${this.sceneState}"
         @toggle-settings="${() => this.togglePanel('gear')}"
         @toggle-gear="${(e: CustomEvent) => this.toggleGear(e.detail.gear)}"
       ></lofi-diorama>
