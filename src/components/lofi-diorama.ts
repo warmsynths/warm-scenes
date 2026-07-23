@@ -2577,8 +2577,8 @@ export class LofiDiorama extends LitElement {
         time: parseFloat(el.getAttribute('data-start') || '0'),
       }));
 
-      // Parse primary/secondary arrays from diorama-screen element
-      const dioramaHost = document.querySelector('diorama-screen');
+      // Parse primary/secondary arrays from host element
+      const dioramaHost = document.querySelector('lofi-dashboard') || document.querySelector('diorama-screen');
       if (dioramaHost) {
         const primaryStr = dioramaHost.getAttribute('data-primary-array') || '';
         const secondaryStr = dioramaHost.getAttribute('data-secondary-array') || '';

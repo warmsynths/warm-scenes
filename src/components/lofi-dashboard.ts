@@ -6,6 +6,8 @@ import './gear-preview';
 import './AudioDirector/AudioDirector';
 import type { AudioDirector, AvailableTarget } from './AudioDirector/AudioDirector';
 import type { DioramaAnalyzeResult, DioramaAnalyzeError } from './AudioDirector/diorama-analyzer.worker';
+import { exportDirectorConfig } from '../utils/exportConfig';
+import type { ExportableScreen } from '../types/screen';
 
 import ufoPosterImg from '../assets/posters/iwanttobelieve_.jpg';
 import tr808PosterImg from '../assets/posters/tr808.png';
@@ -38,7 +40,7 @@ const GEAR_DICTIONARY: Record<string, string> = {
 };
 
 @customElement('lofi-dashboard')
-export class LofiDashboard extends LitElement {
+export class LofiDashboard extends LitElement implements ExportableScreen {
   @state()
   private audioManager = new AudioManager();
 
@@ -708,8 +710,8 @@ export class LofiDashboard extends LitElement {
         time: parseFloat(el.getAttribute('data-start') || '0'),
       }));
 
-      // Read primary/secondary arrays from diorama-screen host element
-      const dioramaHost = document.querySelector('diorama-screen');
+      // Read primary/secondary arrays from host element
+      const dioramaHost = document.querySelector('lofi-dashboard') || document.querySelector('diorama-screen');
       if (dioramaHost) {
         const primaryStr = dioramaHost.getAttribute('data-primary-array') || '';
         const secondaryStr = dioramaHost.getAttribute('data-secondary-array') || '';
@@ -1372,6 +1374,18 @@ export class LofiDashboard extends LitElement {
         </div>
       </div>
     `;
+  }
+
+  public exportConfig(): void {
+    const director = this.shadowRoot?.querySelector('audio-director') as AudioDirector | null;
+    if (director) {
+      exportDirectorConfig(director, {
+        primaryArray: this.primaryArray || [],
+        secondaryArray: this.secondaryArray || [],
+      });
+    } else {
+      alert("Load an audio file in the Diorama timeline first.");
+    }
   }
 
   render() {

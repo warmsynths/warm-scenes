@@ -9,6 +9,7 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { AudioManager } from '../utils/audio-manager';
 import floatingCoupleImage from '../assets/couple_forward_silhouette.png';
 import { exportConfigAsJSON } from '../utils/exportConfig';
+import type { ExportableScreen } from '../types/screen';
 
 const CinematicGrainShader = {
   uniforms: {
@@ -58,7 +59,7 @@ const CinematicGrainShader = {
 };
 
 @customElement('cinematic-credits')
-export class CinematicCredits extends LitElement {
+export class CinematicCredits extends LitElement implements ExportableScreen {
   static styles = css`
     :host {
       display: block;

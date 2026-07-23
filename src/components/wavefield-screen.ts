@@ -7,9 +7,11 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import './AudioDirector/AudioDirector';
 import type { AudioDirector } from './AudioDirector/AudioDirector';
+import { exportConfigAsJSON, exportDirectorConfig } from '../utils/exportConfig';
+import type { ExportableScreen } from '../types/screen';
 
 @customElement('wavefield-screen')
-export class WavefieldScreen extends LitElement {
+export class WavefieldScreen extends LitElement implements ExportableScreen {
   @query('.canvas-container')
   container!: HTMLDivElement;
 
@@ -906,6 +908,48 @@ export class WavefieldScreen extends LitElement {
       this.composer.render(); // Render with neon bloom
     } else {
       this.renderer.render(this.scene, this.camera); // Pure crisp B&W (Joy Mode)
+    }
+  }
+
+  public exportConfig(): void {
+    const director = this.shadowRoot?.querySelector('audio-director') as AudioDirector | null;
+    const currentState = {
+      theme: this.theme,
+      device: this.device,
+      speed: this.scrollSpeed,
+      gap: this.lineGap,
+      height: this.gridHeight,
+      mode: this.mode,
+      rippleDir: this.rippleDir
+    };
+
+    if (director) {
+      exportDirectorConfig(director, currentState);
+    } else {
+      let exportData: any[] = [];
+      if (this.activeScript.length === 0) {
+        exportData = [
+          { time: 0, type: 'theme', value: currentState.theme },
+          { time: 0, type: 'device', value: currentState.device },
+          { time: 0, type: 'speed', value: currentState.speed },
+          { time: 0, type: 'gap', value: currentState.gap },
+          { time: 0, type: 'height', value: currentState.height },
+          { time: 0, type: 'mode', value: currentState.mode },
+          { time: 0, type: 'rippleDir', value: currentState.rippleDir }
+        ];
+      } else {
+        exportData = this.activeScript.map((evt: any) => ({
+          time: evt.time,
+          type: evt.config.target,
+          value: evt.config.amount
+        }));
+      }
+
+      exportConfigAsJSON({
+        engine: 'wave_field',
+        ...currentState,
+        script: exportData
+      });
     }
   }
 

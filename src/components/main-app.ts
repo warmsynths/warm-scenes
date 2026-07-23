@@ -1,10 +1,9 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import './diorama-screen';
+import './lofi-dashboard';
 import './wavefield-screen';
 import './cinematic-credits';
-import { exportConfigAsJSON, exportDirectorConfig } from '../utils/exportConfig';
-import type { AudioDirector } from './AudioDirector/AudioDirector';
+import type { ExportableScreen } from '../types/screen';
 
 @customElement('main-app')
 export class MainApp extends LitElement {
@@ -61,62 +60,14 @@ export class MainApp extends LitElement {
   }
 
   private handleExportConfig() {
-    if (this.activeScreen === 'wavefield') {
-      // Try the new director-based export first
-      const wavefieldScreen = this.shadowRoot?.querySelector('wavefield-screen') as any;
-      const director = wavefieldScreen?.shadowRoot?.querySelector('audio-director') as AudioDirector | null;
-      
-      if (director) {
-        exportDirectorConfig(director, wavefieldScreen ? wavefieldScreen.currentState : undefined);
-      } else if (wavefieldScreen) {
-        // Fallback to legacy export
-        const script = wavefieldScreen.activeScriptEvents || [];
-        const state = wavefieldScreen.currentState || {};
-        let exportData: any[] = [];
-        
-        if (script.length === 0) {
-          exportData = [
-            { time: 0, type: 'theme', value: state.theme },
-            { time: 0, type: 'device', value: state.device },
-            { time: 0, type: 'speed', value: state.speed },
-            { time: 0, type: 'gap', value: state.gap },
-            { time: 0, type: 'height', value: state.height },
-            { time: 0, type: 'mode', value: state.mode },
-            { time: 0, type: 'rippleDir', value: state.rippleDir }
-          ];
-        } else {
-          exportData = script.map((evt: any) => ({
-            time: evt.time,
-            type: evt.config.target,
-            value: evt.config.amount
-          }));
-        }
-        
-        exportConfigAsJSON({
-          engine: 'wave_field',
-          ...state,
-          script: exportData
-        });
-      }
-    } else if (this.activeScreen === 'diorama') {
-      // Diorama export - will be fully wired in Phase 2
-      const dioramaScreen = this.shadowRoot?.querySelector('diorama-screen') as any;
-      const dashboard = dioramaScreen?.shadowRoot?.querySelector('lofi-dashboard') as any;
-      const director = dashboard?.shadowRoot?.querySelector('audio-director') as AudioDirector | null;
-      
-      if (director) {
-        exportDirectorConfig(director, {
-          primaryArray: dashboard.primaryArray || [],
-          secondaryArray: dashboard.secondaryArray || [],
-        });
-      } else {
-        alert("Load an audio file in the Diorama timeline first.");
-      }
-    } else if (this.activeScreen === 'credits') {
-      const creditsScreen = this.shadowRoot?.querySelector('cinematic-credits') as any;
-      if (creditsScreen && typeof creditsScreen.exportConfig === 'function') {
-        creditsScreen.exportConfig();
-      }
+    const selector = this.activeScreen === 'diorama' 
+      ? 'lofi-dashboard' 
+      : this.activeScreen === 'wavefield' 
+        ? 'wavefield-screen' 
+        : 'cinematic-credits';
+    const activeScreenEl = this.shadowRoot?.querySelector(selector) as (Element & ExportableScreen) | null;
+    if (activeScreenEl && typeof activeScreenEl.exportConfig === 'function') {
+      activeScreenEl.exportConfig();
     }
   }
 
@@ -134,7 +85,7 @@ export class MainApp extends LitElement {
       
       <div class="screen-container">
         ${this.activeScreen === 'diorama' 
-          ? html`<diorama-screen></diorama-screen>` 
+          ? html`<lofi-dashboard></lofi-dashboard>` 
           : this.activeScreen === 'wavefield'
             ? html`<wavefield-screen></wavefield-screen>`
             : html`<cinematic-credits></cinematic-credits>`}
