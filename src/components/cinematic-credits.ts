@@ -4,59 +4,12 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
-import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { AudioManager } from '../utils/audio-manager';
 import floatingCoupleImage from '../assets/couple_forward_silhouette.png';
 import { exportConfigAsJSON } from '../utils/exportConfig';
 import type { ExportableScreen } from '../types/screen';
-
-const CinematicGrainShader = {
-  uniforms: {
-    'tDiffuse': { value: null },
-    'uTime': { value: 0.0 },
-    'uAmount': { value: 0.05 },
-    'uLuminanceWeight': { value: 1.0 }
-  },
-  vertexShader: `
-    varying vec2 vUv;
-    void main() {
-      vUv = uv;
-      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-    }
-  `,
-  fragmentShader: `
-    uniform sampler2D tDiffuse;
-    uniform float uTime;
-    uniform float uAmount;
-    uniform float uLuminanceWeight;
-    varying vec2 vUv;
-
-    float hash(vec2 p) {
-      p = fract(p * vec2(123.34, 456.21));
-      p += dot(p, p + 45.32);
-      return fract(p.x * p.y);
-    }
-
-    void main() {
-      vec4 texColor = texture2D(tDiffuse, vUv);
-      
-      float luminance = dot(texColor.rgb, vec3(0.299, 0.587, 0.114));
-      
-      float weight = 1.0 - abs(luminance - 0.5) * 2.0; 
-      weight = mix(1.0, weight, uLuminanceWeight);
-      
-      vec2 seed = vUv + fract(uTime * 1.3453);
-      
-      float noise = hash(seed) * 0.5 + hash(seed + vec2(0.123, 0.456)) * 0.25 + hash(seed - vec2(0.321, 0.654)) * 0.25;
-      noise = (noise - 0.5) * 2.0;
-      
-      texColor.rgb += noise * (uAmount / 5.0) * weight;
-      
-      gl_FragColor = texColor;
-    }
-  `
-};
+import { VisualEffectsStack } from '../utils/visual-effects';
 
 @customElement('cinematic-credits')
 export class CinematicCredits extends LitElement implements ExportableScreen {
@@ -448,6 +401,10 @@ export class CinematicCredits extends LitElement implements ExportableScreen {
   @state() private sunSize = 0.4;
   @state() private sunGlowAmount = 1.0;
   @state() private grainAmount = 3.5; // Start with heavy 70s grain
+  @state() private vhsEnabled = false;
+  @state() private vhsIntensity = 1.0;
+  @state() private noirEnabled = false;
+  @state() private noirIntensity = 1.0;
   @state() private selectedFigure: 'couple' | 'cowboy' | 'chairs' = 'couple';
   @state() private sunsetSpeed = 0.015;
   @state() private sunsetManualProgress = 0.7; // Start halfway down the horizon
@@ -463,7 +420,7 @@ export class CinematicCredits extends LitElement implements ExportableScreen {
   @state() private audioLoop = false;
 
   private audioManager = new AudioManager();
-  private customGrainPass!: ShaderPass;
+  private effects!: VisualEffectsStack;
   private lastFrameTime = 0;
   private sunY = -0.47; // Start lower
 
@@ -488,6 +445,10 @@ export class CinematicCredits extends LitElement implements ExportableScreen {
       sunSize: this.sunSize,
       sunGlowAmount: this.sunGlowAmount,
       grainAmount: this.grainAmount,
+      vhsEnabled: this.vhsEnabled,
+      vhsIntensity: this.vhsIntensity,
+      noirEnabled: this.noirEnabled,
+      noirIntensity: this.noirIntensity,
       selectedFigure: this.selectedFigure,
       sunsetSpeed: this.sunsetSpeed,
       creditsSpeed: this.creditsSpeed,
@@ -517,6 +478,10 @@ export class CinematicCredits extends LitElement implements ExportableScreen {
         if (typeof config.sunSize === 'number') this.sunSize = config.sunSize;
         if (typeof config.sunGlowAmount === 'number') this.sunGlowAmount = config.sunGlowAmount;
         if (typeof config.grainAmount === 'number') this.grainAmount = config.grainAmount;
+        if (typeof config.vhsEnabled === 'boolean') this.vhsEnabled = config.vhsEnabled;
+        if (typeof config.vhsIntensity === 'number') this.vhsIntensity = config.vhsIntensity;
+        if (typeof config.noirEnabled === 'boolean') this.noirEnabled = config.noirEnabled;
+        if (typeof config.noirIntensity === 'number') this.noirIntensity = config.noirIntensity;
         if (config.selectedFigure) this.selectedFigure = config.selectedFigure;
         if (typeof config.sunsetSpeed === 'number') this.sunsetSpeed = config.sunsetSpeed;
         if (typeof config.creditsSpeed === 'number') this.creditsSpeed = config.creditsSpeed;
@@ -558,6 +523,18 @@ export class CinematicCredits extends LitElement implements ExportableScreen {
       }
       if (this.hasAttribute('data-grain-amount')) {
         this.grainAmount = parseFloat(this.getAttribute('data-grain-amount') || '3.5');
+      }
+      if (this.hasAttribute('data-vhs-enabled')) {
+        this.vhsEnabled = this.getAttribute('data-vhs-enabled') === 'true';
+      }
+      if (this.hasAttribute('data-vhs-intensity')) {
+        this.vhsIntensity = parseFloat(this.getAttribute('data-vhs-intensity') || '1.0');
+      }
+      if (this.hasAttribute('data-noir-enabled')) {
+        this.noirEnabled = this.getAttribute('data-noir-enabled') === 'true';
+      }
+      if (this.hasAttribute('data-noir-intensity')) {
+        this.noirIntensity = parseFloat(this.getAttribute('data-noir-intensity') || '1.0');
       }
       if (this.hasAttribute('data-selected-figure')) {
         this.selectedFigure = (this.getAttribute('data-selected-figure') as any) || 'couple';
@@ -636,9 +613,9 @@ export class CinematicCredits extends LitElement implements ExportableScreen {
       this.backgroundUniforms.uSunsetProgress.value = this.sunsetManualProgress;
     }
 
-    if (this.customGrainPass) {
-      this.customGrainPass.uniforms.uTime.value = time;
-      this.customGrainPass.uniforms.uAmount.value = this.grainAmount;
+    if (this.effects) {
+      this.effects.update(time);
+      this.effects.setGrain(this.grainAmount);
     }
 
     // 1. Roll progress: credits roll finishes 3.5s before end of video
@@ -1224,10 +1201,12 @@ export class CinematicCredits extends LitElement implements ExportableScreen {
       0.9  // threshold - Increased so sky doesn't bloom
     );
     this.composer.addPass(bloomPass);
-    
-    this.customGrainPass = new ShaderPass(CinematicGrainShader);
-    this.customGrainPass.uniforms.uAmount.value = this.grainAmount;
-    this.composer.addPass(this.customGrainPass);
+
+    this.effects = new VisualEffectsStack(this.clientWidth, this.clientHeight);
+    this.effects.setGrain(this.grainAmount);
+    this.effects.setVHS(this.vhsEnabled, this.vhsIntensity);
+    this.effects.setNoir(this.noirEnabled, this.noirIntensity);
+    this.effects.addToComposer(this.composer);
 
     const outputPass = new OutputPass();
     this.composer.addPass(outputPass);
@@ -1240,6 +1219,9 @@ export class CinematicCredits extends LitElement implements ExportableScreen {
     this.composer.setSize(this.clientWidth, this.clientHeight);
     if (this.backgroundUniforms) {
       this.backgroundUniforms.uResolution.value.set(this.clientWidth, this.clientHeight);
+    }
+    if (this.effects) {
+      this.effects.setResolution(this.clientWidth, this.clientHeight);
     }
   };
 
@@ -1286,10 +1268,10 @@ export class CinematicCredits extends LitElement implements ExportableScreen {
       this.backgroundUniforms.uSunsetProgress.value = this.sunsetManualProgress;
     }
     
-    if (this.customGrainPass) {
-      this.customGrainPass.uniforms.uTime.value = time;
+    if (this.effects) {
+      this.effects.update(time);
     }
-    
+
     // 1. Roll progress: credits roll finishes 3.5s before end of track
     const rollDuration = Math.max(1.0, dur - 3.5);
     const rollProgress = Math.max(0, Math.min(1, currentTime / rollDuration));
@@ -1340,8 +1322,42 @@ export class CinematicCredits extends LitElement implements ExportableScreen {
   private handleGrainChange(e: Event) {
     const target = e.target as HTMLInputElement;
     this.grainAmount = parseFloat(target.value);
-    if (this.customGrainPass) {
-      this.customGrainPass.uniforms.uAmount.value = this.grainAmount;
+    if (this.effects) {
+      this.effects.setGrain(this.grainAmount);
+    }
+    this.saveConfigToLocalStorage();
+  }
+
+  private toggleVHS() {
+    this.vhsEnabled = !this.vhsEnabled;
+    if (this.effects) {
+      this.effects.setVHS(this.vhsEnabled, this.vhsIntensity);
+    }
+    this.saveConfigToLocalStorage();
+  }
+
+  private handleVHSIntensityChange(e: Event) {
+    const target = e.target as HTMLInputElement;
+    this.vhsIntensity = parseFloat(target.value);
+    if (this.effects) {
+      this.effects.setVHS(this.vhsEnabled, this.vhsIntensity);
+    }
+    this.saveConfigToLocalStorage();
+  }
+
+  private toggleNoir() {
+    this.noirEnabled = !this.noirEnabled;
+    if (this.effects) {
+      this.effects.setNoir(this.noirEnabled, this.noirIntensity);
+    }
+    this.saveConfigToLocalStorage();
+  }
+
+  private handleNoirIntensityChange(e: Event) {
+    const target = e.target as HTMLInputElement;
+    this.noirIntensity = parseFloat(target.value);
+    if (this.effects) {
+      this.effects.setNoir(this.noirEnabled, this.noirIntensity);
     }
     this.saveConfigToLocalStorage();
   }
@@ -1537,14 +1553,56 @@ export class CinematicCredits extends LitElement implements ExportableScreen {
               <span>Film Grain</span>
               <span class="control-value">${this.grainAmount.toFixed(2)}</span>
             </div>
-            <input 
-              type="range" 
-              min="0.0" 
-              max="25.0" 
-              step="0.1" 
-              .value="${this.grainAmount}" 
+            <input
+              type="range"
+              min="0.0"
+              max="25.0"
+              step="0.1"
+              .value="${this.grainAmount}"
               @input="${this.handleGrainChange}"
             />
+          </div>
+
+          <!-- VHS Effect -->
+          <div class="control-group">
+            <div class="switch-container" @click="${this.toggleVHS}">
+              <span class="switch-label">VHS Effect</span>
+              <label class="switch">
+                <input type="checkbox" .checked="${this.vhsEnabled}" readonly />
+                <span class="slider"></span>
+              </label>
+            </div>
+            ${this.vhsEnabled ? html`
+              <input
+                type="range"
+                min="0.0"
+                max="1.0"
+                step="0.05"
+                .value="${this.vhsIntensity}"
+                @input="${this.handleVHSIntensityChange}"
+              />
+            ` : ''}
+          </div>
+
+          <!-- Black & White Noir Effect -->
+          <div class="control-group">
+            <div class="switch-container" @click="${this.toggleNoir}">
+              <span class="switch-label">B&W Noir</span>
+              <label class="switch">
+                <input type="checkbox" .checked="${this.noirEnabled}" readonly />
+                <span class="slider"></span>
+              </label>
+            </div>
+            ${this.noirEnabled ? html`
+              <input
+                type="range"
+                min="0.0"
+                max="1.0"
+                step="0.05"
+                .value="${this.noirIntensity}"
+                @input="${this.handleNoirIntensityChange}"
+              />
+            ` : ''}
           </div>
 
           <!-- Loaded Figure Selector -->
