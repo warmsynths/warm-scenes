@@ -2644,9 +2644,10 @@ export class LofiDiorama extends LitElement {
   }
 
   private async loadOfflineAudio() {
-    // Try ../audio.wav first (render mode: temp HTML is in docs/, audio is at project root)
-    // Fall back to audio.wav for compatibility
-    const paths = ['../audio.wav', 'audio.wav'];
+    // Try audio.wav first (render mode: HyperFrames serves relative to the project root,
+    // matching the <audio id="main-audio"> src in render.js). Fall back to ../audio.wav
+    // for older/alternate serving setups.
+    const paths = ['audio.wav', '../audio.wav'];
     for (const audioPath of paths) {
       try {
         const response = await fetch(audioPath);

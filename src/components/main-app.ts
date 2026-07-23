@@ -1,9 +1,26 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
+import gsap from 'gsap';
 import './lofi-dashboard';
 import './wavefield-screen';
 import './cinematic-credits';
 import type { ExportableScreen } from '../types/screen';
+
+// HyperFrames composition contract: register one paused GSAP timeline at
+// window.__timelines['<composition-id>'], built synchronously at page load.
+// Uses the app's own bundled GSAP instead of a render-time CDN script so
+// renders don't depend on network access. No-op outside a HyperFrames render
+// (there's no #composition element in the normal dev/preview app).
+const compositionEl = document.getElementById('composition');
+if (compositionEl) {
+  const compositionId = compositionEl.getAttribute('data-composition-id');
+  if (compositionId) {
+    (window as any).__timelines = (window as any).__timelines || {};
+    if (!(window as any).__timelines[compositionId]) {
+      (window as any).__timelines[compositionId] = gsap.timeline({ paused: true });
+    }
+  }
+}
 
 @customElement('main-app')
 export class MainApp extends LitElement {

@@ -766,13 +766,37 @@ export class LofiDashboard extends LitElement implements ExportableScreen {
         time: parseFloat(el.getAttribute('data-start') || '0'),
       }));
 
-      // Read primary/secondary arrays from host element
+      // Read primary/secondary arrays and scene state from host element
       const dioramaHost = document.querySelector('lofi-dashboard') || document.querySelector('diorama-screen');
       if (dioramaHost) {
         const primaryStr = dioramaHost.getAttribute('data-primary-array') || '';
         const secondaryStr = dioramaHost.getAttribute('data-secondary-array') || '';
         if (primaryStr) this.primaryArray = primaryStr.split(',').filter(s => s);
         if (secondaryStr) this.secondaryArray = secondaryStr.split(',').filter(s => s);
+
+        const activeGearStr = dioramaHost.getAttribute('data-active-gear') || '';
+        if (activeGearStr) this.activeGear = activeGearStr.split(',').filter(s => s);
+
+        const environment = { ...this.sceneState.environment };
+        if (dioramaHost.hasAttribute('data-weather')) {
+          environment.weather = (dioramaHost.getAttribute('data-weather') as Weather) || environment.weather;
+        }
+        if (dioramaHost.hasAttribute('data-time-of-day')) {
+          environment.timeOfDay = (dioramaHost.getAttribute('data-time-of-day') as TimeOfDay) || environment.timeOfDay;
+        }
+        if (dioramaHost.hasAttribute('data-scene-mode')) {
+          environment.sceneMode = (dioramaHost.getAttribute('data-scene-mode') as 'normal' | 'liminal') || environment.sceneMode;
+        }
+        if (dioramaHost.hasAttribute('data-celestial-position')) {
+          environment.celestialPosition = parseFloat(dioramaHost.getAttribute('data-celestial-position') || '') || environment.celestialPosition;
+        }
+        if (dioramaHost.hasAttribute('data-rain-intensity')) {
+          environment.rainIntensity = parseFloat(dioramaHost.getAttribute('data-rain-intensity') || '') || environment.rainIntensity;
+        }
+        if (dioramaHost.hasAttribute('data-lightning-intensity')) {
+          environment.lightningIntensity = parseFloat(dioramaHost.getAttribute('data-lightning-intensity') || '') || environment.lightningIntensity;
+        }
+        this.sceneState = { ...this.sceneState, environment };
       }
     }
   }
@@ -1435,6 +1459,8 @@ export class LofiDashboard extends LitElement implements ExportableScreen {
       exportDirectorConfig(director, {
         primaryArray: this.primaryArray || [],
         secondaryArray: this.secondaryArray || [],
+        activeGear: this.activeGear || [],
+        environment: this.sceneState.environment,
       });
     } else {
       alert("Load an audio file in the Diorama timeline first.");

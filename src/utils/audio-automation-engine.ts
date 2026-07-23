@@ -30,6 +30,8 @@ export class AudioAutomationEngine {
     worker: Worker,
     channelData: Float32Array,
     sampleRate: number,
+    primaryArray: string[],
+    secondaryArray: string[],
     sensitivity: number
   ): Promise<DioramaAnalyzeResult> {
     return new Promise((resolve, reject) => {
@@ -53,9 +55,14 @@ export class AudioAutomationEngine {
       worker.addEventListener('error', handleError);
 
       worker.postMessage({
-        channelData,
-        sampleRate,
-        sensitivity
+        type: 'ANALYZE_DIORAMA',
+        payload: {
+          channelData,
+          sampleRate,
+          primaryArray,
+          secondaryArray,
+          sensitivity
+        }
       });
     });
   }

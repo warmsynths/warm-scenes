@@ -116,11 +116,19 @@ function main() {
       }).join('\n');
       
       eventsHtml = macroHtml + '\n' + microHtml;
-      targetScreen = `<diorama-screen 
-        data-primary-array="${(config.primaryArray || []).join(',')}" 
-        data-secondary-array="${(config.secondaryArray || []).join(',')}" 
+      const environment = config.environment || {};
+      targetScreen = `<lofi-dashboard
+        data-primary-array="${(config.primaryArray || []).join(',')}"
+        data-secondary-array="${(config.secondaryArray || []).join(',')}"
+        data-active-gear="${(config.activeGear || []).join(',')}"
+        data-weather="${environment.weather || 'sunny'}"
+        data-time-of-day="${environment.timeOfDay || 'day'}"
+        data-scene-mode="${environment.sceneMode || 'normal'}"
+        data-celestial-position="${environment.celestialPosition !== undefined ? environment.celestialPosition : 50}"
+        data-rain-intensity="${environment.rainIntensity !== undefined ? environment.rainIntensity : 50}"
+        data-lightning-intensity="${environment.lightningIntensity !== undefined ? environment.lightningIntensity : 50}"
         style="width: 100%; height: 100%; display: block;">
-      </diorama-screen>`;
+      </lofi-dashboard>`;
     } else if (engine === 'credits') {
       eventsHtml = '';
       targetScreen = `<cinematic-credits 
@@ -156,7 +164,7 @@ function main() {
   <div id="composition" data-composition-id="main" data-width="1920" data-height="1080" data-start="0" data-duration="${duration}" style="width: 1920px; height: 1080px; position: relative; overflow: hidden; background: #000;">
     
     <!-- Audio track (Hyperframes will own this) -->
-    <audio id="main-audio" src="../audio.wav" data-start="0"></audio>
+    <audio id="main-audio" src="audio.wav" data-start="0"></audio>
 
     <!-- Config Events -->
 ${eventsHtml}
