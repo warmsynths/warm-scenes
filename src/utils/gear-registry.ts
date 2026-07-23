@@ -41,36 +41,36 @@ export class GearRegistry {
     return createGearModel(id);
   }
 
-  public static getTrackerScreen(): TrackerScreen {
-    if (!this.trackerScreen) {
-      this.trackerScreen = new TrackerScreen();
-    }
+  public static createTrackerScreen(): TrackerScreen {
+    this.trackerScreen = new TrackerScreen();
     return this.trackerScreen;
   }
 
-  public static getM8Screen(): M8Screen {
-    if (!this.m8Screen) {
-      this.m8Screen = new M8Screen();
-    }
+  public static createM8Screen(): M8Screen {
+    this.m8Screen = new M8Screen();
     return this.m8Screen;
   }
 
-  public static getQuantumCube(scene?: THREE.Scene): QuantumCube {
-    if (!this.quantumCube) {
-      this.quantumCube = new QuantumCube(scene);
-    }
+  public static createQuantumCube(): QuantumCube {
+    this.quantumCube = new QuantumCube();
     return this.quantumCube;
   }
 
-  public static updateScreens(time: number): void {
+  public static updateTrackerScreen(amplitude: number = 0, bass: number = 0): void {
     if (this.trackerScreen) {
-      this.trackerScreen.update(time);
+      this.trackerScreen.update(amplitude, bass);
     }
+  }
+
+  public static updateM8Screen(amplitude: number = 0, bass: number = 0, freqs: number[] = []): void {
     if (this.m8Screen) {
-      this.m8Screen.update(time);
+      this.m8Screen.update(amplitude, bass, freqs);
     }
+  }
+
+  public static updateQuantumCube(renderer: THREE.WebGLRenderer, mainCamera: THREE.Camera): void {
     if (this.quantumCube) {
-      this.quantumCube.update(time);
+      this.quantumCube.update(renderer, mainCamera);
     }
   }
 }

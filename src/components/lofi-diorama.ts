@@ -27,6 +27,7 @@ import { AudioManager } from '../utils/audio-manager';
 import { TrackerScreen } from '../utils/tracker-screen';
 import { M8Screen } from '../utils/m8-screen';
 import { QuantumCube } from '../utils/quantum-cube';
+import { GearRegistry } from '../utils/gear-registry';
 import type { DioramaSceneState } from '../types/diorama';
 
 const MM_TO_UNITS = 0.018;
@@ -2834,11 +2835,11 @@ export class LofiDiorama extends LitElement {
 
     // Tracker screen
     if (this.trackerScreen && this.activeGear.includes('polyend')) {
-      this.trackerScreen.update(amplitude, bass);
+      GearRegistry.updateTrackerScreen(amplitude, bass);
     }
 
     if (this.m8Screen && this.activeGear.includes('m8')) {
-      this.m8Screen.update(amplitude, bass, freqs);
+      GearRegistry.updateM8Screen(amplitude, bass, freqs);
     }
 
     // Circuit pad LEDs
@@ -2901,7 +2902,7 @@ export class LofiDiorama extends LitElement {
     }
 
     if (this.quantumCube) {
-      this.quantumCube.update(this.renderer, this.camera);
+      GearRegistry.updateQuantumCube(this.renderer, this.camera);
     }
 
     if (this.controls) {

@@ -1,6 +1,5 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, state, query } from 'lit/decorators.js';
-import { AudioManager } from '../utils/audio-manager';
 import './lofi-diorama';
 import './gear-preview';
 import './AudioDirector/AudioDirector';
@@ -9,6 +8,8 @@ import type { DioramaAnalyzeResult, DioramaAnalyzeError } from './AudioDirector/
 import { exportDirectorConfig } from '../utils/exportConfig';
 import type { ExportableScreen } from '../types/screen';
 import type { DioramaSceneState } from '../types/diorama';
+import { GearRegistry } from '../utils/gear-registry';
+import { AudioAutomationEngine } from '../utils/audio-automation-engine';
 
 import ufoPosterImg from '../assets/posters/iwanttobelieve_.jpg';
 import tr808PosterImg from '../assets/posters/tr808.png';
@@ -20,30 +21,10 @@ import whiteRugImg from '../assets/rugs/white_arched_rug.png';
 type Weather = 'sunny' | 'rainy' | 'thunderstorm';
 type TimeOfDay = 'day' | 'sunset' | 'night';
 
-const GEAR_DICTIONARY: Record<string, string> = {
-  polyend: 'Polyend Tracker',
-  circuit_tracks: 'Circuit Tracks',
-  mood: 'MOOD',
-  blooper: 'Blooper',
-  generation_loss: 'Gen Loss',
-  sp404: 'SP-404',
-  m8: 'M8',
-  poster_believe: 'Believe Poster',
-  poster_808: 'TR-808 Poster',
-  poster_mpc: 'MPC Poster',
-  lamp: 'Desk Lamp',
-  cup: 'Coffee Cup',
-  succulent_echeveria: 'Echeveria',
-  succulent_moonstones: 'Moonstones',
-  succulent_haworthia: 'Haworthia',
-  succulent_pearls: 'String of Pearls',
-  succulent_jade: 'Jade Plant'
-};
-
 @customElement('lofi-dashboard')
 export class LofiDashboard extends LitElement implements ExportableScreen {
-  @state()
-  private audioManager = new AudioManager();
+  private automationEngine = new AudioAutomationEngine();
+  get audioManager() { return this.automationEngine.manager; }
 
   @state()
   private isDragOver = false;
@@ -1306,10 +1287,7 @@ export class LofiDashboard extends LitElement implements ExportableScreen {
       this.dioramaWorker.terminate();
     }
 
-    this.dioramaWorker = new Worker(
-      new URL('./AudioDirector/diorama-analyzer.worker.ts', import.meta.url),
-      { type: 'module' }
-    );
+    this.dioramaWorker = this.automationEngine.createDioramaWorker();
 
     this.dioramaWorker.onmessage = (ev: MessageEvent) => {
       const data = ev.data;
@@ -1343,10 +1321,10 @@ export class LofiDashboard extends LitElement implements ExportableScreen {
 
   private get dioramaTargets(): AvailableTarget[] {
     return this.activeGear
-      .filter(id => GEAR_DICTIONARY[id] !== undefined)
+      .filter(id => GearRegistry.getLabel(id) !== id)
       .map(id => ({
         id: id,
-        label: GEAR_DICTIONARY[id],
+        label: GearRegistry.getLabel(id),
         type: 'trigger' as const
       }));
   }
