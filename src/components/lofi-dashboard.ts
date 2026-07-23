@@ -58,6 +58,11 @@ export class LofiDashboard extends LitElement implements ExportableScreen {
       celestialPosition: 50,
       rainIntensity: 50,
       lightningIntensity: 50,
+      grainAmount: 0,
+      vhsEnabled: false,
+      vhsIntensity: 1.0,
+      noirEnabled: false,
+      noirIntensity: 1.0,
     },
     gear: {
       activeGear: this.getInitialGear(),
@@ -113,6 +118,46 @@ export class LofiDashboard extends LitElement implements ExportableScreen {
     this.sceneState = {
       ...this.sceneState,
       environment: { ...this.sceneState.environment, lightningIntensity: val }
+    };
+  }
+
+  get grainAmount(): number { return this.sceneState.environment.grainAmount; }
+  set grainAmount(val: number) {
+    this.sceneState = {
+      ...this.sceneState,
+      environment: { ...this.sceneState.environment, grainAmount: val }
+    };
+  }
+
+  get vhsEnabled(): boolean { return this.sceneState.environment.vhsEnabled; }
+  set vhsEnabled(val: boolean) {
+    this.sceneState = {
+      ...this.sceneState,
+      environment: { ...this.sceneState.environment, vhsEnabled: val }
+    };
+  }
+
+  get vhsIntensity(): number { return this.sceneState.environment.vhsIntensity; }
+  set vhsIntensity(val: number) {
+    this.sceneState = {
+      ...this.sceneState,
+      environment: { ...this.sceneState.environment, vhsIntensity: val }
+    };
+  }
+
+  get noirEnabled(): boolean { return this.sceneState.environment.noirEnabled; }
+  set noirEnabled(val: boolean) {
+    this.sceneState = {
+      ...this.sceneState,
+      environment: { ...this.sceneState.environment, noirEnabled: val }
+    };
+  }
+
+  get noirIntensity(): number { return this.sceneState.environment.noirIntensity; }
+  set noirIntensity(val: number) {
+    this.sceneState = {
+      ...this.sceneState,
+      environment: { ...this.sceneState.environment, noirIntensity: val }
     };
   }
 
@@ -796,6 +841,21 @@ export class LofiDashboard extends LitElement implements ExportableScreen {
         if (dioramaHost.hasAttribute('data-lightning-intensity')) {
           environment.lightningIntensity = parseFloat(dioramaHost.getAttribute('data-lightning-intensity') || '') || environment.lightningIntensity;
         }
+        if (dioramaHost.hasAttribute('data-grain-amount')) {
+          environment.grainAmount = parseFloat(dioramaHost.getAttribute('data-grain-amount') || '') || environment.grainAmount;
+        }
+        if (dioramaHost.hasAttribute('data-vhs-enabled')) {
+          environment.vhsEnabled = dioramaHost.getAttribute('data-vhs-enabled') === 'true';
+        }
+        if (dioramaHost.hasAttribute('data-vhs-intensity')) {
+          environment.vhsIntensity = parseFloat(dioramaHost.getAttribute('data-vhs-intensity') || '') || environment.vhsIntensity;
+        }
+        if (dioramaHost.hasAttribute('data-noir-enabled')) {
+          environment.noirEnabled = dioramaHost.getAttribute('data-noir-enabled') === 'true';
+        }
+        if (dioramaHost.hasAttribute('data-noir-intensity')) {
+          environment.noirIntensity = parseFloat(dioramaHost.getAttribute('data-noir-intensity') || '') || environment.noirIntensity;
+        }
         this.sceneState = { ...this.sceneState, environment };
       }
     }
@@ -1178,6 +1238,31 @@ export class LofiDashboard extends LitElement implements ExportableScreen {
             <div style="font-size: 0.85rem; color: #a49382; font-weight: 700;">Lightning Frequency</div>
             <input type="range" class="scrub-slider" min="0" max="100" .value="${this.lightningIntensity.toString()}" @input="${(e: Event) => this.lightningIntensity = parseFloat((e.target as HTMLInputElement).value)}" />
           </div>
+        ` : ''}
+      </div>
+
+      <div class="gear-section" style="padding: 12px; max-width: 300px;">
+        <div class="gear-category-title" style="padding-left: 0; margin-bottom: 8px;">Visual Filters</div>
+
+        <div class="slider-container" style="margin-bottom: 12px;">
+          <div style="font-size: 0.85rem; color: #a49382; font-weight: 700;">Film Grain</div>
+          <input type="range" class="scrub-slider" min="0" max="25" step="0.1" .value="${this.grainAmount.toString()}" @input="${(e: Event) => this.grainAmount = parseFloat((e.target as HTMLInputElement).value)}" />
+        </div>
+
+        <div class="slider-container" style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+          <input type="checkbox" .checked="${this.vhsEnabled}" @change="${(e: Event) => this.vhsEnabled = (e.target as HTMLInputElement).checked}" />
+          <div style="font-size: 0.85rem; color: #a49382; font-weight: 700;">VHS Effect</div>
+        </div>
+        ${this.vhsEnabled ? html`
+          <input type="range" class="scrub-slider" min="0" max="1" step="0.05" .value="${this.vhsIntensity.toString()}" @input="${(e: Event) => this.vhsIntensity = parseFloat((e.target as HTMLInputElement).value)}" style="margin-bottom: 12px;" />
+        ` : ''}
+
+        <div class="slider-container" style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+          <input type="checkbox" .checked="${this.noirEnabled}" @change="${(e: Event) => this.noirEnabled = (e.target as HTMLInputElement).checked}" />
+          <div style="font-size: 0.85rem; color: #a49382; font-weight: 700;">B&W Noir</div>
+        </div>
+        ${this.noirEnabled ? html`
+          <input type="range" class="scrub-slider" min="0" max="1" step="0.05" .value="${this.noirIntensity.toString()}" @input="${(e: Event) => this.noirIntensity = parseFloat((e.target as HTMLInputElement).value)}" />
         ` : ''}
       </div>
     `;

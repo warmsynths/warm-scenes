@@ -28,6 +28,7 @@ import { TrackerScreen } from '../utils/tracker-screen';
 import { M8Screen } from '../utils/m8-screen';
 import { QuantumCube } from '../utils/quantum-cube';
 import { GearRegistry } from '../utils/gear-registry';
+import { VisualEffectsStack } from '../utils/visual-effects';
 import type { DioramaSceneState } from '../types/diorama';
 
 const MM_TO_UNITS = 0.018;
@@ -72,6 +73,26 @@ export class LofiDiorama extends LitElement {
 
   get lightningIntensity(): number {
     return this.sceneState?.environment.lightningIntensity ?? 50;
+  }
+
+  get grainAmount(): number {
+    return this.sceneState?.environment.grainAmount ?? 0;
+  }
+
+  get vhsEnabled(): boolean {
+    return this.sceneState?.environment.vhsEnabled ?? false;
+  }
+
+  get vhsIntensity(): number {
+    return this.sceneState?.environment.vhsIntensity ?? 1.0;
+  }
+
+  get noirEnabled(): boolean {
+    return this.sceneState?.environment.noirEnabled ?? false;
+  }
+
+  get noirIntensity(): number {
+    return this.sceneState?.environment.noirIntensity ?? 1.0;
   }
 
   get activeGear(): string[] {
@@ -134,6 +155,7 @@ export class LofiDiorama extends LitElement {
   private backroomsGroup!: THREE.Group;
   private backroomsWallMeshes: THREE.Mesh[] = [];
   private bloomPass!: UnrealBloomPass;
+  private effects!: VisualEffectsStack;
 
   @state()
   private activeConfigDevice: THREE.Object3D | null = null;
@@ -463,6 +485,12 @@ export class LofiDiorama extends LitElement {
         0.85   // threshold
     );
     this.composer.addPass(this.bloomPass);
+
+    this.effects = new VisualEffectsStack(width, height);
+    this.effects.setGrain(this.grainAmount);
+    this.effects.setVHS(this.vhsEnabled, this.vhsIntensity);
+    this.effects.setNoir(this.noirEnabled, this.noirIntensity);
+    this.effects.addToComposer(this.composer);
 
     const outputPass = new OutputPass();
     this.composer.addPass(outputPass);
@@ -2584,6 +2612,9 @@ export class LofiDiorama extends LitElement {
     this.renderer.setSize(width, height, false);
     this.cssRenderer.setSize(width, height);
     this.composer.setSize(width, height);
+    if (this.effects) {
+      this.effects.setResolution(width, height);
+    }
   }
 
   private startLoop() {
@@ -2930,6 +2961,14 @@ export class LofiDiorama extends LitElement {
       // Release camera to orbit controls
       this.sequencerActive = false;
       this.controls.enabled = true;
+    }
+
+    if (this.effects) {
+      const effectsTime = this.isRenderMode ? this.renderCurrentTime : performance.now() / 1000;
+      this.effects.update(effectsTime);
+      this.effects.setGrain(this.grainAmount);
+      this.effects.setVHS(this.vhsEnabled, this.vhsIntensity);
+      this.effects.setNoir(this.noirEnabled, this.noirIntensity);
     }
 
     // Use composer for post-processing instead of standard renderer

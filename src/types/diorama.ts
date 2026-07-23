@@ -5,6 +5,11 @@ export interface DioramaEnvironmentConfig {
   celestialPosition: number;
   rainIntensity: number;
   lightningIntensity: number;
+  grainAmount: number;
+  vhsEnabled: boolean;
+  vhsIntensity: number;
+  noirEnabled: boolean;
+  noirIntensity: number;
 }
 
 export interface DioramaGearConfig {

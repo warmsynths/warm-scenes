@@ -93,7 +93,7 @@ function main() {
       const displayMode = config.displayMode || (config.mode !== 'wave_field' ? config.mode : undefined) || 'full';
       const rippleDir = config.rippleDir || 'down';
 
-      targetScreen = `<wavefield-screen 
+      targetScreen = `<wavefield-screen
         data-theme="${theme}"
         data-device="${device}"
         data-speed="${speed}"
@@ -101,6 +101,11 @@ function main() {
         data-height="${height}"
         data-mode="${displayMode}"
         data-ripple-dir="${rippleDir}"
+        data-grain-amount="${config.grainAmount !== undefined ? config.grainAmount : 0}"
+        data-vhs-enabled="${config.vhsEnabled ? 'true' : 'false'}"
+        data-vhs-intensity="${config.vhsIntensity !== undefined ? config.vhsIntensity : 1.0}"
+        data-noir-enabled="${config.noirEnabled ? 'true' : 'false'}"
+        data-noir-intensity="${config.noirIntensity !== undefined ? config.noirIntensity : 1.0}"
         style="width: 100%; height: 100%; display: block;">
       </wavefield-screen>`;
     } else if (engine === 'diorama') {
@@ -127,6 +132,11 @@ function main() {
         data-celestial-position="${environment.celestialPosition !== undefined ? environment.celestialPosition : 50}"
         data-rain-intensity="${environment.rainIntensity !== undefined ? environment.rainIntensity : 50}"
         data-lightning-intensity="${environment.lightningIntensity !== undefined ? environment.lightningIntensity : 50}"
+        data-grain-amount="${environment.grainAmount !== undefined ? environment.grainAmount : 0}"
+        data-vhs-enabled="${environment.vhsEnabled ? 'true' : 'false'}"
+        data-vhs-intensity="${environment.vhsIntensity !== undefined ? environment.vhsIntensity : 1.0}"
+        data-noir-enabled="${environment.noirEnabled ? 'true' : 'false'}"
+        data-noir-intensity="${environment.noirIntensity !== undefined ? environment.noirIntensity : 1.0}"
         style="width: 100%; height: 100%; display: block;">
       </lofi-dashboard>`;
     } else if (engine === 'credits') {

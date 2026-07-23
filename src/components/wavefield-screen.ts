@@ -9,6 +9,7 @@ import './AudioDirector/AudioDirector';
 import type { AudioDirector } from './AudioDirector/AudioDirector';
 import { exportConfigAsJSON, exportDirectorConfig } from '../utils/exportConfig';
 import type { ExportableScreen } from '../types/screen';
+import { VisualEffectsStack } from '../utils/visual-effects';
 
 @customElement('wavefield-screen')
 export class WavefieldScreen extends LitElement implements ExportableScreen {
@@ -87,6 +88,23 @@ export class WavefieldScreen extends LitElement implements ExportableScreen {
 
   @state()
   private gridHeight: number = 100;
+
+  @state()
+  private grainAmount: number = 0;
+
+  @state()
+  private vhsEnabled = false;
+
+  @state()
+  private vhsIntensity = 1.0;
+
+  @state()
+  private noirEnabled = false;
+
+  @state()
+  private noirIntensity = 1.0;
+
+  private effects!: VisualEffectsStack;
 
   static styles = css`
     :host {
@@ -279,11 +297,18 @@ export class WavefieldScreen extends LitElement implements ExportableScreen {
 
     const renderScene = new RenderPass(this.scene, this.camera);
     const bloomPass = new UnrealBloomPass(new THREE.Vector2(width, height), 0.35, 0.4, 0.1);
-    const outputPass = new OutputPass();
-    
+
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(renderScene);
     this.composer.addPass(bloomPass);
+
+    this.effects = new VisualEffectsStack(width, height);
+    this.effects.setGrain(this.grainAmount);
+    this.effects.setVHS(this.vhsEnabled, this.vhsIntensity);
+    this.effects.setNoir(this.noirEnabled, this.noirIntensity);
+    this.effects.addToComposer(this.composer);
+
+    const outputPass = new OutputPass();
     this.composer.addPass(outputPass);
 
     this.buildWavefield();
@@ -396,6 +421,9 @@ export class WavefieldScreen extends LitElement implements ExportableScreen {
     this.renderer.setSize(width, height);
     if (this.composer) {
       this.composer.setSize(width, height);
+    }
+    if (this.effects) {
+      this.effects.setResolution(width, height);
     }
   }
 
@@ -562,6 +590,16 @@ export class WavefieldScreen extends LitElement implements ExportableScreen {
       if (this.hasAttribute('data-height')) this.gridHeight = parseFloat(this.getAttribute('data-height') || '100');
       if (this.hasAttribute('data-mode')) this.mode = (this.getAttribute('data-mode') as any) || 'full';
       if (this.hasAttribute('data-ripple-dir')) this.rippleDir = (this.getAttribute('data-ripple-dir') as any) || 'down';
+      if (this.hasAttribute('data-grain-amount')) this.grainAmount = parseFloat(this.getAttribute('data-grain-amount') || '0');
+      if (this.hasAttribute('data-vhs-enabled')) this.vhsEnabled = this.getAttribute('data-vhs-enabled') === 'true';
+      if (this.hasAttribute('data-vhs-intensity')) this.vhsIntensity = parseFloat(this.getAttribute('data-vhs-intensity') || '1.0');
+      if (this.hasAttribute('data-noir-enabled')) this.noirEnabled = this.getAttribute('data-noir-enabled') === 'true';
+      if (this.hasAttribute('data-noir-intensity')) this.noirIntensity = parseFloat(this.getAttribute('data-noir-intensity') || '1.0');
+      if (this.effects) {
+        this.effects.setGrain(this.grainAmount);
+        this.effects.setVHS(this.vhsEnabled, this.vhsIntensity);
+        this.effects.setNoir(this.noirEnabled, this.noirIntensity);
+      }
 
       this.updateThemeColors();
 
@@ -617,8 +655,11 @@ export class WavefieldScreen extends LitElement implements ExportableScreen {
 
   private renderScene() {
     if (!this.renderer || !this.scene || !this.camera) return;
-    
+
     this.time += 0.05;
+    if (this.effects) {
+      this.effects.update(this.time);
+    }
     let targetWeight = 0;
     let volumeRipple = 0;
 
@@ -921,7 +962,12 @@ export class WavefieldScreen extends LitElement implements ExportableScreen {
       gap: this.lineGap,
       height: this.gridHeight,
       mode: this.mode,
-      rippleDir: this.rippleDir
+      rippleDir: this.rippleDir,
+      grainAmount: this.grainAmount,
+      vhsEnabled: this.vhsEnabled,
+      vhsIntensity: this.vhsIntensity,
+      noirEnabled: this.noirEnabled,
+      noirIntensity: this.noirIntensity
     };
 
     if (director) {
@@ -1048,7 +1094,28 @@ export class WavefieldScreen extends LitElement implements ExportableScreen {
           <label>Height:</label>
           <input type="range" min="10" max="200" step="10" .value="${this.gridHeight}" @input="${(e: any) => this.gridHeight = parseInt(e.target.value)}" style="flex: 1" />
         </div>
-        
+
+        <div class="controls-row">
+          <label>Film Grain:</label>
+          <input type="range" min="0.0" max="25.0" step="0.1" .value="${this.grainAmount}" @input="${(e: any) => { this.grainAmount = parseFloat(e.target.value); this.effects?.setGrain(this.grainAmount); }}" style="flex: 1" />
+        </div>
+
+        <div class="controls-row">
+          <label>VHS Effect:</label>
+          <input type="checkbox" .checked="${this.vhsEnabled}" @change="${(e: any) => { this.vhsEnabled = e.target.checked; this.effects?.setVHS(this.vhsEnabled, this.vhsIntensity); }}" />
+          ${this.vhsEnabled ? html`
+            <input type="range" min="0.0" max="1.0" step="0.05" .value="${this.vhsIntensity}" @input="${(e: any) => { this.vhsIntensity = parseFloat(e.target.value); this.effects?.setVHS(this.vhsEnabled, this.vhsIntensity); }}" style="flex: 1; margin-left: 8px;" />
+          ` : ''}
+        </div>
+
+        <div class="controls-row">
+          <label>B&W Noir:</label>
+          <input type="checkbox" .checked="${this.noirEnabled}" @change="${(e: any) => { this.noirEnabled = e.target.checked; this.effects?.setNoir(this.noirEnabled, this.noirIntensity); }}" />
+          ${this.noirEnabled ? html`
+            <input type="range" min="0.0" max="1.0" step="0.05" .value="${this.noirIntensity}" @input="${(e: any) => { this.noirIntensity = parseFloat(e.target.value); this.effects?.setNoir(this.noirEnabled, this.noirIntensity); }}" style="flex: 1; margin-left: 8px;" />
+          ` : ''}
+        </div>
+
         <div class="status">
           ${this.audioInitialized ? 'Audio active (Hard bass triggers reveal)' : 'Waiting for audio...'}
         </div>
