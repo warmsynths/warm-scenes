@@ -67,14 +67,14 @@ export class MainApp extends LitElement {
       const director = wavefieldScreen?.shadowRoot?.querySelector('audio-director') as AudioDirector | null;
       
       if (director) {
-        exportDirectorConfig(director);
+        exportDirectorConfig(director, wavefieldScreen ? wavefieldScreen.currentState : undefined);
       } else if (wavefieldScreen) {
         // Fallback to legacy export
         const script = wavefieldScreen.activeScriptEvents || [];
+        const state = wavefieldScreen.currentState || {};
         let exportData: any[] = [];
         
         if (script.length === 0) {
-          const state = wavefieldScreen.currentState;
           exportData = [
             { time: 0, type: 'theme', value: state.theme },
             { time: 0, type: 'device', value: state.device },
@@ -92,7 +92,11 @@ export class MainApp extends LitElement {
           }));
         }
         
-        exportConfigAsJSON(exportData);
+        exportConfigAsJSON({
+          engine: 'wave_field',
+          ...state,
+          script: exportData
+        });
       }
     } else if (this.activeScreen === 'diorama') {
       // Diorama export - will be fully wired in Phase 2
@@ -109,7 +113,10 @@ export class MainApp extends LitElement {
         alert("Load an audio file in the Diorama timeline first.");
       }
     } else if (this.activeScreen === 'credits') {
-      alert("Cinematic Credits rendering path is not currently supported by the video render engine.");
+      const creditsScreen = this.shadowRoot?.querySelector('cinematic-credits') as any;
+      if (creditsScreen && typeof creditsScreen.exportConfig === 'function') {
+        creditsScreen.exportConfig();
+      }
     }
   }
 

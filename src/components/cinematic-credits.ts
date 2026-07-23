@@ -8,6 +8,7 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { AudioManager } from '../utils/audio-manager';
 import floatingCoupleImage from '../assets/couple_forward_silhouette.png';
+import { exportConfigAsJSON } from '../utils/exportConfig';
 
 const CinematicGrainShader = {
   uniforms: {
@@ -474,14 +475,108 @@ export class CinematicCredits extends LitElement {
   private clock = new THREE.Clock();
   
   private backgroundUniforms: any;
-  private creditsCanvas!: HTMLCanvasElement;
-  private creditsCtx!: CanvasRenderingContext2D;
-  private creditsTexture!: THREE.CanvasTexture;
-  private creditsOffset = 0;
   private silhouetteMesh!: THREE.Mesh;
   private silhouetteBaseY = 0.5;
 
+  private isRenderMode = false;
+
+  public getConfig() {
+    return {
+      engine: 'credits',
+      duration: this.audioDuration || 60,
+      sunSize: this.sunSize,
+      sunGlowAmount: this.sunGlowAmount,
+      grainAmount: this.grainAmount,
+      selectedFigure: this.selectedFigure,
+      sunsetSpeed: this.sunsetSpeed,
+      creditsSpeed: this.creditsSpeed,
+      syncToAudio: this.syncToAudio,
+      sunsetManualProgress: this.sunsetManualProgress,
+    };
+  }
+
+  public exportConfig() {
+    exportConfigAsJSON(this.getConfig(), 'config.json');
+  }
+
+  private saveConfigToLocalStorage() {
+    try {
+      const config = this.getConfig();
+      localStorage.setItem('cinematic_credits_config', JSON.stringify(config));
+    } catch (e) {
+      console.warn('Failed to save credits config to localStorage', e);
+    }
+  }
+
+  private loadConfigFromLocalStorage() {
+    try {
+      const saved = localStorage.getItem('cinematic_credits_config');
+      if (saved) {
+        const config = JSON.parse(saved);
+        if (typeof config.sunSize === 'number') this.sunSize = config.sunSize;
+        if (typeof config.sunGlowAmount === 'number') this.sunGlowAmount = config.sunGlowAmount;
+        if (typeof config.grainAmount === 'number') this.grainAmount = config.grainAmount;
+        if (config.selectedFigure) this.selectedFigure = config.selectedFigure;
+        if (typeof config.sunsetSpeed === 'number') this.sunsetSpeed = config.sunsetSpeed;
+        if (typeof config.creditsSpeed === 'number') this.creditsSpeed = config.creditsSpeed;
+        if (typeof config.syncToAudio === 'boolean') this.syncToAudio = config.syncToAudio;
+        if (typeof config.sunsetManualProgress === 'number') this.sunsetManualProgress = config.sunsetManualProgress;
+      }
+    } catch (e) {
+      console.warn('Failed to load credits config from localStorage', e);
+    }
+  }
+
+  private fadeMesh!: THREE.Mesh;
+  private fadeMaterial!: THREE.MeshBasicMaterial;
+
+  private createFadeOverlay() {
+    const geometry = new THREE.PlaneGeometry(100, 100);
+    this.fadeMaterial = new THREE.MeshBasicMaterial({
+      color: 0x000000,
+      transparent: true,
+      opacity: 0.0,
+      depthTest: false
+    });
+    this.fadeMesh = new THREE.Mesh(geometry, this.fadeMaterial);
+    this.fadeMesh.position.set(0, 0, 4); // In front of all 3D content, behind camera at z=5
+    this.scene.add(this.fadeMesh);
+  }
+
   async firstUpdated() {
+    this.isRenderMode = window.hasOwnProperty('__timelines') || 
+                        this.hasAttribute('data-sun-size') || 
+                        document.querySelector('#composition') !== null;
+
+    if (this.isRenderMode) {
+      if (this.hasAttribute('data-sun-size')) {
+        this.sunSize = parseFloat(this.getAttribute('data-sun-size') || '0.4');
+      }
+      if (this.hasAttribute('data-sun-glow')) {
+        this.sunGlowAmount = parseFloat(this.getAttribute('data-sun-glow') || '1.0');
+      }
+      if (this.hasAttribute('data-grain-amount')) {
+        this.grainAmount = parseFloat(this.getAttribute('data-grain-amount') || '3.5');
+      }
+      if (this.hasAttribute('data-selected-figure')) {
+        this.selectedFigure = (this.getAttribute('data-selected-figure') as any) || 'couple';
+      }
+      if (this.hasAttribute('data-sunset-speed')) {
+        this.sunsetSpeed = parseFloat(this.getAttribute('data-sunset-speed') || '0.015');
+      }
+      if (this.hasAttribute('data-credits-speed')) {
+        this.creditsSpeed = parseFloat(this.getAttribute('data-credits-speed') || '0.001');
+      }
+      if (this.hasAttribute('data-sync-to-audio')) {
+        this.syncToAudio = this.getAttribute('data-sync-to-audio') === 'true';
+      }
+      if (this.hasAttribute('data-sunset-progress')) {
+        this.sunsetManualProgress = parseFloat(this.getAttribute('data-sunset-progress') || '0.7');
+      }
+    } else {
+      this.loadConfigFromLocalStorage();
+    }
+
     this.initScene();
     this.createBackground();
     this.createSilhouette();
@@ -494,13 +589,85 @@ export class CinematicCredits extends LitElement {
     }
     
     this.createCredits();
+    this.createFadeOverlay();
     this.setupPostProcessing();
     
-    window.addEventListener('resize', this.handleResize);
-    
-    this.clock.start();
-    this.lastFrameTime = performance.now() / 1000;
-    this.renderLoop();
+    if (this.isRenderMode) {
+      console.log('[Credits] HyperFrames render mode detected');
+      const compEl = document.getElementById('composition');
+      const compDuration = compEl ? parseFloat(compEl.getAttribute('data-duration') || '60') : (this.audioDuration || 60);
+      const initialSunsetProgress = this.sunsetManualProgress;
+
+      window.addEventListener('hf-seek', (e: any) => {
+        const time = e.detail.time;
+        this.renderFrameAtTime(time, compDuration, initialSunsetProgress);
+      });
+
+      this.renderFrameAtTime(0, compDuration, initialSunsetProgress);
+    } else {
+      window.addEventListener('resize', this.handleResize);
+      this.clock.start();
+      this.lastFrameTime = performance.now() / 1000;
+      this.renderLoop();
+    }
+  }
+
+  private renderFrameAtTime(
+    time: number,
+    duration: number,
+    initialSunsetProgress: number
+  ) {
+    if (this.syncToAudio && duration > 0) {
+      const progress = Math.max(0, Math.min(1, time / duration));
+      this.sunsetManualProgress = progress;
+    } else {
+      this.sunsetManualProgress = Math.min(1.0, initialSunsetProgress + (this.sunsetSpeed * time) / 1.1);
+    }
+    const startSunY = 0.35;
+    const endSunY = -0.55 - (this.sunSize * 1.25) - 0.25;
+    this.sunY = startSunY + (endSunY - startSunY) * this.sunsetManualProgress;
+
+    if (this.backgroundUniforms) {
+      this.backgroundUniforms.uTime.value = time;
+      this.backgroundUniforms.uSunY.value = this.sunY;
+      this.backgroundUniforms.uSunSize.value = this.sunSize;
+      this.backgroundUniforms.uSunGlowAmount.value = this.sunGlowAmount;
+      this.backgroundUniforms.uSunsetProgress.value = this.sunsetManualProgress;
+    }
+
+    if (this.customGrainPass) {
+      this.customGrainPass.uniforms.uTime.value = time;
+      this.customGrainPass.uniforms.uAmount.value = this.grainAmount;
+    }
+
+    // 1. Roll progress: credits roll finishes 3.5s before end of video
+    const rollDuration = Math.max(1.0, duration - 3.5);
+    const rollProgress = Math.max(0, Math.min(1, time / rollDuration));
+    if (this.creditsMesh && this.creditsStartY !== undefined && this.creditsEndY !== undefined) {
+      this.creditsMesh.position.y = this.creditsStartY + rollProgress * (this.creditsEndY - this.creditsStartY);
+    }
+
+    // 2. Fade to black overlay in final 1.5 seconds of the video
+    const fadeStartTime = Math.max(0, duration - 1.5);
+    const fadeProgress = (duration > fadeStartTime) 
+      ? Math.max(0, Math.min(1, (time - fadeStartTime) / (duration - fadeStartTime))) 
+      : 0;
+    if (this.fadeMaterial) {
+      this.fadeMaterial.opacity = fadeProgress;
+    }
+
+    if (this.silhouetteMesh) {
+      if (this.selectedFigure === 'couple') {
+        const floatY = Math.sin(time * 0.4) * 0.03 + Math.sin(time * 0.15) * 0.02;
+        const floatX = Math.cos(time * 0.3) * 0.02;
+        this.silhouetteMesh.position.y = this.silhouetteBaseY + floatY;
+        this.silhouetteMesh.position.x = -1.2 + floatX;
+      } else {
+        this.silhouetteMesh.position.y = this.silhouetteBaseY;
+      }
+    }
+
+    this.composer.render();
   }
 
   disconnectedCallback() {
@@ -533,7 +700,8 @@ export class CinematicCredits extends LitElement {
       uResolution: { value: new THREE.Vector2(this.clientWidth, this.clientHeight) },
       uSunY: { value: this.sunY },
       uSunSize: { value: this.sunSize },
-      uSunGlowAmount: { value: this.sunGlowAmount }
+      uSunGlowAmount: { value: this.sunGlowAmount },
+      uSunsetProgress: { value: this.sunsetManualProgress }
     };
 
     const vertexShader = `
@@ -550,6 +718,7 @@ export class CinematicCredits extends LitElement {
       uniform float uSunY;
       uniform float uSunSize;
       uniform float uSunGlowAmount;
+      uniform float uSunsetProgress;
       varying vec2 vUv;
 
       void main() {
@@ -558,10 +727,40 @@ export class CinematicCredits extends LitElement {
         vec2 p = screenUv * 2.0 - 1.0;
         p.x *= uResolution.x / uResolution.y;
 
-        // Background gradient (sunset sky)
-        vec3 topColor = vec3(0.1, 0.05, 0.1); 
-        vec3 bottomColor = vec3(0.5, 0.15, 0.05); // Darker so it doesn't bloom
-        vec3 color = mix(bottomColor, topColor, screenUv.y);
+        // Dynamic Sky Colors based on uSunsetProgress (0 = Golden Hour, 0.5 = Sunset, 1.0 = Deep Dusk/Twilight)
+        float prog = clamp(uSunsetProgress, 0.0, 1.0);
+
+        // 1. Horizon Colors (bottom of sky)
+        vec3 horizonDay    = vec3(0.85, 0.42, 0.15); // Golden Amber
+        vec3 horizonSunset = vec3(0.65, 0.20, 0.08); // Fiery Crimson Sunset
+        vec3 horizonDusk   = vec3(0.28, 0.07, 0.14); // Deep Dusk Twilight Violet
+
+        vec3 bottomColor = prog < 0.5 
+          ? mix(horizonDay, horizonSunset, prog * 2.0)
+          : mix(horizonSunset, horizonDusk, (prog - 0.5) * 2.0);
+
+        // 2. Mid Sky Colors
+        vec3 midDay    = vec3(0.45, 0.16, 0.22); // Rose Warmth
+        vec3 midSunset = vec3(0.25, 0.07, 0.20); // Deep Purple
+        vec3 midDusk   = vec3(0.07, 0.03, 0.12); // Night Indigo
+
+        vec3 midColor = prog < 0.5 
+          ? mix(midDay, midSunset, prog * 2.0)
+          : mix(midSunset, midDusk, (prog - 0.5) * 2.0);
+
+        // 3. Zenith Colors (top of sky)
+        vec3 topDay    = vec3(0.12, 0.05, 0.18); // Deep Violet
+        vec3 topSunset = vec3(0.06, 0.03, 0.12); // Dark Navy Purple
+        vec3 topDusk   = vec3(0.02, 0.01, 0.05); // Midnight Dark Sky
+
+        vec3 topColor = prog < 0.5 
+          ? mix(topDay, topSunset, prog * 2.0)
+          : mix(topSunset, topDusk, (prog - 0.5) * 2.0);
+
+        // 3-stop sky gradient across screen height
+        vec3 color = screenUv.y < 0.5 
+          ? mix(bottomColor, midColor, screenUv.y * 2.0)
+          : mix(midColor, topColor, (screenUv.y - 0.5) * 2.0);
 
         // Heat haze / rippling effect
         float heat = sin(p.y * 40.0 - uTime * 4.0) * 0.015;
@@ -573,9 +772,12 @@ export class CinematicCredits extends LitElement {
         float sunMask = smoothstep(uSunSize, uSunSize - 0.02, d); // Distinct core
         float sunGlow = smoothstep(uSunSize * 3.0, uSunSize * 0.2, d); // Hazy glow
         
-        vec3 sunColor = vec3(0.88, 0.48, 0.12); // Kept strictly below 0.9 bloom threshold to prevent bleeding over horizon
+        // Sun color shifts warmer/redder as it sets
+        vec3 sunColorDay = vec3(0.95, 0.55, 0.15);
+        vec3 sunColorDusk = vec3(0.80, 0.25, 0.05);
+        vec3 sunColor = mix(sunColorDay, sunColorDusk, prog);
         
-        color += sunColor * sunGlow * 0.4 * uSunGlowAmount; // Add glow modulated by slider
+        color += sunColor * sunGlow * 0.4 * uSunGlowAmount * (1.0 - prog * 0.5); // Add glow modulated by slider
         color = mix(color, sunColor, sunMask); // Solid distinct core
 
         // Silhouetted desert terrain
@@ -695,27 +897,50 @@ export class CinematicCredits extends LitElement {
     );
   }
 
-  private createCredits() {
+  private creditsCanvas!: HTMLCanvasElement;
+  private creditsCtx!: CanvasRenderingContext2D;
+  private creditsTexture!: THREE.CanvasTexture;
+  private creditsMesh!: THREE.Mesh;
+  private creditsStartY = 0;
+  private creditsEndY = 0;
+
+  private createCredits(targetDuration?: number) {
+    const duration = targetDuration || this.audioDuration || 60;
+    
+    // Remove existing mesh if rebuilding
+    if (this.creditsMesh) {
+      this.scene.remove(this.creditsMesh);
+      this.creditsMesh.geometry.dispose();
+      (this.creditsMesh.material as THREE.Material).dispose();
+      if (this.creditsTexture) this.creditsTexture.dispose();
+    }
+
+    // Standard reading speed ~ 160px per second on canvas
+    const textTargetHeight = Math.max(6000, Math.ceil(duration * 160));
+    const canvasWidth = 1024;
+    
     this.creditsCanvas = document.createElement('canvas');
-    this.creditsCanvas.width = 1024;
-    this.creditsCanvas.height = 8192;
+    this.creditsCanvas.width = canvasWidth;
+    
+    // First pass to measure canvas height
+    const { topY, bottomY, totalCanvasHeight } = this.drawCreditsText(textTargetHeight);
+    
+    this.creditsCanvas.height = totalCanvasHeight;
     this.creditsCtx = this.creditsCanvas.getContext('2d')!;
     
-    // Draw text onto the canvas
-    this.drawCreditsText();
+    // Final pass to draw onto correctly sized canvas
+    this.drawCreditsText(textTargetHeight);
 
     this.creditsTexture = new THREE.CanvasTexture(this.creditsCanvas);
     this.creditsTexture.minFilter = THREE.LinearFilter;
     this.creditsTexture.magFilter = THREE.LinearFilter;
     this.creditsTexture.wrapS = THREE.ClampToEdgeWrapping;
-    this.creditsTexture.wrapT = THREE.RepeatWrapping;
+    this.creditsTexture.wrapT = THREE.ClampToEdgeWrapping;
 
-    // Credits are moved to z = -1 so they render IN FRONT of the silhouette (at z = -2).
-    // Original was at z = -4 (distance 9 from camera at z=5). New distance is 6.
-    // Scale by 6/9 to maintain the same visual size on screen. 
-    // Height is 64 because canvas is 8192 (twice the original 4096/32).
     const scale = 6.0 / 9.0;
-    const geometry = new THREE.PlaneGeometry(8 * scale, 64 * scale); 
+    const planeWidth = 8 * scale;
+    const planeHeight = (totalCanvasHeight / canvasWidth) * planeWidth;
+    const geometry = new THREE.PlaneGeometry(planeWidth, planeHeight); 
     const material = new THREE.MeshBasicMaterial({
       map: this.creditsTexture,
       transparent: true,
@@ -724,98 +949,265 @@ export class CinematicCredits extends LitElement {
       depthTest: false
     });
 
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(0, 0, -1);
-    this.scene.add(mesh);
+    this.creditsMesh = new THREE.Mesh(geometry, material);
+    this.creditsMesh.position.set(0, 0, -1);
+
+    // Calculate startY and endY for 3D scrolling
+    // Viewport height at z = -1 (distance 6, FOV 60) is ~6.928
+    const viewportHeight = 2.0 * 6.0 * Math.tan(THREE.MathUtils.degToRad(30));
+    
+    // Local Y of pixel y on canvas: (planeHeight/2) - (y / totalCanvasHeight) * planeHeight
+    const localTopY = (planeHeight / 2.0) - (topY / totalCanvasHeight) * planeHeight;
+    const localBottomY = (planeHeight / 2.0) - (bottomY / totalCanvasHeight) * planeHeight;
+
+    // At progress = 0: top of text is just below viewport bottom
+    this.creditsStartY = - (viewportHeight / 2.0) - 0.5 - localTopY;
+    
+    // At progress = 1.0: bottom Warmer Bros block rests in lower-center of viewport
+    this.creditsEndY = -0.5 - localBottomY;
+
+    this.creditsMesh.position.y = this.creditsStartY;
+    this.scene.add(this.creditsMesh);
   }
 
-  private drawCreditsText() {
+  private drawCreditsText(targetHeightPx: number): { topY: number; bottomY: number; totalCanvasHeight: number } {
     const ctx = this.creditsCtx;
-    ctx.clearRect(0, 0, this.creditsCanvas.width, this.creditsCanvas.height);
+    const width = 1024;
     
-    ctx.fillStyle = 'rgba(255, 200, 150, 1.0)';
-    ctx.textAlign = 'center';
-    
-    let y = 500;
-    const centerX = this.creditsCanvas.width / 2;
-    
-    const jobs = [
-      "DIRECTED BY", "PRODUCED BY", "EXECUTIVE PRODUCERS", "WRITTEN BY",
-      "BASED ON THE NOVEL BY", "MUSIC BY", "DIRECTOR OF PHOTOGRAPHY",
-      "EDITED BY", "PRODUCTION DESIGNER", "ART DIRECTOR", "COSTUME DESIGNER",
-      "MAKEUP AND HAIR DESIGNER", "SOUND MIXER", "SOUND DESIGNER",
-      "VISUAL EFFECTS SUPERVISOR", "CAST", "STUNT COORDINATOR",
-      "FIRST ASSISTANT DIRECTOR", "CAMERA OPERATOR", "KEY GRIP", "GAFFER",
-      "LOCATION MANAGER", "CREW"
-    ];
+    if (ctx) {
+      ctx.clearRect(0, 0, width, this.creditsCanvas.height || 8192);
+    }
+
+    let y = 600;
+    const topY = y;
+    const centerX = width / 2;
 
     const famousFirsts = [
       "Leonardo", "Brad", "Tom", "Meryl", "Denzel", "Scarlett", "Morgan",
       "Harrison", "Natalie", "Joaquin", "Charlize", "Christian", "Viola", 
       "Ryan", "Emma", "Chris", "Jennifer", "Samuel", "Cate", "Matthew",
-      "Anne", "Hugh", "Julia", "Daniel", "Keanu", "Halle"
+      "Anne", "Hugh", "Julia", "Daniel", "Keanu", "Halle", "Cillian", "Florence",
+      "Pedro", "Zendaya", "Timothée", "Margot", "Austin", "Ana", "Willem"
     ];
-    
+
     const famousLasts = [
       "DiCaprio", "Pitt", "Hanks", "Streep", "Washington", "Johansson", "Freeman",
       "Ford", "Portman", "Phoenix", "Theron", "Bale", "Davis",
       "Gosling", "Stone", "Evans", "Lawrence", "Jackson", "Blanchett", "McConaughey",
-      "Hathaway", "Jackman", "Roberts", "Day-Lewis", "Reeves", "Berry"
+      "Hathaway", "Jackman", "Roberts", "Day-Lewis", "Reeves", "Berry", "Murphy",
+      "Pugh", "Pascal", "Coleman", "Chalamet", "Robbie", "Butler", "de Armas", "Dafoe"
     ];
 
-    const firstNames = ["Adam", "Sarah", "John", "Emily", "Michael", "Jessica", "David", "Laura", "James", "Rachel"];
-    const colors = ["Red", "Green", "Black", "White", "Silver", "Gold", "Grey", "Brown", "Crimson", "Violet"];
-    const nouns = ["stone", "wood", "water", "smith", "bridge", "field", "hill", "brook", "heart", "man"];
+    const characterFirsts = ["Adam", "Sarah", "John", "Emily", "Michael", "Jessica", "David", "Laura", "James", "Rachel", "Marcus", "Elena"];
+    const characterColors = ["Red", "Green", "Black", "White", "Silver", "Gold", "Grey", "Brown", "Crimson", "Violet", "Amber", "Cobalt"];
+    const characterNouns = ["stone", "wood", "water", "smith", "bridge", "field", "hill", "brook", "heart", "man", "vane", "cross"];
 
-    const generateActorName = () => {
-      const first = famousFirsts[Math.floor(Math.random() * famousFirsts.length)];
-      const last = famousLasts[Math.floor(Math.random() * famousLasts.length)];
-      return `${first} ${last}`;
+    const pseudoRandom = (seed: number) => {
+      const x = Math.sin(seed * 9999.1234 + 123.456) * 43758.5453;
+      return x - Math.floor(x);
     };
 
-    const generateCharacterName = () => {
-      const first = firstNames[Math.floor(Math.random() * firstNames.length)];
-      const color = colors[Math.floor(Math.random() * colors.length)];
-      const noun = nouns[Math.floor(Math.random() * nouns.length)];
-      return `${first} ${color}${noun}`;
+    const getActorName = (index: number) => {
+      const fIdx = Math.floor(pseudoRandom(index * 13 + 1) * famousFirsts.length);
+      const lIdx = Math.floor(pseudoRandom(index * 17 + 3) * famousLasts.length);
+      return `${famousFirsts[fIdx]} ${famousLasts[lIdx]}`;
     };
 
-    jobs.forEach(job => {
-      ctx.font = 'bold 36px "Chivo", "Arial Narrow", "Helvetica Condensed", Helvetica, sans-serif'; 
-      ctx.globalAlpha = 0.9;
-      ctx.fillStyle = 'rgba(255, 200, 150, 1.0)';
-      ctx.shadowBlur = 0;
+    const getCharacterName = (index: number) => {
+      const fIdx = Math.floor(pseudoRandom(index * 19 + 7) * characterFirsts.length);
+      const cIdx = Math.floor(pseudoRandom(index * 23 + 11) * characterColors.length);
+      const nIdx = Math.floor(pseudoRandom(index * 29 + 13) * characterNouns.length);
+      return `${characterFirsts[fIdx]} ${characterColors[cIdx]}${characterNouns[nIdx]}`;
+    };
+
+    // Main Header
+    if (ctx) {
+      ctx.font = '900 54px "Chivo", sans-serif';
+      ctx.fillStyle = 'rgba(255, 230, 190, 1.0)';
       ctx.textAlign = 'center';
+      ctx.fillText('W A R M   S C E N E S', centerX, y);
       
-      const spacedJob = job.split('').join(' ');
-      ctx.fillText(spacedJob, centerX, y);
-      y += 60;
-      
-      let numNames = Math.floor(Math.random() * 3) + 1;
-      if (job === "CAST") numNames = 12;
-      if (job === "CREW") numNames = 15;
+      y += 65;
+      ctx.font = 'bold 28px "Nunito", sans-serif';
+      ctx.fillStyle = 'rgba(255, 180, 130, 0.9)';
+      ctx.fillText('A CINEMATIC DIORAMA EXPERIENCE', centerX, y);
 
-      for (let i = 0; i < numNames; i++) {
-        ctx.font = 'normal 32px "Chivo", "Arial Narrow", sans-serif'; 
-        ctx.globalAlpha = 0.8;
+      y += 50;
+      ctx.font = 'normal 22px "Nunito", sans-serif';
+      ctx.fillStyle = 'rgba(255, 150, 100, 0.75)';
+      ctx.fillText('A WARMER BROS. STUDIOS PRODUCTION', centerX, y);
+    }
+    y += 160;
+
+    const baseDepartments = [
+      { title: "DIRECTED BY", count: 1 },
+      { title: "PRODUCED BY", count: 2 },
+      { title: "EXECUTIVE PRODUCERS", count: 3 },
+      { title: "WRITTEN BY", count: 2 },
+      { title: "BASED ON THE NOVEL BY", count: 1 },
+      { title: "MUSIC COMPOSED & PERFORMED BY", count: 1 },
+      { title: "DIRECTOR OF PHOTOGRAPHY", count: 1 },
+      { title: "EDITED BY", count: 2 },
+      { title: "PRODUCTION DESIGNER", count: 1 },
+      { title: "ART DIRECTOR", count: 2 },
+      { title: "COSTUME DESIGNER", count: 1 },
+      { title: "MAKEUP AND HAIR DESIGNER", count: 2 },
+      { title: "SOUND MIXER & SOUND DESIGN", count: 2 },
+      { title: "VISUAL EFFECTS SUPERVISOR", count: 1 },
+      { title: "CAST", isCast: true },
+      { title: "STUNT COORDINATOR", count: 1 },
+      { title: "FIRST ASSISTANT DIRECTOR", count: 1 },
+      { title: "SECOND ASSISTANT DIRECTOR", count: 2 },
+      { title: "CAMERA OPERATORS", count: 4 },
+      { title: "FIRST ASSISTANT CAMERA", count: 3 },
+      { title: "GAFFER & CHIEF LIGHTING TECHNICIAN", count: 2 },
+      { title: "BEST BOY ELECTRIC", count: 2 },
+      { title: "KEY GRIP & DOLLEY GRIP", count: 3 },
+      { title: "SET DECORATORS & PROPS", count: 4 },
+      { title: "FOLEY ARTISTS & SOUND EDITORS", count: 4 },
+      { title: "RE-RECORDING MIXERS", count: 2 },
+      { title: "VISUAL EFFECTS ARTISTS", count: 6 },
+      { title: "SUPERVISING ANIMATORS", count: 4 },
+      { title: "COMPOSITING LEAD", count: 3 },
+      { title: "DIGITAL COLORIST", count: 2 },
+      { title: "LOCATION MANAGERS", count: 3 },
+      { title: "STUNT TEAM", count: 6 },
+      { title: "TRANSPORTATION COORDINATORS", count: 3 },
+      { title: "CATERING & CRAFT SERVICES", count: 4 },
+      { title: "PRODUCTION ACCOUNTANTS", count: 3 },
+      { title: "POST PRODUCTION SUPERVISOR", count: 2 },
+      { title: "MUSIC SUPERVISORS & CLEARANCES", count: 3 },
+      { title: "SPECIAL THANKS", count: 6 },
+    ];
+
+    let nameCounter = 1;
+    let sectionIdx = 0;
+    
+    // Fill out department listings until target height is met
+    while (y < targetHeightPx - 800 || sectionIdx < baseDepartments.length) {
+      const dept = baseDepartments[sectionIdx % baseDepartments.length];
+      
+      if (ctx) {
+        ctx.font = 'bold 36px "Chivo", sans-serif'; 
+        ctx.globalAlpha = 0.95;
+        ctx.fillStyle = 'rgba(255, 200, 150, 1.0)';
+        ctx.textAlign = 'center';
         
-        if (job === "CAST") {
-          const actor = generateActorName();
-          const character = generateCharacterName();
-          
-          ctx.textAlign = 'right';
-          ctx.fillText(actor, centerX - 30, y);
-          
-          ctx.textAlign = 'left';
-          ctx.fillText(character, centerX + 30, y);
-        } else {
-          ctx.textAlign = 'center';
-          ctx.fillText(generateActorName(), centerX, y);
-        }
-        y += 50;
+        const spacedJob = dept.title.split('').join(' ');
+        ctx.fillText(spacedJob, centerX, y);
       }
-      y += 120;
-    });
+      y += 60;
+
+      if (dept.isCast) {
+        const castCount = (targetHeightPx > 15000) ? 24 : 12;
+        for (let i = 0; i < castCount; i++) {
+          if (ctx) {
+            ctx.font = 'normal 30px "Chivo", sans-serif';
+            ctx.globalAlpha = 0.85;
+            ctx.fillStyle = 'rgba(255, 220, 180, 0.9)';
+            
+            const actor = getActorName(nameCounter);
+            const character = getCharacterName(nameCounter);
+            
+            ctx.textAlign = 'right';
+            ctx.fillText(actor, centerX - 30, y);
+            
+            ctx.textAlign = 'left';
+            ctx.fillText(character, centerX + 30, y);
+          }
+          nameCounter++;
+          y += 48;
+        }
+      } else {
+        const count = dept.count || 2;
+        for (let i = 0; i < count; i++) {
+          if (ctx) {
+            ctx.font = 'normal 30px "Chivo", sans-serif'; 
+            ctx.globalAlpha = 0.85;
+            ctx.fillStyle = 'rgba(255, 220, 180, 0.9)';
+            ctx.textAlign = 'center';
+            ctx.fillText(getActorName(nameCounter), centerX, y);
+          }
+          nameCounter++;
+          y += 48;
+        }
+      }
+
+      y += 100;
+      sectionIdx++;
+    }
+
+    // Warmer Bros Studios End Credits Block
+    y += 60;
+    if (ctx) {
+      ctx.globalAlpha = 1.0;
+      // Top decorative bar
+      ctx.strokeStyle = 'rgba(255, 200, 150, 0.6)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(centerX - 350, y);
+      ctx.lineTo(centerX + 350, y);
+      ctx.stroke();
+
+      y += 60;
+      ctx.font = 'bold 36px "Chivo", sans-serif';
+      ctx.fillStyle = 'rgba(255, 220, 180, 1.0)';
+      ctx.textAlign = 'center';
+      ctx.fillText('PRODUCED AND DISTRIBUTED BY', centerX, y);
+
+      y += 55;
+      ctx.font = '900 52px "Chivo", sans-serif';
+      ctx.fillStyle = 'rgba(255, 240, 210, 1.0)';
+      ctx.fillText('WARMER BROS. STUDIOS', centerX, y);
+
+      y += 65;
+      ctx.font = 'bold 26px "Nunito", sans-serif';
+      ctx.fillStyle = 'rgba(255, 200, 150, 0.9)';
+      ctx.fillText('COPYRIGHT © 2026 WARMER BROS. PICTURES INC.', centerX, y);
+
+      y += 38;
+      ctx.font = 'normal 22px "Nunito", sans-serif';
+      ctx.fillStyle = 'rgba(230, 180, 140, 0.8)';
+      ctx.fillText('ALL RIGHTS RESERVED.', centerX, y);
+
+      y += 55;
+      const disclaimerLines = [
+        'THIS MOTION PICTURE IS PROTECTED UNDER THE LAWS OF THE UNITED STATES',
+        'AND OTHER COUNTRIES. ANY UNAUTHORIZED DUPLICATION, DISTRIBUTION OR EXHIBITION',
+        'MAY RESULT IN CIVIL LIABILITY AND CRIMINAL PROSECUTION.',
+        '',
+        'WARMER BROS. STUDIOS ® REG. U.S. PAT. OFF.',
+        'WARM SCENES DIORAMA RENDER ENGINE v2.5',
+        'FILMED ON LOCATION IN WARM SCENES VIRTUAL SOUNDSTAGE'
+      ];
+
+      disclaimerLines.forEach(line => {
+        if (line === '') {
+          y += 18;
+          return;
+        }
+        ctx.font = 'bold 18px "Nunito", sans-serif';
+        ctx.fillStyle = 'rgba(200, 160, 130, 0.75)';
+        ctx.fillText(line, centerX, y);
+        y += 30;
+      });
+
+      y += 25;
+      // Bottom decorative bar
+      ctx.strokeStyle = 'rgba(255, 200, 150, 0.6)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(centerX - 350, y);
+      ctx.lineTo(centerX + 350, y);
+      ctx.stroke();
+    } else {
+      y += 60 + 55 + 65 + 38 + 55 + (7 * 30) + 25;
+    }
+
+    const bottomY = y;
+    const totalCanvasHeight = Math.ceil(bottomY + 1200);
+
+    return { topY, bottomY, totalCanvasHeight };
   }
 
   private setupPostProcessing() {
@@ -864,11 +1256,12 @@ export class CinematicCredits extends LitElement {
       this.isAudioPlaying = this.audioManager.isPlaying;
     }
 
-    // Determine sun position based on speed/audio sync
+    const dur = this.audioDuration || 60;
+    let currentTime = 0;
+
     if (this.syncToAudio && this.audioDuration > 0) {
-      const progress = this.audioTime / this.audioDuration;
-      this.sunsetManualProgress = Math.max(0, Math.min(1, progress));
-      this.sunY = 0.3 - this.sunsetManualProgress * 1.1;
+      currentTime = this.audioTime;
+      this.sunsetManualProgress = Math.max(0, Math.min(1, currentTime / dur));
     } else {
       if (this.isSunsetRunning) {
         this.sunsetManualProgress += (this.sunsetSpeed * delta) / 1.1;
@@ -877,41 +1270,49 @@ export class CinematicCredits extends LitElement {
           this.isSunsetRunning = false;
         }
       }
-      this.sunY = 0.3 - this.sunsetManualProgress * 1.1;
+      currentTime = this.sunsetManualProgress * dur;
     }
+
+    const startSunY = 0.35;
+    const endSunY = -0.55 - (this.sunSize * 1.25) - 0.25;
+    this.sunY = startSunY + (endSunY - startSunY) * this.sunsetManualProgress;
 
     if (this.backgroundUniforms) {
       this.backgroundUniforms.uTime.value = time;
       this.backgroundUniforms.uSunY.value = this.sunY;
       this.backgroundUniforms.uSunSize.value = this.sunSize;
       this.backgroundUniforms.uSunGlowAmount.value = this.sunGlowAmount;
+      this.backgroundUniforms.uSunsetProgress.value = this.sunsetManualProgress;
     }
     
     if (this.customGrainPass) {
       this.customGrainPass.uniforms.uTime.value = time;
     }
     
-    // Scroll credits
-    if (this.creditsTexture) {
-      if (this.syncToAudio && this.audioDuration > 0) {
-        const progress = this.audioTime / this.audioDuration;
-        this.creditsTexture.offset.y = -progress;
-      } else {
-        this.creditsOffset += this.creditsSpeed * (delta * 60.0); 
-        this.creditsTexture.offset.y = -this.creditsOffset; 
-      }
+    // 1. Roll progress: credits roll finishes 3.5s before end of track
+    const rollDuration = Math.max(1.0, dur - 3.5);
+    const rollProgress = Math.max(0, Math.min(1, currentTime / rollDuration));
+    if (this.creditsMesh && this.creditsStartY !== undefined && this.creditsEndY !== undefined) {
+      this.creditsMesh.position.y = this.creditsStartY + rollProgress * (this.creditsEndY - this.creditsStartY);
+    }
+
+    // 2. Fade to black in final 1.5 seconds of track
+    const fadeStartTime = Math.max(0, dur - 1.5);
+    const fadeProgress = (dur > fadeStartTime) 
+      ? Math.max(0, Math.min(1, (currentTime - fadeStartTime) / (dur - fadeStartTime))) 
+      : 0;
+    if (this.fadeMaterial) {
+      this.fadeMaterial.opacity = fadeProgress;
     }
     
     // Animate floating couple
     if (this.silhouetteMesh) {
       if (this.selectedFigure === 'couple') {
-        // Liminal, slow realistic floating physics
         const floatY = Math.sin(time * 0.4) * 0.03 + Math.sin(time * 0.15) * 0.02;
         const floatX = Math.cos(time * 0.3) * 0.02;
         this.silhouetteMesh.position.y = this.silhouetteBaseY + floatY;
         this.silhouetteMesh.position.x = -1.2 + floatX;
       } else {
-        // Cowboy and chairs are stationary on the ground
         this.silhouetteMesh.position.y = this.silhouetteBaseY;
       }
     }
@@ -926,11 +1327,13 @@ export class CinematicCredits extends LitElement {
   private handleSunSizeChange(e: Event) {
     const target = e.target as HTMLInputElement;
     this.sunSize = parseFloat(target.value);
+    this.saveConfigToLocalStorage();
   }
 
   private handleGlowChange(e: Event) {
     const target = e.target as HTMLInputElement;
     this.sunGlowAmount = parseFloat(target.value);
+    this.saveConfigToLocalStorage();
   }
 
   private handleGrainChange(e: Event) {
@@ -939,11 +1342,13 @@ export class CinematicCredits extends LitElement {
     if (this.customGrainPass) {
       this.customGrainPass.uniforms.uAmount.value = this.grainAmount;
     }
+    this.saveConfigToLocalStorage();
   }
 
   private changeFigure(figure: 'couple' | 'cowboy' | 'chairs') {
     this.selectedFigure = figure;
     this.loadSilhouette(figure);
+    this.saveConfigToLocalStorage();
   }
 
   private toggleSyncToAudio() {
@@ -951,22 +1356,26 @@ export class CinematicCredits extends LitElement {
     if (this.syncToAudio) {
       this.isSunsetRunning = false;
     }
+    this.saveConfigToLocalStorage();
   }
 
   private handleSunsetSpeedChange(e: Event) {
     const target = e.target as HTMLInputElement;
     this.sunsetSpeed = parseFloat(target.value);
+    this.saveConfigToLocalStorage();
   }
 
   private handleCreditsSpeedChange(e: Event) {
     const target = e.target as HTMLInputElement;
     this.creditsSpeed = parseFloat(target.value);
+    this.saveConfigToLocalStorage();
   }
 
   private handleSunsetProgressChange(e: Event) {
     const target = e.target as HTMLInputElement;
     this.sunsetManualProgress = parseFloat(target.value);
     this.isSunsetRunning = false;
+    this.saveConfigToLocalStorage();
   }
 
   private toggleSunsetPlayState() {
@@ -974,8 +1383,9 @@ export class CinematicCredits extends LitElement {
   }
 
   private resetSunset() {
-    this.sunsetManualProgress = 0.7; // Reset to halfway down
+    this.sunsetManualProgress = 0.0;
     this.isSunsetRunning = true;
+    this.saveConfigToLocalStorage();
   }
 
   private triggerAudioUpload() {
@@ -995,6 +1405,9 @@ export class CinematicCredits extends LitElement {
         this.audioVolume = this.audioManager.volume;
         this.audioLoop = this.audioManager.loop;
         
+        // Rebuild credits canvas and scroll bounds for uploaded audio duration
+        this.createCredits(this.audioDuration);
+
         // Auto play on upload
         this.audioManager.play();
         this.isAudioPlaying = true;
@@ -1305,6 +1718,16 @@ export class CinematicCredits extends LitElement {
                 </button>
               </div>
             `}
+          </div>
+
+          <!-- Export HyperFrames Config Button -->
+          <div class="control-group" style="margin-top: 8px;">
+            <button 
+              class="btn-reset" 
+              style="background: rgba(255, 110, 60, 0.25); border-color: #ff6e3c; color: #ffffff; padding: 10px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; width: 100%; cursor: pointer;"
+              @click="${this.exportConfig}">
+              Export HyperFrames Config
+            </button>
           </div>
 
         </div>

@@ -36,9 +36,9 @@ function main() {
   const scriptMatch = indexHtmlStr.match(/<script type="module" crossorigin src="([^"]+)"><\/script>/);
   const cssMatch = indexHtmlStr.match(/<link rel="stylesheet" crossorigin href="([^"]+)">/);
 
-  // Paths are relative to docs/ — use them directly (e.g. './assets/index-XXXX.js')
-  const scriptSrc = scriptMatch ? scriptMatch[1] : '';
-  const cssHref = cssMatch ? cssMatch[1] : '';
+  // Paths relative to project root for HyperFrames server
+  const scriptSrc = scriptMatch ? scriptMatch[1].replace(/^\.\/assets\//, 'docs/assets/').replace(/^assets\//, 'docs/assets/') : '';
+  const cssHref = cssMatch ? cssMatch[1].replace(/^\.\/assets\//, 'docs/assets/').replace(/^assets\//, 'docs/assets/') : '';
 
   // 3. Read JSON config
   const configData = fs.readFileSync(CONFIG_PATH, 'utf-8');
@@ -80,11 +80,29 @@ function main() {
     if (engine === 'wave_field') {
       const script = config.script || [];
       eventsHtml = script.map((evt, i) => {
-        const type = isLegacy ? evt.type : (evt.config ? evt.config.target : 'trigger');
-        const value = isLegacy ? evt.value : (evt.config ? evt.config.amount : 0);
+        const type = isLegacy ? evt.type : (evt.config ? evt.config.target : (evt.type || 'trigger'));
+        const value = isLegacy ? evt.value : (evt.config ? (evt.config.value !== undefined ? evt.config.value : evt.config.amount) : (evt.value !== undefined ? evt.value : 0));
         return `      <div id="event-${i}" class="config-event clip" data-type="${type}" data-value="${value}" data-start="${evt.time}"></div>`;
       }).join('\n');
-      targetScreen = `<wavefield-screen style="width: 100%; height: 100%; display: block;"></wavefield-screen>`;
+
+      const theme = config.theme || 'noir';
+      const device = config.device || 'sp404';
+      const speed = config.speed !== undefined ? config.speed : 8.0;
+      const gap = config.gap !== undefined ? config.gap : 1;
+      const height = config.height !== undefined ? config.height : 100;
+      const displayMode = config.displayMode || (config.mode !== 'wave_field' ? config.mode : undefined) || 'full';
+      const rippleDir = config.rippleDir || 'down';
+
+      targetScreen = `<wavefield-screen 
+        data-theme="${theme}"
+        data-device="${device}"
+        data-speed="${speed}"
+        data-gap="${gap}"
+        data-height="${height}"
+        data-mode="${displayMode}"
+        data-ripple-dir="${rippleDir}"
+        style="width: 100%; height: 100%; display: block;">
+      </wavefield-screen>`;
     } else if (engine === 'diorama') {
       const macros = config.macroShots || [];
       const micros = config.microCuts || [];
@@ -103,8 +121,21 @@ function main() {
         data-secondary-array="${(config.secondaryArray || []).join(',')}" 
         style="width: 100%; height: 100%; display: block;">
       </diorama-screen>`;
+    } else if (engine === 'credits') {
+      eventsHtml = '';
+      targetScreen = `<cinematic-credits 
+        data-sun-size="${config.sunSize !== undefined ? config.sunSize : 0.4}" 
+        data-sun-glow="${config.sunGlowAmount !== undefined ? config.sunGlowAmount : 1.0}" 
+        data-grain-amount="${config.grainAmount !== undefined ? config.grainAmount : 3.5}" 
+        data-selected-figure="${config.selectedFigure || 'couple'}" 
+        data-sunset-speed="${config.sunsetSpeed !== undefined ? config.sunsetSpeed : 0.015}" 
+        data-credits-speed="${config.creditsSpeed !== undefined ? config.creditsSpeed : 0.001}" 
+        data-sync-to-audio="${config.syncToAudio ? 'true' : 'false'}" 
+        data-sunset-progress="${config.sunsetManualProgress !== undefined ? config.sunsetManualProgress : 0.7}" 
+        style="width: 100%; height: 100%; display: block;">
+      </cinematic-credits>`;
     } else {
-      console.error(`Error: Unsupported engine '${engine}' in config.json. Supported engines are 'wave_field' and 'diorama'.`);
+      console.error(`Error: Unsupported engine '${engine}' in config.json. Supported engines are 'wave_field', 'diorama', and 'credits'.`);
       process.exit(1);
     }
   } catch (err) {
@@ -147,18 +178,27 @@ ${eventsHtml}
   fs.writeFileSync(TEMP_HTML_PATH, htmlContent, 'utf-8');
   console.log(`Generated temporary HTML template: ${TEMP_HTML_PATH}`);
 
-  // 7. Execute hyperframes render
+  // 7. Execute hyperframes render with controlled compression (default CRF 24 to keep file size reasonable)
+  const args = process.argv.slice(2);
+  let crfArg = '--crf 24'; // Default CRF 24 keeps 1080p videos under ~100MB instead of 1GB+
+  
+  // Allow CLI overrides e.g. node render.js --crf 20 or node render.js --video-bitrate 8M
+  if (args.some(a => a.startsWith('--crf') || a.startsWith('--video-bitrate') || a.startsWith('-q') || a.startsWith('--quality'))) {
+    crfArg = args.join(' ');
+  }
+
   let renderFailed = false;
   try {
-    console.log(`Running: npx hyperframes render --composition docs/hyperframes-temp.html --output ${OUTPUT_PATH}`);
-    execSync(`npx hyperframes render --composition docs/hyperframes-temp.html --output ${OUTPUT_PATH}`, { 
-      stdio: 'inherit' 
-    });
+    const renderCmd = `npx hyperframes render --composition docs/hyperframes-temp.html --output ${OUTPUT_PATH} ${crfArg}`;
+    console.log(`Running: ${renderCmd}`);
+    execSync(renderCmd, { stdio: 'inherit' });
     if (!fs.existsSync(OUTPUT_PATH)) {
       console.error(`Error: Render command completed but expected output file '${OUTPUT_PATH}' was not created.`);
       renderFailed = true;
     } else {
-      console.log('Rendering complete!');
+      const stats = fs.statSync(OUTPUT_PATH);
+      const sizeMB = (stats.size / (1024 * 1024)).toFixed(2);
+      console.log(`Rendering complete! Final video size: ${sizeMB} MB (${OUTPUT_PATH})`);
     }
   } catch (err) {
     console.error('Error during HyperFrames rendering:', err.message);

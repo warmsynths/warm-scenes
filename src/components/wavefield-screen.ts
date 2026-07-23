@@ -552,11 +552,20 @@ export class WavefieldScreen extends LitElement {
   private startLoop() {
     // Detect HyperFrames offline rendering mode
     if (window.hasOwnProperty('__timelines') || document.querySelector('.config-event')) {
-      this.mode = 'full';
-      // Do not force scripted playbackMode so freeplay can still work offline
+      if (this.hasAttribute('data-theme')) this.theme = (this.getAttribute('data-theme') as any) || 'noir';
+      if (this.hasAttribute('data-device')) this.device = (this.getAttribute('data-device') as any) || 'sp404';
+      if (this.hasAttribute('data-speed')) this.scrollSpeed = parseFloat(this.getAttribute('data-speed') || '8.0');
+      if (this.hasAttribute('data-gap')) this.lineGap = parseInt(this.getAttribute('data-gap') || '1');
+      if (this.hasAttribute('data-height')) this.gridHeight = parseFloat(this.getAttribute('data-height') || '100');
+      if (this.hasAttribute('data-mode')) this.mode = (this.getAttribute('data-mode') as any) || 'full';
+      if (this.hasAttribute('data-ripple-dir')) this.rippleDir = (this.getAttribute('data-ripple-dir') as any) || 'down';
+
+      this.updateThemeColors();
+
       this.audioInitialized = true;
       this.isPlaying = true;
       this.isRenderMode = true;
+      this.playbackMode = 'scripted';
       
       // Load offline audio buffer for deterministic analysis
       this.loadOfflineAudio();

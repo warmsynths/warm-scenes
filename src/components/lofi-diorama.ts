@@ -9,7 +9,10 @@ import pinkRugImg from '../assets/rugs/pink_arched_rug.png';
 import whiteRugImg from '../assets/rugs/white_arched_rug.png';
 import yellowWallpaperImg from '../assets/textures/yellow_wallpaper.png';
 import dampCarpetImg from '../assets/textures/damp_carpet.png';
-import dropCeilingImg from '../assets/textures/drop_ceiling.png';
+import backroomsAlbedoImg from '../assets/backrooms_albedo.png';
+import backroomsEmissionImg from '../assets/backrooms_emission.png';
+import backroomsRoughnessImg from '../assets/backrooms_roughness.png';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
@@ -496,6 +499,7 @@ export class LofiDiorama extends LitElement {
 
     this.buildBackrooms();
     this.buildRoom();
+    this.buildWindow();
     this.buildDesk();
     this.buildFurniture();
     this.buildPosters();
@@ -508,7 +512,6 @@ export class LofiDiorama extends LitElement {
     this.updateGear();
 
     this.buildClutter();
-    this.buildWindow();
     this.buildWeather();
   }
 
@@ -516,95 +519,112 @@ export class LofiDiorama extends LitElement {
     const textureLoader = new THREE.TextureLoader();
     this.backroomsWallMeshes = [];
 
-    // Carpet Floor
-    const carpetTex = textureLoader.load(dampCarpetImg);
-    carpetTex.wrapS = THREE.RepeatWrapping;
-    carpetTex.wrapT = THREE.RepeatWrapping;
-    carpetTex.repeat.set(40, 40);
-    const carpetMat = new THREE.MeshStandardMaterial({ map: carpetTex, roughness: 0.9, color: 0xbbbbbb });
-    const carpet = new THREE.Mesh(new THREE.BoxGeometry(400, 2, 400), carpetMat);
-    carpet.position.set(0, -6.01, 0);
-    carpet.receiveShadow = true;
-    carpet.name = 'backroomsCarpet';
-    this.backroomsGroup.add(carpet);
-    this.surfaceObjects.push(carpet);
-
-    // Drop Ceiling (Plane facing down so it's invisible from above due to backface culling)
-    const ceilingTex = textureLoader.load(dropCeilingImg);
-    ceilingTex.wrapS = THREE.RepeatWrapping;
-    ceilingTex.wrapT = THREE.RepeatWrapping;
-    ceilingTex.repeat.set(20, 20);
-    const ceilingMat = new THREE.MeshStandardMaterial({ map: ceilingTex, roughness: 0.8, color: 0xcccccc });
-    const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), ceilingMat);
-    ceiling.rotation.x = Math.PI / 2; // Face downwards
-    ceiling.position.set(0, 35, 0); // 40 units high relative to floor
-    ceiling.receiveShadow = true;
-    this.backroomsGroup.add(ceiling);
-
-    // Labyrinth Generation
+    // Load textures for GLB diorama model
     const wallTex = textureLoader.load(yellowWallpaperImg);
     wallTex.wrapS = THREE.RepeatWrapping;
     wallTex.wrapT = THREE.RepeatWrapping;
-    wallTex.repeat.set(2, 4); // per 20x20 block
-    const baseWallMat = new THREE.MeshStandardMaterial({
-      map: wallTex,
-      roughness: 0.7,
-      color: 0xaaaaaa,
-      transparent: true,
-      opacity: 1.0
-    });
+    wallTex.repeat.set(4, 4);
 
-    const maze = [
-      "11111111111",
-      "10001000001",
-      "10101011101",
-      "10100010001",
-      "10111110111",
-      "10000000001",
-      "11101111101",
-      "10001000101",
-      "10111010001",
-      "10000011101",
-      "11111111111"
-    ];
+    const carpetTex = textureLoader.load(dampCarpetImg);
+    carpetTex.wrapS = THREE.RepeatWrapping;
+    carpetTex.wrapT = THREE.RepeatWrapping;
+    carpetTex.repeat.set(6, 6);
 
-    const blockSize = 20;
-    const offsetX = -((maze[0].length * blockSize) / 2) + 14;
-    const offsetZ = -((maze.length * blockSize) / 2);
+    const modelAlbedoTex = textureLoader.load(backroomsAlbedoImg);
+    const modelEmissionTex = textureLoader.load(backroomsEmissionImg);
+    const modelRoughnessTex = textureLoader.load(backroomsRoughnessImg);
+    modelAlbedoTex.colorSpace = THREE.SRGBColorSpace;
 
-    for (let row = 0; row < maze.length; row++) {
-      for (let col = 0; col < maze[row].length; col++) {
-        const x = offsetX + (col * blockSize) + (blockSize / 2);
-        const z = offsetZ + (row * blockSize) + (blockSize / 2);
+    // Load custom backrooms GLB diorama model
+    const gltfLoader = new GLTFLoader();
+    gltfLoader.load(
+      import.meta.env.BASE_URL + 'models/backrooms-diorama.glb',
+      (gltf) => {
+        const model = gltf.scene;
+        model.name = 'backroomsDioramaGLB';
+        model.scale.set(12, 12, 12);
+        model.position.set(14, -5.9, 0);
 
-        if (maze[row][col] === "1") {
-          const wallMat = baseWallMat.clone();
-          const wallBlock = new THREE.Mesh(new THREE.BoxGeometry(blockSize, 40, blockSize), wallMat);
-          wallBlock.position.set(x, 14, z);
-          wallBlock.receiveShadow = true;
-          wallBlock.castShadow = true;
-          wallBlock.userData.targetOpacity = 1.0;
-          this.backroomsGroup.add(wallBlock);
-          this.backroomsWallMeshes.push(wallBlock);
-        } else if (maze[row][col] === "0") {
-          // Every few empty spaces, place a fluorescent light
-          if ((row + col) % 3 === 0) {
-            const fluoro = new THREE.RectAreaLight(0xffffff, 3, 15, 5);
-            fluoro.position.set(x, 33.9, z);
-            fluoro.lookAt(x, 0, z);
-            this.backroomsGroup.add(fluoro);
+        model.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            const mesh = child as THREE.Mesh;
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            const name = mesh.name.toLowerCase();
 
-            const fluoroMeshMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-            const fluoroMesh = new THREE.Mesh(new THREE.BoxGeometry(16, 0.5, 6), fluoroMeshMat);
-            fluoroMesh.position.set(x, 34, z);
-            fluoroMesh.userData.isFluoro = true;
-            this.backroomsGroup.add(fluoroMesh);
+            if (name.includes('carpetfloor') || name.includes('carpet')) {
+              mesh.material = new THREE.MeshStandardMaterial({
+                map: carpetTex,
+                roughness: 0.9,
+                metalness: 0.05
+              });
+              this.surfaceObjects.push(mesh);
+            } else if (name.includes('wall') || name.includes('pillar')) {
+              const wallMat = new THREE.MeshStandardMaterial({
+                map: wallTex,
+                roughness: 0.75,
+                metalness: 0.0,
+                bumpMap: wallTex,
+                bumpScale: 0.02
+              });
+              mesh.material = wallMat;
+              this.backroomsWallMeshes.push(mesh);
+            } else if (name.includes('fixturetube') || name.includes('tube')) {
+              mesh.material = new THREE.MeshBasicMaterial({ color: 0xfff5cc });
+              const pointLight = new THREE.PointLight(0xfff5cc, 2.5, 30);
+              mesh.add(pointLight);
+            } else if (name.includes('fixture') || name.includes('housing')) {
+              mesh.material = new THREE.MeshStandardMaterial({
+                color: 0x222222,
+                metalness: 0.8,
+                roughness: 0.3
+              });
+            } else if (name.includes('chair')) {
+              mesh.material = new THREE.MeshStandardMaterial({
+                color: 0x3d4852,
+                metalness: 0.5,
+                roughness: 0.4
+              });
+            } else if (name.includes('door')) {
+              mesh.material = new THREE.MeshStandardMaterial({
+                color: 0x4a3728,
+                roughness: 0.7,
+                metalness: 0.1
+              });
+            } else if (name.includes('stain')) {
+              mesh.material = new THREE.MeshStandardMaterial({
+                color: 0x2b2214,
+                transparent: true,
+                opacity: 0.6,
+                roughness: 1.0
+              });
+            } else if (name.includes('baseboard')) {
+              mesh.material = new THREE.MeshStandardMaterial({
+                color: 0x2b2b2b,
+                roughness: 0.6
+              });
+            } else if (mesh.material) {
+              const m = mesh.material as THREE.MeshStandardMaterial;
+              if (modelAlbedoTex) m.map = modelAlbedoTex;
+              if (modelRoughnessTex) m.roughnessMap = modelRoughnessTex;
+              if (modelEmissionTex) {
+                m.emissiveMap = modelEmissionTex;
+                m.emissive = new THREE.Color(0xffffff);
+                m.emissiveIntensity = 0.6;
+              }
+            }
           }
-        }
-      }
-    }
+        });
 
-    // Ambient light specifically for the backrooms to prevent pitch black
+        this.backroomsGroup.add(model);
+      },
+      undefined,
+      (err) => {
+        console.warn('Could not load backrooms-diorama.glb model:', err);
+      }
+    );
+
+    // Ambient light specifically for the backrooms GLB diorama
     const backroomsAmbient = new THREE.AmbientLight(0xcccc99, 1.2);
     this.backroomsGroup.add(backroomsAmbient);
   }
@@ -2255,19 +2275,19 @@ export class LofiDiorama extends LitElement {
     // Outer frame
     const frameTop = new THREE.Mesh(new THREE.BoxGeometry(16.5, 0.8, 1), frameMat);
     frameTop.position.set(0, 20.4, -19.8);
-    this.scene.add(frameTop);
+    this.cosyRoomGroup.add(frameTop);
 
     const frameBottom = new THREE.Mesh(new THREE.BoxGeometry(16.5, 0.8, 1.5), frameMat);
     frameBottom.position.set(0, 12.0, -19.6);
-    this.scene.add(frameBottom);
+    this.cosyRoomGroup.add(frameBottom);
 
     const frameL = new THREE.Mesh(new THREE.BoxGeometry(0.8, 9, 1), frameMat);
     frameL.position.set(-8, 16.2, -19.8);
-    this.scene.add(frameL);
+    this.cosyRoomGroup.add(frameL);
 
     const frameR = new THREE.Mesh(new THREE.BoxGeometry(0.8, 9, 1), frameMat);
     frameR.position.set(8, 16.2, -19.8);
-    this.scene.add(frameR);
+    this.cosyRoomGroup.add(frameR);
 
     // Window sill
     const sillMat = new THREE.MeshStandardMaterial({
@@ -2277,7 +2297,7 @@ export class LofiDiorama extends LitElement {
     const sill = new THREE.Mesh(new THREE.BoxGeometry(17, 0.4, 2), sillMat);
     sill.position.set(0, 12.4, -19);
     sill.castShadow = true;
-    this.scene.add(sill);
+    this.cosyRoomGroup.add(sill);
     this.surfaceObjects.push(sill);
 
     this.staticCollisionObjects.push(frameTop, frameBottom, frameL, frameR, sill);
@@ -2290,7 +2310,7 @@ export class LofiDiorama extends LitElement {
     const skyGeo = new THREE.PlaneGeometry(120, 80);
     const sky = new THREE.Mesh(skyGeo, this.skyMat);
     sky.position.set(0, 15, -35);
-    this.scene.add(sky);
+    this.cosyRoomGroup.add(sky);
 
     // Clouds
     const cloudMat = new THREE.MeshBasicMaterial({
@@ -2316,7 +2336,7 @@ export class LofiDiorama extends LitElement {
       cloudGroup.position.set(pos[0], pos[1], pos[2]);
       cloudGroup.name = 'cloud';
       this.clouds.push(cloudGroup as unknown as THREE.Mesh);
-      this.scene.add(cloudGroup);
+      this.cosyRoomGroup.add(cloudGroup);
     }
 
     // Rain particles (hidden if sunny)
@@ -2339,16 +2359,16 @@ export class LofiDiorama extends LitElement {
 
     this.rainDrops = new THREE.Points(rainGeo, rainMat);
     this.rainDrops.visible = this.weather === 'rainy' || this.weather === 'thunderstorm';
-    this.scene.add(this.rainDrops);
+    this.cosyRoomGroup.add(this.rainDrops);
 
     // Lightning light
     this.lightningLight = new THREE.PointLight(0xffffff, 0, 250);
     this.lightningLight.position.set(0, 30, -30);
-    this.scene.add(this.lightningLight);
+    this.cosyRoomGroup.add(this.lightningLight);
 
     // Yard (Grass, Fence, Trees) - shrunk to a tiny floating diorama chunk!
     this.yardGroup = new THREE.Group();
-    this.scene.add(this.yardGroup);
+    this.cosyRoomGroup.add(this.yardGroup);
 
     // Small Ground Chunk
     const grassMat = new THREE.MeshStandardMaterial({ color: 0x3b5e2b, roughness: 1.0, metalness: 0.0 });
@@ -3206,10 +3226,11 @@ export class LofiDiorama extends LitElement {
     const box = new THREE.Box3().setFromObject(obj, true);
     if (box.isEmpty()) return;
 
-    // Raycast downwards from the center of the bounding box
+    // Raycast downwards starting above the bounding box top to reliably hit the surface beneath it
     const center = new THREE.Vector3();
     box.getCenter(center);
-    raycaster.set(center, new THREE.Vector3(0, -1, 0));
+    const rayOrigin = new THREE.Vector3(center.x, Math.max(center.y + 1.0, box.max.y + 0.2), center.z);
+    raycaster.set(rayOrigin, new THREE.Vector3(0, -1, 0));
 
     const intersects = raycaster.intersectObjects(this.surfaceObjects, false);
 
