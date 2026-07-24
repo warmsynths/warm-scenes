@@ -4,11 +4,15 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import './AudioDirector/AudioDirector';
 import type { AudioDirector } from './AudioDirector/AudioDirector';
+import { exportConfigAsJSON, exportDirectorConfig } from '../utils/exportConfig';
+import type { ExportableScreen } from '../types/screen';
+import { VisualEffectsStack } from '../utils/visual-effects';
 
 @customElement('wavefield-screen')
-export class WavefieldScreen extends LitElement {
+export class WavefieldScreen extends LitElement implements ExportableScreen {
   @query('.canvas-container')
   container!: HTMLDivElement;
 
@@ -84,6 +88,23 @@ export class WavefieldScreen extends LitElement {
 
   @state()
   private gridHeight: number = 100;
+
+  @state()
+  private grainAmount: number = 0;
+
+  @state()
+  private vhsEnabled = false;
+
+  @state()
+  private vhsIntensity = 1.0;
+
+  @state()
+  private noirEnabled = false;
+
+  @state()
+  private noirIntensity = 1.0;
+
+  private effects!: VisualEffectsStack;
 
   static styles = css`
     :host {
@@ -270,14 +291,25 @@ export class WavefieldScreen extends LitElement {
     this.renderer = new THREE.WebGLRenderer({ antialias: false, alpha: false });
     this.renderer.setSize(width, height);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.0;
     this.container.appendChild(this.renderer.domElement);
 
     const renderScene = new RenderPass(this.scene, this.camera);
     const bloomPass = new UnrealBloomPass(new THREE.Vector2(width, height), 0.35, 0.4, 0.1);
-    
+
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(renderScene);
     this.composer.addPass(bloomPass);
+
+    this.effects = new VisualEffectsStack(width, height);
+    this.effects.setGrain(this.grainAmount);
+    this.effects.setVHS(this.vhsEnabled, this.vhsIntensity);
+    this.effects.setNoir(this.noirEnabled, this.noirIntensity);
+    this.effects.addToComposer(this.composer);
+
+    const outputPass = new OutputPass();
+    this.composer.addPass(outputPass);
 
     this.buildWavefield();
     this.buildProxySP404();
@@ -390,6 +422,9 @@ export class WavefieldScreen extends LitElement {
     if (this.composer) {
       this.composer.setSize(width, height);
     }
+    if (this.effects) {
+      this.effects.setResolution(width, height);
+    }
   }
 
   // --- Web Audio API ---
@@ -440,9 +475,10 @@ export class WavefieldScreen extends LitElement {
   private lastFilterVal = 0;
 
   private async loadOfflineAudio() {
-    // Try ../audio.wav first (render mode: temp HTML is in docs/, audio is at project root)
-    // Fall back to audio.wav for compatibility
-    const paths = ['../audio.wav', 'audio.wav'];
+    // Try audio.wav first (render mode: HyperFrames serves relative to the project root,
+    // matching the <audio id="main-audio"> src in render.js). Fall back to ../audio.wav
+    // for older/alternate serving setups.
+    const paths = ['audio.wav', '../audio.wav'];
     for (const audioPath of paths) {
       try {
         const response = await fetch(audioPath);
@@ -547,11 +583,30 @@ export class WavefieldScreen extends LitElement {
   private startLoop() {
     // Detect HyperFrames offline rendering mode
     if (window.hasOwnProperty('__timelines') || document.querySelector('.config-event')) {
-      this.mode = 'full';
-      // Do not force scripted playbackMode so freeplay can still work offline
+      if (this.hasAttribute('data-theme')) this.theme = (this.getAttribute('data-theme') as any) || 'noir';
+      if (this.hasAttribute('data-device')) this.device = (this.getAttribute('data-device') as any) || 'sp404';
+      if (this.hasAttribute('data-speed')) this.scrollSpeed = parseFloat(this.getAttribute('data-speed') || '8.0');
+      if (this.hasAttribute('data-gap')) this.lineGap = parseInt(this.getAttribute('data-gap') || '1');
+      if (this.hasAttribute('data-height')) this.gridHeight = parseFloat(this.getAttribute('data-height') || '100');
+      if (this.hasAttribute('data-mode')) this.mode = (this.getAttribute('data-mode') as any) || 'full';
+      if (this.hasAttribute('data-ripple-dir')) this.rippleDir = (this.getAttribute('data-ripple-dir') as any) || 'down';
+      if (this.hasAttribute('data-grain-amount')) this.grainAmount = parseFloat(this.getAttribute('data-grain-amount') || '0');
+      if (this.hasAttribute('data-vhs-enabled')) this.vhsEnabled = this.getAttribute('data-vhs-enabled') === 'true';
+      if (this.hasAttribute('data-vhs-intensity')) this.vhsIntensity = parseFloat(this.getAttribute('data-vhs-intensity') || '1.0');
+      if (this.hasAttribute('data-noir-enabled')) this.noirEnabled = this.getAttribute('data-noir-enabled') === 'true';
+      if (this.hasAttribute('data-noir-intensity')) this.noirIntensity = parseFloat(this.getAttribute('data-noir-intensity') || '1.0');
+      if (this.effects) {
+        this.effects.setGrain(this.grainAmount);
+        this.effects.setVHS(this.vhsEnabled, this.vhsIntensity);
+        this.effects.setNoir(this.noirEnabled, this.noirIntensity);
+      }
+
+      this.updateThemeColors();
+
       this.audioInitialized = true;
       this.isPlaying = true;
       this.isRenderMode = true;
+      this.playbackMode = 'scripted';
       
       // Load offline audio buffer for deterministic analysis
       this.loadOfflineAudio();
@@ -600,8 +655,11 @@ export class WavefieldScreen extends LitElement {
 
   private renderScene() {
     if (!this.renderer || !this.scene || !this.camera) return;
-    
+
     this.time += 0.05;
+    if (this.effects) {
+      this.effects.update(this.time);
+    }
     let targetWeight = 0;
     let volumeRipple = 0;
 
@@ -895,6 +953,53 @@ export class WavefieldScreen extends LitElement {
     }
   }
 
+  public exportConfig(): void {
+    const director = this.shadowRoot?.querySelector('audio-director') as AudioDirector | null;
+    const currentState = {
+      theme: this.theme,
+      device: this.device,
+      speed: this.scrollSpeed,
+      gap: this.lineGap,
+      height: this.gridHeight,
+      mode: this.mode,
+      rippleDir: this.rippleDir,
+      grainAmount: this.grainAmount,
+      vhsEnabled: this.vhsEnabled,
+      vhsIntensity: this.vhsIntensity,
+      noirEnabled: this.noirEnabled,
+      noirIntensity: this.noirIntensity
+    };
+
+    if (director) {
+      exportDirectorConfig(director, currentState);
+    } else {
+      let exportData: any[] = [];
+      if (this.activeScript.length === 0) {
+        exportData = [
+          { time: 0, type: 'theme', value: currentState.theme },
+          { time: 0, type: 'device', value: currentState.device },
+          { time: 0, type: 'speed', value: currentState.speed },
+          { time: 0, type: 'gap', value: currentState.gap },
+          { time: 0, type: 'height', value: currentState.height },
+          { time: 0, type: 'mode', value: currentState.mode },
+          { time: 0, type: 'rippleDir', value: currentState.rippleDir }
+        ];
+      } else {
+        exportData = this.activeScript.map((evt: any) => ({
+          time: evt.time,
+          type: evt.config.target,
+          value: evt.config.amount
+        }));
+      }
+
+      exportConfigAsJSON({
+        engine: 'wave_field',
+        ...currentState,
+        script: exportData
+      });
+    }
+  }
+
   render() {
     return html`
       <div class="canvas-container"></div>
@@ -989,7 +1094,28 @@ export class WavefieldScreen extends LitElement {
           <label>Height:</label>
           <input type="range" min="10" max="200" step="10" .value="${this.gridHeight}" @input="${(e: any) => this.gridHeight = parseInt(e.target.value)}" style="flex: 1" />
         </div>
-        
+
+        <div class="controls-row">
+          <label>Film Grain:</label>
+          <input type="range" min="0.0" max="25.0" step="0.1" .value="${this.grainAmount}" @input="${(e: any) => { this.grainAmount = parseFloat(e.target.value); this.effects?.setGrain(this.grainAmount); }}" style="flex: 1" />
+        </div>
+
+        <div class="controls-row">
+          <label>VHS Effect:</label>
+          <input type="checkbox" .checked="${this.vhsEnabled}" @change="${(e: any) => { this.vhsEnabled = e.target.checked; this.effects?.setVHS(this.vhsEnabled, this.vhsIntensity); }}" />
+          ${this.vhsEnabled ? html`
+            <input type="range" min="0.0" max="1.0" step="0.05" .value="${this.vhsIntensity}" @input="${(e: any) => { this.vhsIntensity = parseFloat(e.target.value); this.effects?.setVHS(this.vhsEnabled, this.vhsIntensity); }}" style="flex: 1; margin-left: 8px;" />
+          ` : ''}
+        </div>
+
+        <div class="controls-row">
+          <label>B&W Noir:</label>
+          <input type="checkbox" .checked="${this.noirEnabled}" @change="${(e: any) => { this.noirEnabled = e.target.checked; this.effects?.setNoir(this.noirEnabled, this.noirIntensity); }}" />
+          ${this.noirEnabled ? html`
+            <input type="range" min="0.0" max="1.0" step="0.05" .value="${this.noirIntensity}" @input="${(e: any) => { this.noirIntensity = parseFloat(e.target.value); this.effects?.setNoir(this.noirEnabled, this.noirIntensity); }}" style="flex: 1; margin-left: 8px;" />
+          ` : ''}
+        </div>
+
         <div class="status">
           ${this.audioInitialized ? 'Audio active (Hard bass triggers reveal)' : 'Waiting for audio...'}
         </div>

@@ -3,6 +3,7 @@ import { customElement, property, state, query } from 'lit/decorators.js';
 import WaveSurfer from 'wavesurfer.js';
 import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.esm.js';
 import type { AnalyzeResult, AnalyzeError } from './analyzer.worker';
+import { AudioAutomationEngine } from '../../utils/audio-automation-engine';
 
 export interface ActionConfig {
   target: string;
@@ -489,7 +490,8 @@ export class AudioDirector extends LitElement {
       this.worker.terminate();
     }
 
-    this.worker = new Worker(new URL('./analyzer.worker.ts', import.meta.url), { type: 'module' });
+    const engine = new AudioAutomationEngine();
+    this.worker = engine.createSpectrumWorker();
     
     this.worker.onmessage = (e: MessageEvent) => {
       const data = e.data;

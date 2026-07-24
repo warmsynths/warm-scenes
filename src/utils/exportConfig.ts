@@ -32,11 +32,16 @@ export function exportDirectorConfig(
   extras?: Record<string, any>
 ): void {
   const state = director.getState();
-  const payload = {
+  const payload: Record<string, any> = {
     engine: state.mode,
     ...state,
     ...(extras || {}),
   };
+  // Ensure engine property is not overwritten by screen display modes (e.g. 'full' / 'joy')
+  payload.engine = state.mode;
+  if (extras && (extras.displayMode || extras.mode)) {
+    payload.displayMode = extras.displayMode || extras.mode;
+  }
   exportConfigAsJSON(payload, 'config.json');
 }
 

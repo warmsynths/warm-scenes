@@ -1,11 +1,15 @@
 import { LitElement, html, css } from 'lit';
-import { customElement, state, property, query } from 'lit/decorators.js';
-import { AudioManager } from '../utils/audio-manager';
+import { customElement, state, query } from 'lit/decorators.js';
 import './lofi-diorama';
 import './gear-preview';
 import './AudioDirector/AudioDirector';
 import type { AudioDirector, AvailableTarget } from './AudioDirector/AudioDirector';
 import type { DioramaAnalyzeResult, DioramaAnalyzeError } from './AudioDirector/diorama-analyzer.worker';
+import { exportDirectorConfig } from '../utils/exportConfig';
+import type { ExportableScreen } from '../types/screen';
+import type { DioramaSceneState } from '../types/diorama';
+import { GearRegistry } from '../utils/gear-registry';
+import { AudioAutomationEngine } from '../utils/audio-automation-engine';
 
 import ufoPosterImg from '../assets/posters/iwanttobelieve_.jpg';
 import tr808PosterImg from '../assets/posters/tr808.png';
@@ -17,30 +21,10 @@ import whiteRugImg from '../assets/rugs/white_arched_rug.png';
 type Weather = 'sunny' | 'rainy' | 'thunderstorm';
 type TimeOfDay = 'day' | 'sunset' | 'night';
 
-const GEAR_DICTIONARY: Record<string, string> = {
-  polyend: 'Polyend Tracker',
-  circuit_tracks: 'Circuit Tracks',
-  mood: 'MOOD',
-  blooper: 'Blooper',
-  generation_loss: 'Gen Loss',
-  sp404: 'SP-404',
-  m8: 'M8',
-  poster_believe: 'Believe Poster',
-  poster_808: 'TR-808 Poster',
-  poster_mpc: 'MPC Poster',
-  lamp: 'Desk Lamp',
-  cup: 'Coffee Cup',
-  succulent_echeveria: 'Echeveria',
-  succulent_moonstones: 'Moonstones',
-  succulent_haworthia: 'Haworthia',
-  succulent_pearls: 'String of Pearls',
-  succulent_jade: 'Jade Plant'
-};
-
 @customElement('lofi-dashboard')
-export class LofiDashboard extends LitElement {
-  @state()
-  private audioManager = new AudioManager();
+export class LofiDashboard extends LitElement implements ExportableScreen {
+  private automationEngine = new AudioAutomationEngine();
+  get audioManager() { return this.automationEngine.manager; }
 
   @state()
   private isDragOver = false;
@@ -57,21 +41,6 @@ export class LofiDashboard extends LitElement {
   @state()
   private progressPercent = 0;
 
-  @state()
-  private weather: Weather = 'sunny';
-
-  @state()
-  private timeOfDay: TimeOfDay = 'day';
-
-  @state()
-  private celestialPosition: number = 50;
-
-  @state()
-  private rainIntensity: number = 50;
-
-  @state()
-  private lightningIntensity: number = 50;
-
   private getInitialGear(): string[] {
     const saved = localStorage.getItem('lofi_active_gear');
     if (saved) {
@@ -80,8 +49,157 @@ export class LofiDashboard extends LitElement {
     return ['polyend', 'circuit_tracks', 'mood', 'blooper', 'generation_loss', 'sp404', 'm8', 'poster_believe', 'poster_808', 'poster_mpc', 'lamp', 'cup', 'succulent_echeveria', 'succulent_moonstones', 'succulent_haworthia', 'succulent_pearls', 'succulent_jade'];
   }
 
-  @property({ type: Array })
-  private activeGear: string[] = this.getInitialGear();
+  @state()
+  private sceneState: DioramaSceneState = {
+    environment: {
+      weather: 'sunny',
+      timeOfDay: 'day',
+      sceneMode: 'normal',
+      celestialPosition: 50,
+      rainIntensity: 50,
+      lightningIntensity: 50,
+      grainAmount: 0,
+      vhsEnabled: false,
+      vhsIntensity: 1.0,
+      noirEnabled: false,
+      noirIntensity: 1.0,
+    },
+    gear: {
+      activeGear: this.getInitialGear(),
+      primaryArray: [],
+      secondaryArray: [],
+      macroShots: [],
+      microCuts: [],
+    }
+  };
+
+  get weather(): Weather { return this.sceneState.environment.weather; }
+  set weather(val: Weather) {
+    this.sceneState = {
+      ...this.sceneState,
+      environment: { ...this.sceneState.environment, weather: val }
+    };
+  }
+
+  get timeOfDay(): TimeOfDay { return this.sceneState.environment.timeOfDay; }
+  set timeOfDay(val: TimeOfDay) {
+    this.sceneState = {
+      ...this.sceneState,
+      environment: { ...this.sceneState.environment, timeOfDay: val }
+    };
+  }
+
+  get sceneMode(): 'normal' | 'liminal' { return this.sceneState.environment.sceneMode; }
+  set sceneMode(val: 'normal' | 'liminal') {
+    this.sceneState = {
+      ...this.sceneState,
+      environment: { ...this.sceneState.environment, sceneMode: val }
+    };
+  }
+
+  get celestialPosition(): number { return this.sceneState.environment.celestialPosition; }
+  set celestialPosition(val: number) {
+    this.sceneState = {
+      ...this.sceneState,
+      environment: { ...this.sceneState.environment, celestialPosition: val }
+    };
+  }
+
+  get rainIntensity(): number { return this.sceneState.environment.rainIntensity; }
+  set rainIntensity(val: number) {
+    this.sceneState = {
+      ...this.sceneState,
+      environment: { ...this.sceneState.environment, rainIntensity: val }
+    };
+  }
+
+  get lightningIntensity(): number { return this.sceneState.environment.lightningIntensity; }
+  set lightningIntensity(val: number) {
+    this.sceneState = {
+      ...this.sceneState,
+      environment: { ...this.sceneState.environment, lightningIntensity: val }
+    };
+  }
+
+  get grainAmount(): number { return this.sceneState.environment.grainAmount; }
+  set grainAmount(val: number) {
+    this.sceneState = {
+      ...this.sceneState,
+      environment: { ...this.sceneState.environment, grainAmount: val }
+    };
+  }
+
+  get vhsEnabled(): boolean { return this.sceneState.environment.vhsEnabled; }
+  set vhsEnabled(val: boolean) {
+    this.sceneState = {
+      ...this.sceneState,
+      environment: { ...this.sceneState.environment, vhsEnabled: val }
+    };
+  }
+
+  get vhsIntensity(): number { return this.sceneState.environment.vhsIntensity; }
+  set vhsIntensity(val: number) {
+    this.sceneState = {
+      ...this.sceneState,
+      environment: { ...this.sceneState.environment, vhsIntensity: val }
+    };
+  }
+
+  get noirEnabled(): boolean { return this.sceneState.environment.noirEnabled; }
+  set noirEnabled(val: boolean) {
+    this.sceneState = {
+      ...this.sceneState,
+      environment: { ...this.sceneState.environment, noirEnabled: val }
+    };
+  }
+
+  get noirIntensity(): number { return this.sceneState.environment.noirIntensity; }
+  set noirIntensity(val: number) {
+    this.sceneState = {
+      ...this.sceneState,
+      environment: { ...this.sceneState.environment, noirIntensity: val }
+    };
+  }
+
+  get activeGear(): string[] { return this.sceneState.gear.activeGear; }
+  set activeGear(val: string[]) {
+    this.sceneState = {
+      ...this.sceneState,
+      gear: { ...this.sceneState.gear, activeGear: val }
+    };
+  }
+
+  get primaryArray(): string[] { return this.sceneState.gear.primaryArray; }
+  set primaryArray(val: string[]) {
+    this.sceneState = {
+      ...this.sceneState,
+      gear: { ...this.sceneState.gear, primaryArray: val }
+    };
+  }
+
+  get secondaryArray(): string[] { return this.sceneState.gear.secondaryArray; }
+  set secondaryArray(val: string[]) {
+    this.sceneState = {
+      ...this.sceneState,
+      gear: { ...this.sceneState.gear, secondaryArray: val }
+    };
+  }
+
+  get macroShots(): any[] { return this.sceneState.gear.macroShots; }
+  set macroShots(val: any[]) {
+    this.sceneState = {
+      ...this.sceneState,
+      gear: { ...this.sceneState.gear, macroShots: val }
+    };
+  }
+
+  get microCuts(): any[] { return this.sceneState.gear.microCuts; }
+  set microCuts(val: any[]) {
+    this.sceneState = {
+      ...this.sceneState,
+      gear: { ...this.sceneState.gear, microCuts: val }
+    };
+  }
 
   @state()
   private activePanel: 'gear' | 'environment' | 'audio' | 'preflight' | null = null;
@@ -95,15 +213,6 @@ export class LofiDashboard extends LitElement {
   @state()
   private showDirector = false;
 
-  @state()
-  private sceneMode: 'normal' | 'liminal' = 'normal';
-
-  @state()
-  private primaryArray: string[] = [];
-
-  @state()
-  private secondaryArray: string[] = [];
-
   @query('audio-director')
   private directorEl!: AudioDirector;
 
@@ -112,12 +221,6 @@ export class LofiDashboard extends LitElement {
 
   @state()
   private isAnalyzingDiorama = false;
-
-  @state()
-  private macroShots: any[] = [];
-
-  @state()
-  private microCuts: any[] = [];
 
   private dioramaWorker: Worker | null = null;
   private dioramaChannelData: Float32Array | null = null;
@@ -708,13 +811,52 @@ export class LofiDashboard extends LitElement {
         time: parseFloat(el.getAttribute('data-start') || '0'),
       }));
 
-      // Read primary/secondary arrays from diorama-screen host element
-      const dioramaHost = document.querySelector('diorama-screen');
+      // Read primary/secondary arrays and scene state from host element
+      const dioramaHost = document.querySelector('lofi-dashboard') || document.querySelector('diorama-screen');
       if (dioramaHost) {
         const primaryStr = dioramaHost.getAttribute('data-primary-array') || '';
         const secondaryStr = dioramaHost.getAttribute('data-secondary-array') || '';
         if (primaryStr) this.primaryArray = primaryStr.split(',').filter(s => s);
         if (secondaryStr) this.secondaryArray = secondaryStr.split(',').filter(s => s);
+
+        const activeGearStr = dioramaHost.getAttribute('data-active-gear') || '';
+        if (activeGearStr) this.activeGear = activeGearStr.split(',').filter(s => s);
+
+        const environment = { ...this.sceneState.environment };
+        if (dioramaHost.hasAttribute('data-weather')) {
+          environment.weather = (dioramaHost.getAttribute('data-weather') as Weather) || environment.weather;
+        }
+        if (dioramaHost.hasAttribute('data-time-of-day')) {
+          environment.timeOfDay = (dioramaHost.getAttribute('data-time-of-day') as TimeOfDay) || environment.timeOfDay;
+        }
+        if (dioramaHost.hasAttribute('data-scene-mode')) {
+          environment.sceneMode = (dioramaHost.getAttribute('data-scene-mode') as 'normal' | 'liminal') || environment.sceneMode;
+        }
+        if (dioramaHost.hasAttribute('data-celestial-position')) {
+          environment.celestialPosition = parseFloat(dioramaHost.getAttribute('data-celestial-position') || '') || environment.celestialPosition;
+        }
+        if (dioramaHost.hasAttribute('data-rain-intensity')) {
+          environment.rainIntensity = parseFloat(dioramaHost.getAttribute('data-rain-intensity') || '') || environment.rainIntensity;
+        }
+        if (dioramaHost.hasAttribute('data-lightning-intensity')) {
+          environment.lightningIntensity = parseFloat(dioramaHost.getAttribute('data-lightning-intensity') || '') || environment.lightningIntensity;
+        }
+        if (dioramaHost.hasAttribute('data-grain-amount')) {
+          environment.grainAmount = parseFloat(dioramaHost.getAttribute('data-grain-amount') || '') || environment.grainAmount;
+        }
+        if (dioramaHost.hasAttribute('data-vhs-enabled')) {
+          environment.vhsEnabled = dioramaHost.getAttribute('data-vhs-enabled') === 'true';
+        }
+        if (dioramaHost.hasAttribute('data-vhs-intensity')) {
+          environment.vhsIntensity = parseFloat(dioramaHost.getAttribute('data-vhs-intensity') || '') || environment.vhsIntensity;
+        }
+        if (dioramaHost.hasAttribute('data-noir-enabled')) {
+          environment.noirEnabled = dioramaHost.getAttribute('data-noir-enabled') === 'true';
+        }
+        if (dioramaHost.hasAttribute('data-noir-intensity')) {
+          environment.noirIntensity = parseFloat(dioramaHost.getAttribute('data-noir-intensity') || '') || environment.noirIntensity;
+        }
+        this.sceneState = { ...this.sceneState, environment };
       }
     }
   }
@@ -726,7 +868,6 @@ export class LofiDashboard extends LitElement {
   }
 
   private toggleGear(gear: string) {
-    if (gear === 'strat' || gear === 'reel') return;
     if (this.activeGear.includes(gear)) {
       this.activeGear = this.activeGear.filter(g => g !== gear);
     } else {
@@ -933,8 +1074,7 @@ export class LofiDashboard extends LitElement {
       },
       {
         id: 'other', label: 'Other', items: [
-          { id: 'reel', label: 'Tape Reel', icon: '📼', cat: 'Tape', disabled: true },
-          { id: 'strat', label: 'Strat', icon: '🎸', cat: 'Inst', disabled: true }
+          { id: 'strat', label: 'Strat', icon: '🎸', cat: 'Inst', disabled: false }
         ]
       },
       {
@@ -1100,6 +1240,31 @@ export class LofiDashboard extends LitElement {
           </div>
         ` : ''}
       </div>
+
+      <div class="gear-section" style="padding: 12px; max-width: 300px;">
+        <div class="gear-category-title" style="padding-left: 0; margin-bottom: 8px;">Visual Filters</div>
+
+        <div class="slider-container" style="margin-bottom: 12px;">
+          <div style="font-size: 0.85rem; color: #a49382; font-weight: 700;">Film Grain</div>
+          <input type="range" class="scrub-slider" min="0" max="25" step="0.1" .value="${this.grainAmount.toString()}" @input="${(e: Event) => this.grainAmount = parseFloat((e.target as HTMLInputElement).value)}" />
+        </div>
+
+        <div class="slider-container" style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+          <input type="checkbox" .checked="${this.vhsEnabled}" @change="${(e: Event) => this.vhsEnabled = (e.target as HTMLInputElement).checked}" />
+          <div style="font-size: 0.85rem; color: #a49382; font-weight: 700;">VHS Effect</div>
+        </div>
+        ${this.vhsEnabled ? html`
+          <input type="range" class="scrub-slider" min="0" max="1" step="0.05" .value="${this.vhsIntensity.toString()}" @input="${(e: Event) => this.vhsIntensity = parseFloat((e.target as HTMLInputElement).value)}" style="margin-bottom: 12px;" />
+        ` : ''}
+
+        <div class="slider-container" style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+          <input type="checkbox" .checked="${this.noirEnabled}" @change="${(e: Event) => this.noirEnabled = (e.target as HTMLInputElement).checked}" />
+          <div style="font-size: 0.85rem; color: #a49382; font-weight: 700;">B&W Noir</div>
+        </div>
+        ${this.noirEnabled ? html`
+          <input type="range" class="scrub-slider" min="0" max="1" step="0.05" .value="${this.noirIntensity.toString()}" @input="${(e: Event) => this.noirIntensity = parseFloat((e.target as HTMLInputElement).value)}" />
+        ` : ''}
+      </div>
     `;
   }
 
@@ -1231,10 +1396,7 @@ export class LofiDashboard extends LitElement {
       this.dioramaWorker.terminate();
     }
 
-    this.dioramaWorker = new Worker(
-      new URL('./AudioDirector/diorama-analyzer.worker.ts', import.meta.url),
-      { type: 'module' }
-    );
+    this.dioramaWorker = this.automationEngine.createDioramaWorker();
 
     this.dioramaWorker.onmessage = (ev: MessageEvent) => {
       const data = ev.data;
@@ -1268,10 +1430,10 @@ export class LofiDashboard extends LitElement {
 
   private get dioramaTargets(): AvailableTarget[] {
     return this.activeGear
-      .filter(id => GEAR_DICTIONARY[id] !== undefined)
+      .filter(id => GearRegistry.getLabel(id) !== id)
       .map(id => ({
         id: id,
-        label: GEAR_DICTIONARY[id],
+        label: GearRegistry.getLabel(id),
         type: 'trigger' as const
       }));
   }
@@ -1376,6 +1538,20 @@ export class LofiDashboard extends LitElement {
     `;
   }
 
+  public exportConfig(): void {
+    const director = this.shadowRoot?.querySelector('audio-director') as AudioDirector | null;
+    if (director) {
+      exportDirectorConfig(director, {
+        primaryArray: this.primaryArray || [],
+        secondaryArray: this.secondaryArray || [],
+        activeGear: this.activeGear || [],
+        environment: this.sceneState.environment,
+      });
+    } else {
+      alert("Load an audio file in the Diorama timeline first.");
+    }
+  }
+
   render() {
     const isLoaded = this.audioManager.isLoaded;
     const isPlaying = this.audioManager.isPlaying;
@@ -1385,17 +1561,7 @@ export class LofiDashboard extends LitElement {
       <lofi-diorama 
         .audioManager="${this.audioManager}" 
         .audioDirector="${this.showDirector ? this.directorEl : null}"
-        .weather="${this.weather}"
-        .timeOfDay="${this.timeOfDay}"
-        .sceneMode="${this.sceneMode}"
-        .celestialPosition="${this.celestialPosition}"
-        .rainIntensity="${this.rainIntensity}"
-        .lightningIntensity="${this.lightningIntensity}"
-        .activeGear="${this.activeGear}"
-        .primaryArray="${this.primaryArray}"
-        .secondaryArray="${this.secondaryArray}"
-        .macroShots="${this.macroShots}"
-        .microCuts="${this.microCuts}"
+        .sceneState="${this.sceneState}"
         @toggle-settings="${() => this.togglePanel('gear')}"
         @toggle-gear="${(e: CustomEvent) => this.toggleGear(e.detail.gear)}"
       ></lofi-diorama>

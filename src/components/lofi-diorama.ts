@@ -9,10 +9,10 @@ import pinkRugImg from '../assets/rugs/pink_arched_rug.png';
 import whiteRugImg from '../assets/rugs/white_arched_rug.png';
 import yellowWallpaperImg from '../assets/textures/yellow_wallpaper.png';
 import dampCarpetImg from '../assets/textures/damp_carpet.png';
-import dropCeilingImg from '../assets/textures/drop_ceiling.png';
 import backroomsAlbedoImg from '../assets/backrooms_albedo.png';
 import backroomsEmissionImg from '../assets/backrooms_emission.png';
 import backroomsRoughnessImg from '../assets/backrooms_roughness.png';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
@@ -27,6 +27,9 @@ import { AudioManager } from '../utils/audio-manager';
 import { TrackerScreen } from '../utils/tracker-screen';
 import { M8Screen } from '../utils/m8-screen';
 import { QuantumCube } from '../utils/quantum-cube';
+import { GearRegistry } from '../utils/gear-registry';
+import { VisualEffectsStack } from '../utils/visual-effects';
+import type { DioramaSceneState } from '../types/diorama';
 
 const MM_TO_UNITS = 0.018;
 const GET_GEAR_SIZE = (wMm: number, dMm: number, hMm: number) => {
@@ -42,41 +45,92 @@ export class LofiDiorama extends LitElement {
   @property({ type: Object })
   audioManager: AudioManager | null = null;
 
-  @property({ type: String })
-  weather: 'sunny' | 'rainy' | 'thunderstorm' = 'sunny';
-
-  @property({ type: String })
-  timeOfDay: 'day' | 'sunset' | 'night' = 'day';
-
-  @property({ type: Number })
-  celestialPosition: number = 50;
-
-  @property({ type: Number })
-  rainIntensity: number = 50;
-
-  @property({ type: Number })
-  lightningIntensity: number = 50;
-
-  @property({ type: String })
-  sceneMode: 'normal' | 'liminal' = 'normal';
-
-  @property({ type: Array })
-  activeGear: string[] = ['polyend', 'circuit_tracks', 'mood', 'blooper', 'generation_loss', 'sp404', 'm8', 'poster_believe', 'poster_808', 'poster_mpc', 'lamp', 'cup', 'succulent_echeveria', 'succulent_moonstones', 'succulent_haworthia', 'succulent_pearls', 'succulent_jade'];
-
   @property({ type: Object })
   audioDirector: any | null = null;
 
-  @property({ type: Array })
-  primaryArray: string[] = [];
+  @property({ type: Object })
+  sceneState: DioramaSceneState | null = null;
 
-  @property({ type: Array })
-  secondaryArray: string[] = [];
+  get weather(): 'sunny' | 'rainy' | 'thunderstorm' {
+    return this.sceneState?.environment.weather ?? 'sunny';
+  }
 
-  @property({ type: Array })
-  macroShots: any[] = [];
+  get timeOfDay(): 'day' | 'sunset' | 'night' {
+    return this.sceneState?.environment.timeOfDay ?? 'day';
+  }
 
-  @property({ type: Array })
-  microCuts: any[] = [];
+  get sceneMode(): 'normal' | 'liminal' {
+    return this.sceneState?.environment.sceneMode ?? 'normal';
+  }
+
+  get celestialPosition(): number {
+    return this.sceneState?.environment.celestialPosition ?? 50;
+  }
+
+  get rainIntensity(): number {
+    return this.sceneState?.environment.rainIntensity ?? 50;
+  }
+
+  get lightningIntensity(): number {
+    return this.sceneState?.environment.lightningIntensity ?? 50;
+  }
+
+  get grainAmount(): number {
+    return this.sceneState?.environment.grainAmount ?? 0;
+  }
+
+  get vhsEnabled(): boolean {
+    return this.sceneState?.environment.vhsEnabled ?? false;
+  }
+
+  get vhsIntensity(): number {
+    return this.sceneState?.environment.vhsIntensity ?? 1.0;
+  }
+
+  get noirEnabled(): boolean {
+    return this.sceneState?.environment.noirEnabled ?? false;
+  }
+
+  get noirIntensity(): number {
+    return this.sceneState?.environment.noirIntensity ?? 1.0;
+  }
+
+  get activeGear(): string[] {
+    return this.sceneState?.gear.activeGear ?? ['polyend', 'circuit_tracks', 'mood', 'blooper', 'generation_loss', 'sp404', 'm8', 'poster_believe', 'poster_808', 'poster_mpc', 'lamp', 'cup', 'succulent_echeveria', 'succulent_moonstones', 'succulent_haworthia', 'succulent_pearls', 'succulent_jade'];
+  }
+
+  private _primaryArrayOverride: string[] | null = null;
+  private _secondaryArrayOverride: string[] | null = null;
+  private _macroShotsOverride: any[] | null = null;
+  private _microCutsOverride: any[] | null = null;
+
+  get primaryArray(): string[] {
+    return this._primaryArrayOverride ?? this.sceneState?.gear.primaryArray ?? [];
+  }
+  set primaryArray(val: string[]) {
+    this._primaryArrayOverride = val;
+  }
+
+  get secondaryArray(): string[] {
+    return this._secondaryArrayOverride ?? this.sceneState?.gear.secondaryArray ?? [];
+  }
+  set secondaryArray(val: string[]) {
+    this._secondaryArrayOverride = val;
+  }
+
+  get macroShots(): any[] {
+    return this._macroShotsOverride ?? this.sceneState?.gear.macroShots ?? [];
+  }
+  set macroShots(val: any[]) {
+    this._macroShotsOverride = val;
+  }
+
+  get microCuts(): any[] {
+    return this._microCutsOverride ?? this.sceneState?.gear.microCuts ?? [];
+  }
+  set microCuts(val: any[]) {
+    this._microCutsOverride = val;
+  }
 
   @query('.canvas-container')
   container!: HTMLDivElement;
@@ -99,9 +153,9 @@ export class LofiDiorama extends LitElement {
   private clutterGroup!: THREE.Group;
   private cosyRoomGroup!: THREE.Group;
   private backroomsGroup!: THREE.Group;
-  private backroomsWallMat!: THREE.MeshStandardMaterial;
+  private backroomsWallMeshes: THREE.Mesh[] = [];
   private bloomPass!: UnrealBloomPass;
-  private liminalSkybox!: THREE.Mesh;
+  private effects!: VisualEffectsStack;
 
   @state()
   private activeConfigDevice: THREE.Object3D | null = null;
@@ -127,6 +181,7 @@ export class LofiDiorama extends LitElement {
   // Click/raycasting properties
   private clickableObjects: THREE.Object3D[] = [];
   private draggableObjects: THREE.Object3D[] = [];
+  private shelfObjects: THREE.Object3D[] = [];
   private staticCollisionObjects: THREE.Object3D[] = [];
   private surfaceObjects: THREE.Object3D[] = [];
   private dragObject: THREE.Object3D | null = null;
@@ -418,18 +473,24 @@ export class LofiDiorama extends LitElement {
     this.composer.addPass(renderPass);
 
     const ssaoPass = new SSAOPass(this.scene, this.camera, width, height);
-    ssaoPass.kernelRadius = 1.2;
-    ssaoPass.minDistance = 0.002;
-    ssaoPass.maxDistance = 0.1;
+    ssaoPass.kernelRadius = 16.0;
+    ssaoPass.minDistance = 0.005;
+    ssaoPass.maxDistance = 5.0;
     this.composer.addPass(ssaoPass);
 
     this.bloomPass = new UnrealBloomPass(
         new THREE.Vector2(width, height),
-        0.0,   // strength (default 0, enable in liminal mode)
+        0.15,  // strength (subtle ambient glow for warm lights and screens)
         0.4,   // radius
         0.85   // threshold
     );
     this.composer.addPass(this.bloomPass);
+
+    this.effects = new VisualEffectsStack(width, height);
+    this.effects.setGrain(this.grainAmount);
+    this.effects.setVHS(this.vhsEnabled, this.vhsIntensity);
+    this.effects.setNoir(this.noirEnabled, this.noirIntensity);
+    this.effects.addToComposer(this.composer);
 
     const outputPass = new OutputPass();
     this.composer.addPass(outputPass);
@@ -499,6 +560,7 @@ export class LofiDiorama extends LitElement {
 
     this.buildBackrooms();
     this.buildRoom();
+    this.buildWindow();
     this.buildDesk();
     this.buildFurniture();
     this.buildPosters();
@@ -511,49 +573,121 @@ export class LofiDiorama extends LitElement {
     this.updateGear();
 
     this.buildClutter();
-    this.buildWindow();
     this.buildWeather();
   }
 
   private buildBackrooms() {
     const textureLoader = new THREE.TextureLoader();
+    this.backroomsWallMeshes = [];
 
-    // 1. Texture Loader
-    const albedo = textureLoader.load(backroomsAlbedoImg);
-    const emission = textureLoader.load(backroomsEmissionImg);
-    const roughness = textureLoader.load(backroomsRoughnessImg);
+    // Load textures for GLB diorama model
+    const wallTex = textureLoader.load(yellowWallpaperImg);
+    wallTex.wrapS = THREE.RepeatWrapping;
+    wallTex.wrapT = THREE.RepeatWrapping;
+    wallTex.repeat.set(4, 4);
 
-    // Important: Set color space correctly for color map (Vite/Three.js handles this, but explicitly SRGB is good)
-    albedo.colorSpace = THREE.SRGBColorSpace;
+    const carpetTex = textureLoader.load(dampCarpetImg);
+    carpetTex.wrapS = THREE.RepeatWrapping;
+    carpetTex.wrapT = THREE.RepeatWrapping;
+    carpetTex.repeat.set(6, 6);
 
-    // 2. Material Setup
-    const material = new THREE.MeshStandardMaterial({
-        map: albedo,
-        emissiveMap: emission,
-        emissive: new THREE.Color(0xffffff),
-        emissiveIntensity: 1.5, // Controls glow brightness
-        roughnessMap: roughness,
-        side: THREE.BackSide // Render inside of the sphere
-    });
+    const modelAlbedoTex = textureLoader.load(backroomsAlbedoImg);
+    const modelEmissionTex = textureLoader.load(backroomsEmissionImg);
+    const modelRoughnessTex = textureLoader.load(backroomsRoughnessImg);
+    modelAlbedoTex.colorSpace = THREE.SRGBColorSpace;
 
-    // 3. Geometry (Inverted Sphere)
-    const geometry = new THREE.SphereGeometry(500, 60, 40);
-    // Invert geometry to see inside
-    geometry.scale(-1, 1, 1); 
+    // Load custom backrooms GLB diorama model
+    const gltfLoader = new GLTFLoader();
+    gltfLoader.load(
+      import.meta.env.BASE_URL + 'models/backrooms-diorama.glb',
+      (gltf) => {
+        const model = gltf.scene;
+        model.name = 'backroomsDioramaGLB';
+        model.scale.set(12, 12, 12);
+        model.position.set(14, -5.9, 0);
 
-    this.liminalSkybox = new THREE.Mesh(geometry, material);
-    // Center it roughly around the camera's default target
-    this.liminalSkybox.position.set(14, 5.6, 0); 
-    this.backroomsGroup.add(this.liminalSkybox);
+        model.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            const mesh = child as THREE.Mesh;
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            const name = mesh.name.toLowerCase();
 
-    // 4. Invisible Collision Floor
-    // This allows the user to still place gear onto a flat surface even though the visual room is a sphere
-    const floorGeo = new THREE.BoxGeometry(120, 2, 120);
-    const floorMat = new THREE.MeshBasicMaterial({ color: 0xff0000, visible: false });
-    const floor = new THREE.Mesh(floorGeo, floorMat);
-    floor.position.set(14, -6.01, 0); // Y position matches previous floor height
-    this.backroomsGroup.add(floor);
-    this.surfaceObjects.push(floor); 
+            if (name.includes('carpetfloor') || name.includes('carpet')) {
+              mesh.material = new THREE.MeshStandardMaterial({
+                map: carpetTex,
+                roughness: 0.9,
+                metalness: 0.05
+              });
+              this.surfaceObjects.push(mesh);
+            } else if (name.includes('wall') || name.includes('pillar')) {
+              const wallMat = new THREE.MeshStandardMaterial({
+                map: wallTex,
+                roughness: 0.75,
+                metalness: 0.0,
+                bumpMap: wallTex,
+                bumpScale: 0.02
+              });
+              mesh.material = wallMat;
+              this.backroomsWallMeshes.push(mesh);
+            } else if (name.includes('fixturetube') || name.includes('tube')) {
+              mesh.material = new THREE.MeshBasicMaterial({ color: 0xfff5cc });
+              const pointLight = new THREE.PointLight(0xfff5cc, 2.5, 30);
+              mesh.add(pointLight);
+            } else if (name.includes('fixture') || name.includes('housing')) {
+              mesh.material = new THREE.MeshStandardMaterial({
+                color: 0x222222,
+                metalness: 0.8,
+                roughness: 0.3
+              });
+            } else if (name.includes('chair')) {
+              mesh.material = new THREE.MeshStandardMaterial({
+                color: 0x3d4852,
+                metalness: 0.5,
+                roughness: 0.4
+              });
+            } else if (name.includes('door')) {
+              mesh.material = new THREE.MeshStandardMaterial({
+                color: 0x4a3728,
+                roughness: 0.7,
+                metalness: 0.1
+              });
+            } else if (name.includes('stain')) {
+              mesh.material = new THREE.MeshStandardMaterial({
+                color: 0x2b2214,
+                transparent: true,
+                opacity: 0.6,
+                roughness: 1.0
+              });
+            } else if (name.includes('baseboard')) {
+              mesh.material = new THREE.MeshStandardMaterial({
+                color: 0x2b2b2b,
+                roughness: 0.6
+              });
+            } else if (mesh.material) {
+              const m = mesh.material as THREE.MeshStandardMaterial;
+              if (modelAlbedoTex) m.map = modelAlbedoTex;
+              if (modelRoughnessTex) m.roughnessMap = modelRoughnessTex;
+              if (modelEmissionTex) {
+                m.emissiveMap = modelEmissionTex;
+                m.emissive = new THREE.Color(0xffffff);
+                m.emissiveIntensity = 0.6;
+              }
+            }
+          }
+        });
+
+        this.backroomsGroup.add(model);
+      },
+      undefined,
+      (err) => {
+        console.warn('Could not load backrooms-diorama.glb model:', err);
+      }
+    );
+
+    // Ambient light specifically for the backrooms GLB diorama
+    const backroomsAmbient = new THREE.AmbientLight(0xcccc99, 1.2);
+    this.backroomsGroup.add(backroomsAmbient);
   }
 
   private buildRoom() {
@@ -1375,6 +1509,7 @@ export class LofiDiorama extends LitElement {
 
     // Clear old gear
     this.draggableObjects = this.draggableObjects.filter(obj => !this.gearGroup.children.includes(obj));
+    this.shelfObjects = [];
     this.gearGroup.clear();
     this.tapeSpools = [];
     this.circuitPads = [];
@@ -1384,7 +1519,6 @@ export class LofiDiorama extends LitElement {
     this.buildMood(this.activeGear.includes('mood'));
     this.buildBlooper(this.activeGear.includes('blooper'));
     this.buildGenerationLoss(this.activeGear.includes('generation_loss'));
-    this.buildReel(this.activeGear.includes('reel'));
     this.buildSP404(this.activeGear.includes('sp404'));
     this.buildStrat(this.activeGear.includes('strat'));
     this.buildM8(this.activeGear.includes('m8'));
@@ -1438,6 +1572,7 @@ export class LofiDiorama extends LitElement {
     } else {
       trackerBody.position.set(-21, 18.06, -7.5); // Shelf slot, facing out
       trackerBody.rotation.set(Math.PI / 2, 0.15, -Math.PI / 2);
+      this.shelfObjects.push(trackerBody);
     }
 
     // Tracker Screen Overlay (Dynamic)
@@ -1489,6 +1624,7 @@ export class LofiDiorama extends LitElement {
     } else {
       ctBody.position.set(-21, 18.09, -2.5); // Shelf slot, facing out
       ctBody.rotation.set(Math.PI / 2, 0.15, -Math.PI / 2);
+      this.shelfObjects.push(ctBody);
     }
 
     // Circuit Tracks Pads Overlay (Dynamic Additive Blending)
@@ -1545,6 +1681,7 @@ export class LofiDiorama extends LitElement {
     } else {
       pedal.position.set(-21, 12.81, shelfZ); // Lower shelf, facing out
       pedal.rotation.set(Math.PI / 2, 0.15, -Math.PI / 2);
+      this.shelfObjects.push(pedal);
     }
 
     const pSize = GET_GEAR_SIZE(64, 124, 60); // 64mm W x 124mm D x 60mm H
@@ -1613,85 +1750,7 @@ export class LofiDiorama extends LitElement {
     return pedal;
   }
 
-  private buildReel(isActive: boolean) {
-    const reelGroup = new THREE.Group();
-    reelGroup.name = 'reel';
 
-    if (isActive) {
-      reelGroup.rotation.y = -0.2;
-      this.loadOrPlaceObject(reelGroup, 'reel', 8.5, 8.25, -10);
-    } else {
-      reelGroup.position.set(-21, 18.45, -12); // Top shelf slot
-      reelGroup.rotation.y = Math.PI / 2;
-    }
-
-    // Wood sides
-    const woodMat = new THREE.MeshStandardMaterial({ color: 0x4a3018, roughness: 0.8, metalness: 0.1 });
-    const sideL = new THREE.Mesh(new THREE.BoxGeometry(0.3, 4.5, 1.5), woodMat);
-    sideL.position.set(-1.6, 0, 0);
-    reelGroup.add(sideL);
-
-    const sideR = new THREE.Mesh(new THREE.BoxGeometry(0.3, 4.5, 1.5), woodMat);
-    sideR.position.set(1.6, 0, 0);
-    reelGroup.add(sideR);
-
-    // Silver Faceplate
-    const faceMat = new THREE.MeshStandardMaterial({ color: 0xd0d0d0, metalness: 0.8, roughness: 0.3 });
-    const face = new THREE.Mesh(new THREE.BoxGeometry(2.9, 4.5, 1.3), faceMat);
-    face.position.set(0, 0, 0);
-    reelGroup.add(face);
-
-    // Tape Spools
-    const spoolMat = new THREE.MeshStandardMaterial({ color: 0xc0c0c0, metalness: 0.9, roughness: 0.2 });
-    const tapeMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 });
-
-    const createSpool = (x: number, y: number) => {
-      const spoolGroup = new THREE.Group();
-      spoolGroup.position.set(x, y, 0.75);
-
-      const flange = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, 0.05, 32), spoolMat);
-      flange.rotation.x = Math.PI / 2;
-      spoolGroup.add(flange);
-
-      const tape = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.85, 0.06, 32), tapeMat);
-      tape.rotation.x = Math.PI / 2;
-      spoolGroup.add(tape);
-
-      return spoolGroup;
-    };
-
-    const spool1 = createSpool(-0.75, 0.8);
-    const spool2 = createSpool(0.75, 0.8);
-    reelGroup.add(spool1, spool2);
-    if (isActive) {
-      this.tapeSpools.push(spool1, spool2);
-    }
-
-    // Head stack block
-    const headMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.5 });
-    const headStack = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.6, 0.2), headMat);
-    headStack.position.set(0, -0.6, 0.75);
-    reelGroup.add(headStack);
-
-    // VU Meters
-    const vuMat = new THREE.MeshStandardMaterial({ color: 0xeeeedd, emissive: 0x333322 });
-    const vu1 = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.4, 0.1), vuMat);
-    vu1.position.set(-0.4, -1.5, 0.7);
-    reelGroup.add(vu1);
-
-    const vu2 = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.4, 0.1), vuMat);
-    vu2.position.set(0.4, -1.5, 0.7);
-    reelGroup.add(vu2);
-
-    reelGroup.traverse((child) => {
-      if ((child as THREE.Mesh).isMesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
-      }
-    });
-
-    this.gearGroup.add(reelGroup);
-  }
 
   private buildSP404(isActive: boolean) {
     const textureLoader = new THREE.TextureLoader();
@@ -1722,6 +1781,7 @@ export class LofiDiorama extends LitElement {
     } else {
       spBody.position.set(-21, 18.68, 2.5); // Shelf slot, facing out
       spBody.rotation.set(Math.PI / 2, 0.15, -Math.PI / 2);
+      this.shelfObjects.push(spBody);
     }
 
     // SP-404 Pads Overlay (Dynamic Additive Blending)
@@ -1765,6 +1825,7 @@ export class LofiDiorama extends LitElement {
     } else {
       m8Group.position.set(-21, 12.9, -10); // Lower shelf, facing out
       m8Group.rotation.set(Math.PI / 2, 0.15, -Math.PI / 2);
+      this.shelfObjects.push(m8Group);
     }
 
     // M8 Dimensions: 96mm × 133mm × 20mm
@@ -1883,6 +1944,7 @@ export class LofiDiorama extends LitElement {
         } else {
           this.stratModel.position.set(-20, 12, 10);
           this.stratModel.rotation.set(-0.2, Math.PI / 2, 0);
+          this.shelfObjects.push(this.stratModel);
         }
         this.gearGroup.add(this.stratModel);
       }
@@ -1962,6 +2024,7 @@ export class LofiDiorama extends LitElement {
       } else {
         stratGroup.rotation.set(-0.2, Math.PI / 2, 0);
         stratGroup.position.set(-20, 12, 10);
+        this.shelfObjects.push(stratGroup);
       }
 
       this.stratModel = stratGroup;
@@ -2273,19 +2336,19 @@ export class LofiDiorama extends LitElement {
     // Outer frame
     const frameTop = new THREE.Mesh(new THREE.BoxGeometry(16.5, 0.8, 1), frameMat);
     frameTop.position.set(0, 20.4, -19.8);
-    this.scene.add(frameTop);
+    this.cosyRoomGroup.add(frameTop);
 
     const frameBottom = new THREE.Mesh(new THREE.BoxGeometry(16.5, 0.8, 1.5), frameMat);
     frameBottom.position.set(0, 12.0, -19.6);
-    this.scene.add(frameBottom);
+    this.cosyRoomGroup.add(frameBottom);
 
     const frameL = new THREE.Mesh(new THREE.BoxGeometry(0.8, 9, 1), frameMat);
     frameL.position.set(-8, 16.2, -19.8);
-    this.scene.add(frameL);
+    this.cosyRoomGroup.add(frameL);
 
     const frameR = new THREE.Mesh(new THREE.BoxGeometry(0.8, 9, 1), frameMat);
     frameR.position.set(8, 16.2, -19.8);
-    this.scene.add(frameR);
+    this.cosyRoomGroup.add(frameR);
 
     // Window sill
     const sillMat = new THREE.MeshStandardMaterial({
@@ -2295,7 +2358,7 @@ export class LofiDiorama extends LitElement {
     const sill = new THREE.Mesh(new THREE.BoxGeometry(17, 0.4, 2), sillMat);
     sill.position.set(0, 12.4, -19);
     sill.castShadow = true;
-    this.scene.add(sill);
+    this.cosyRoomGroup.add(sill);
     this.surfaceObjects.push(sill);
 
     this.staticCollisionObjects.push(frameTop, frameBottom, frameL, frameR, sill);
@@ -2308,7 +2371,7 @@ export class LofiDiorama extends LitElement {
     const skyGeo = new THREE.PlaneGeometry(120, 80);
     const sky = new THREE.Mesh(skyGeo, this.skyMat);
     sky.position.set(0, 15, -35);
-    this.scene.add(sky);
+    this.cosyRoomGroup.add(sky);
 
     // Clouds
     const cloudMat = new THREE.MeshBasicMaterial({
@@ -2334,7 +2397,7 @@ export class LofiDiorama extends LitElement {
       cloudGroup.position.set(pos[0], pos[1], pos[2]);
       cloudGroup.name = 'cloud';
       this.clouds.push(cloudGroup as unknown as THREE.Mesh);
-      this.scene.add(cloudGroup);
+      this.cosyRoomGroup.add(cloudGroup);
     }
 
     // Rain particles (hidden if sunny)
@@ -2357,16 +2420,16 @@ export class LofiDiorama extends LitElement {
 
     this.rainDrops = new THREE.Points(rainGeo, rainMat);
     this.rainDrops.visible = this.weather === 'rainy' || this.weather === 'thunderstorm';
-    this.scene.add(this.rainDrops);
+    this.cosyRoomGroup.add(this.rainDrops);
 
     // Lightning light
     this.lightningLight = new THREE.PointLight(0xffffff, 0, 250);
     this.lightningLight.position.set(0, 30, -30);
-    this.scene.add(this.lightningLight);
+    this.cosyRoomGroup.add(this.lightningLight);
 
     // Yard (Grass, Fence, Trees) - shrunk to a tiny floating diorama chunk!
     this.yardGroup = new THREE.Group();
-    this.scene.add(this.yardGroup);
+    this.cosyRoomGroup.add(this.yardGroup);
 
     // Small Ground Chunk
     const grassMat = new THREE.MeshStandardMaterial({ color: 0x3b5e2b, roughness: 1.0, metalness: 0.0 });
@@ -2549,6 +2612,9 @@ export class LofiDiorama extends LitElement {
     this.renderer.setSize(width, height, false);
     this.cssRenderer.setSize(width, height);
     this.composer.setSize(width, height);
+    if (this.effects) {
+      this.effects.setResolution(width, height);
+    }
   }
 
   private startLoop() {
@@ -2575,8 +2641,8 @@ export class LofiDiorama extends LitElement {
         time: parseFloat(el.getAttribute('data-start') || '0'),
       }));
 
-      // Parse primary/secondary arrays from diorama-screen element
-      const dioramaHost = document.querySelector('diorama-screen');
+      // Parse primary/secondary arrays from host element
+      const dioramaHost = document.querySelector('lofi-dashboard') || document.querySelector('diorama-screen');
       if (dioramaHost) {
         const primaryStr = dioramaHost.getAttribute('data-primary-array') || '';
         const secondaryStr = dioramaHost.getAttribute('data-secondary-array') || '';
@@ -2609,9 +2675,10 @@ export class LofiDiorama extends LitElement {
   }
 
   private async loadOfflineAudio() {
-    // Try ../audio.wav first (render mode: temp HTML is in docs/, audio is at project root)
-    // Fall back to audio.wav for compatibility
-    const paths = ['../audio.wav', 'audio.wav'];
+    // Try audio.wav first (render mode: HyperFrames serves relative to the project root,
+    // matching the <audio id="main-audio"> src in render.js). Fall back to ../audio.wav
+    // for older/alternate serving setups.
+    const paths = ['audio.wav', '../audio.wav'];
     for (const audioPath of paths) {
       try {
         const response = await fetch(audioPath);
@@ -2681,6 +2748,85 @@ export class LofiDiorama extends LitElement {
     let bass = 0;
     let freqs: number[] = new Array(8).fill(0);
 
+    if (this.sceneMode === 'liminal' && Math.random() < 0.02) {
+      this.backroomsGroup.children.forEach(child => {
+        if (child instanceof THREE.RectAreaLight) {
+          child.intensity = Math.random() > 0.5 ? 5 : 0.5;
+        }
+        if (child.userData && child.userData.isFluoro) {
+          ((child as THREE.Mesh).material as THREE.MeshBasicMaterial).color.setHex(Math.random() > 0.5 ? 0xffffff : 0x555555);
+        }
+      });
+    } else if (this.sceneMode === 'liminal') {
+      this.backroomsGroup.children.forEach(child => {
+        if (child instanceof THREE.RectAreaLight) {
+          child.intensity = 5;
+        }
+        if (child.userData && child.userData.isFluoro) {
+          ((child as THREE.Mesh).material as THREE.MeshBasicMaterial).color.setHex(0xffffff);
+        }
+      });
+    }
+
+    // Camera raycast wall occlusion in liminal mode
+    if (this.sceneMode === 'liminal' && this.backroomsWallMeshes.length > 0 && this.camera && this.controls) {
+      // Default target opacity to 1.0 for all walls
+      this.backroomsWallMeshes.forEach(w => {
+        w.userData.targetOpacity = 1.0;
+      });
+
+      const camPos = this.camera.position.clone();
+      const targetPos = this.controls.target.clone();
+      const dir = targetPos.clone().sub(camPos);
+      const dist = dir.length();
+
+      if (dist > 0.001) {
+        dir.normalize();
+
+        const up = new THREE.Vector3(0, 1, 0);
+        const right = new THREE.Vector3().crossVectors(dir, up).normalize();
+        const camUp = new THREE.Vector3().crossVectors(right, dir).normalize();
+
+        const offsetDist = Math.min(6.0, dist * 0.1);
+        const rayOrigins = [
+          camPos,
+          camPos.clone().addScaledVector(right, offsetDist),
+          camPos.clone().addScaledVector(right, -offsetDist),
+          camPos.clone().addScaledVector(camUp, offsetDist),
+          camPos.clone().addScaledVector(camUp, -offsetDist)
+        ];
+
+        const raycaster = new THREE.Raycaster();
+        raycaster.far = dist;
+
+        rayOrigins.forEach((origin, index) => {
+          const rayDir = targetPos.clone().sub(origin).normalize();
+          raycaster.set(origin, rayDir);
+          const hits = raycaster.intersectObjects(this.backroomsWallMeshes, false);
+
+          hits.forEach(hit => {
+            if (hit.object instanceof THREE.Mesh) {
+              const targetOp = index === 0 ? 0.15 : 0.3;
+              hit.object.userData.targetOpacity = Math.min(
+                hit.object.userData.targetOpacity ?? 1.0,
+                targetOp
+              );
+            }
+          });
+        });
+      }
+
+      // Smoothly animate opacity and set depthWrite
+      this.backroomsWallMeshes.forEach(w => {
+        const mat = w.material as THREE.MeshStandardMaterial;
+        if (mat) {
+          const targetOp = w.userData.targetOpacity ?? 1.0;
+          mat.opacity += (targetOp - mat.opacity) * 0.15;
+          mat.depthWrite = mat.opacity > 0.9;
+        }
+      });
+    }
+
     // --- Audio data source selection ---
     if (this.isRenderMode) {
       // HyperFrames render mode: compute deterministic audio from offline buffer
@@ -2721,11 +2867,11 @@ export class LofiDiorama extends LitElement {
 
     // Tracker screen
     if (this.trackerScreen && this.activeGear.includes('polyend')) {
-      this.trackerScreen.update(amplitude, bass);
+      GearRegistry.updateTrackerScreen(amplitude, bass);
     }
 
     if (this.m8Screen && this.activeGear.includes('m8')) {
-      this.m8Screen.update(amplitude, bass, freqs);
+      GearRegistry.updateM8Screen(amplitude, bass, freqs);
     }
 
     // Circuit pad LEDs
@@ -2788,7 +2934,7 @@ export class LofiDiorama extends LitElement {
     }
 
     if (this.quantumCube) {
-      this.quantumCube.update(this.renderer, this.camera);
+      GearRegistry.updateQuantumCube(this.renderer, this.camera);
     }
 
     if (this.controls) {
@@ -2815,6 +2961,14 @@ export class LofiDiorama extends LitElement {
       // Release camera to orbit controls
       this.sequencerActive = false;
       this.controls.enabled = true;
+    }
+
+    if (this.effects) {
+      const effectsTime = this.isRenderMode ? this.renderCurrentTime : performance.now() / 1000;
+      this.effects.update(effectsTime);
+      this.effects.setGrain(this.grainAmount);
+      this.effects.setVHS(this.vhsEnabled, this.vhsIntensity);
+      this.effects.setNoir(this.noirEnabled, this.noirIntensity);
     }
 
     // Use composer for post-processing instead of standard renderer
@@ -3003,17 +3157,17 @@ export class LofiDiorama extends LitElement {
       return; // Skip hover state if we are dragging
     }
 
-    const intersects = this.raycaster.intersectObjects([...this.clickableObjects, ...this.draggableObjects], true);
+    const intersects = this.raycaster.intersectObjects([...this.clickableObjects, ...this.draggableObjects, ...this.shelfObjects], true);
     if (intersects.length > 0) {
       this.renderer.domElement.style.cursor = 'pointer';
 
       const object = intersects[0].object;
       let target: THREE.Object3D | null = object;
-      while (target && !this.draggableObjects.includes(target) && target !== this.scene) {
+      while (target && !this.draggableObjects.includes(target) && !this.shelfObjects.includes(target) && target !== this.scene) {
         target = target.parent;
       }
 
-      if (target && this.draggableObjects.includes(target) && this.activeGear.includes(target.name)) {
+      if (target && (this.draggableObjects.includes(target) || this.shelfObjects.includes(target))) {
         if (!target.userData.isPoster) {
           this.hoveredSynth = target;
 
@@ -3060,7 +3214,7 @@ export class LofiDiorama extends LitElement {
     this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
     this.raycaster.setFromCamera(this.mouse, this.camera);
-    const intersects = this.raycaster.intersectObjects([...this.clickableObjects, ...this.draggableObjects], true);
+    const intersects = this.raycaster.intersectObjects([...this.clickableObjects, ...this.draggableObjects, ...this.shelfObjects], true);
 
     // Close config panel if clicking elsewhere
     if (this.activeConfigDevice) {
@@ -3080,10 +3234,20 @@ export class LofiDiorama extends LitElement {
     if (intersects.length > 0) {
       const object = intersects[0].object;
 
-      // Bubble up to find if it's a draggable gear
+      // Bubble up to find if it's a draggable or shelf gear
       let dragTarget: THREE.Object3D | null = object;
-      while (dragTarget && !this.draggableObjects.includes(dragTarget) && dragTarget !== this.scene) {
+      while (dragTarget && !this.draggableObjects.includes(dragTarget) && !this.shelfObjects.includes(dragTarget) && dragTarget !== this.scene) {
         dragTarget = dragTarget.parent;
+      }
+
+      if (dragTarget && this.shelfObjects.includes(dragTarget)) {
+        // Direct click on a shelf item -> Move it back to desk!
+        this.dispatchEvent(new CustomEvent('toggle-gear', {
+          detail: { gear: dragTarget.name },
+          bubbles: true,
+          composed: true
+        }));
+        return;
       }
 
       if (dragTarget && this.draggableObjects.includes(dragTarget)) {
@@ -3135,10 +3299,11 @@ export class LofiDiorama extends LitElement {
     const box = new THREE.Box3().setFromObject(obj, true);
     if (box.isEmpty()) return;
 
-    // Raycast downwards from the center of the bounding box
+    // Raycast downwards starting above the bounding box top to reliably hit the surface beneath it
     const center = new THREE.Vector3();
     box.getCenter(center);
-    raycaster.set(center, new THREE.Vector3(0, -1, 0));
+    const rayOrigin = new THREE.Vector3(center.x, Math.max(center.y + 1.0, box.max.y + 0.2), center.z);
+    raycaster.set(rayOrigin, new THREE.Vector3(0, -1, 0));
 
     const intersects = raycaster.intersectObjects(this.surfaceObjects, false);
 
@@ -3437,33 +3602,58 @@ export class LofiDiorama extends LitElement {
     return { pos: this.camera.position.clone(), target: this.controls.target.clone() };
   }
 
+  private resolveCameraTransform(shot: { target?: string; mood?: string; cameraPos?: any; cameraLookAt?: any }) {
+    if (shot.cameraPos && shot.cameraLookAt) {
+      return {
+        pos: new THREE.Vector3(shot.cameraPos.x, shot.cameraPos.y, shot.cameraPos.z),
+        target: new THREE.Vector3(shot.cameraLookAt.x, shot.cameraLookAt.y, shot.cameraLookAt.z)
+      };
+    }
+
+    let targetPosition = new THREE.Vector3(0, 5.6, -7);
+    let cameraOffset = new THREE.Vector3(0, 10, 10);
+
+    if (shot.target) {
+      const targetObj = this.findGearObject(shot.target);
+      if (targetObj) {
+        targetObj.getWorldPosition(targetPosition);
+      } else {
+        console.warn(`[CameraSeq] Target '${shot.target}' unresolvable. Falling back to desk center.`);
+      }
+    }
+
+    switch (shot.mood) {
+      case 'balanced':
+        cameraOffset.set(0, 15, 12);
+        break;
+      case 'submerged':
+        cameraOffset.set(-4, 6, 6);
+        break;
+      case 'chaotic':
+        cameraOffset.set(0, 7, 0.5);
+        break;
+      case 'ambient':
+        targetPosition.set(0, 16, -19);
+        cameraOffset.set(3, 2, 28);
+        break;
+      default:
+        cameraOffset.set(0, 10, 10);
+    }
+
+    const pos = targetPosition.clone().add(cameraOffset);
+    return { pos, target: targetPosition };
+  }
+
   public snapToCamera(markerId: string) {
     if (!this.macroShots) return;
     const shot = this.macroShots.find((m: any) => m.id === markerId);
     if (!shot) return;
 
-    if (shot.cameraPos && shot.cameraLookAt) {
-      this.camera.position.set(shot.cameraPos.x, shot.cameraPos.y, shot.cameraPos.z);
-      this.controls.target.set(shot.cameraLookAt.x, shot.cameraLookAt.y, shot.cameraLookAt.z);
-    } else {
-      let targetPosition = new THREE.Vector3(0, 5.6, -7);
-      let cameraOffset = new THREE.Vector3(0, 10, 10);
-      if (shot.target) {
-        const targetObj = this.findGearObject(shot.target);
-        if (targetObj) targetObj.getWorldPosition(targetPosition);
-      }
-      switch (shot.mood) {
-        case 'balanced': cameraOffset.set(0, 15, 12); break;
-        case 'submerged': cameraOffset.set(-4, 6, 6); break;
-        case 'chaotic': cameraOffset.set(0, 7, 0.5); break;
-        case 'ambient': targetPosition.set(0, 16, -19); cameraOffset.set(3, 2, 28); break;
-        default: cameraOffset.set(0, 10, 10);
-      }
-      this.camera.position.copy(targetPosition).add(cameraOffset);
-      this.controls.target.copy(targetPosition);
-    }
-    
+    const transform = this.resolveCameraTransform(shot);
+    this.camera.position.copy(transform.pos);
+    this.controls.target.copy(transform.target);
     this.camera.lookAt(this.controls.target);
+    
     this.isTransitioning = false;
     this.lastMacroId = markerId; 
     
@@ -3508,55 +3698,9 @@ export class LofiDiorama extends LitElement {
     if (activeMacro && activeMacro.id !== this.lastMacroId) {
       this.lastMacroId = activeMacro.id;
 
-      if (activeMacro.cameraPos && activeMacro.cameraLookAt) {
-        this.targetCameraPos.set(activeMacro.cameraPos.x, activeMacro.cameraPos.y, activeMacro.cameraPos.z);
-        this.targetCameraTarget.set(activeMacro.cameraLookAt.x, activeMacro.cameraLookAt.y, activeMacro.cameraLookAt.z);
-      } else {
-        let targetPosition = new THREE.Vector3(0, 5.6, -7); // Default: desk center
-        let cameraOffset = new THREE.Vector3(0, 10, 10);
-
-        // Dynamically locate the event target's 3D mesh and extract its position
-        if (activeMacro.target) {
-          const targetObj = this.findGearObject(activeMacro.target);
-          if (targetObj) {
-            targetObj.getWorldPosition(targetPosition);
-            console.log(`[CameraSeq] Found target '${activeMacro.target}' -> obj.name='${targetObj.name}', worldPos=(${targetPosition.x.toFixed(2)}, ${targetPosition.y.toFixed(2)}, ${targetPosition.z.toFixed(2)})`);
-          } else {
-            console.warn(`[CameraSeq] Could not find 3D object for target '${activeMacro.target}'. Falling back to desk center.`);
-            // Log all gearGroup children for debugging
-            console.warn(`[CameraSeq] gearGroup has ${this.gearGroup.children.length} children:`, 
-              this.gearGroup.children.map(c => `'${c.name}'`).join(', '));
-          }
-        } else {
-          console.warn(`[CameraSeq] activeMacro has no target property. mood=${activeMacro.mood}`);
-        }
-
-        // Mood State Machine (offsets only — targetPosition is always the found device)
-        switch (activeMacro.mood) {
-          case 'balanced':
-            cameraOffset.set(0, 15, 12);
-            break;
-          case 'submerged':
-            cameraOffset.set(-4, 6, 6);
-            break;
-          case 'chaotic':
-            cameraOffset.set(0, 7, 0.5);
-            break;
-          case 'ambient':
-            // B-roll: Frame the window from inside the room
-            // Window center is roughly (0, 16.2, -20), frame spans ~16.5 wide, ~8.4 tall
-            targetPosition.set(0, 16, -19);
-            cameraOffset.set(3, 2, 28);
-            break;
-          default:
-            cameraOffset.set(0, 10, 10);
-        }
-
-        console.log(`[CameraSeq] Final: mood='${activeMacro.mood}', target=(${targetPosition.x.toFixed(2)}, ${targetPosition.y.toFixed(2)}, ${targetPosition.z.toFixed(2)}), offset=(${cameraOffset.x.toFixed(2)}, ${cameraOffset.y.toFixed(2)}, ${cameraOffset.z.toFixed(2)}), camPos=(${(targetPosition.x + cameraOffset.x).toFixed(2)}, ${(targetPosition.y + cameraOffset.y).toFixed(2)}, ${(targetPosition.z + cameraOffset.z).toFixed(2)})`);
-
-        this.targetCameraTarget.copy(targetPosition);
-        this.targetCameraPos.copy(targetPosition).add(cameraOffset);
-      }
+      const transform = this.resolveCameraTransform(activeMacro);
+      this.targetCameraPos.copy(transform.pos);
+      this.targetCameraTarget.copy(transform.target);
 
       const isCut = (activeMacro as any).transitionType === 'cut';
       
@@ -3655,36 +3799,20 @@ export class LofiDiorama extends LitElement {
             }
           } else {
             // Default position if no save for this mode
-            child.position.set(14 + (Math.random() * 10 - 5), 5.6, (Math.random() * 10 - 5));
+            const defaultY = this.sceneMode === 'liminal' ? -4.4 : 5.6;
+            child.position.set(14 + (Math.random() * 10 - 5), defaultY, (Math.random() * 10 - 5));
           }
         }
       });
 
-      // Lighting and Environment adjustments
+      // Lighting adjustments
       if (this.sceneMode === 'liminal') {
         this.deskLight.intensity = 0;
         this.windowLight.intensity = 0;
-        if (this.ambientLight) this.ambientLight.intensity = 0.05;
-        if (this.hemiLight) this.hemiLight.intensity = 0.05;
-        this.scene.background = new THREE.Color(0x000000);
-        if (this.bloomPass) this.bloomPass.strength = 1.5;
-        
-        // Hide normal environment
-        if (this.yardGroup) this.yardGroup.visible = false;
-        if (this.rainDrops) this.rainDrops.visible = false;
-        this.clouds.forEach(c => c.visible = false);
-        // The sky plane is just a mesh, let's hide it by toggling material visibility
-        if (this.skyMat) this.skyMat.visible = false;
+        this.scene.background = new THREE.Color(0x999999);
       } else {
-        this.updateEnvironment(); // Restore normal lighting and weather
+        this.updateEnvironment(); // Restore normal lighting
         this.scene.background = new THREE.Color(0x1a1520);
-        if (this.ambientLight) this.ambientLight.intensity = 0.3;
-        if (this.hemiLight) this.hemiLight.intensity = 0.8;
-        if (this.bloomPass) this.bloomPass.strength = 0;
-        
-        if (this.yardGroup) this.yardGroup.visible = true;
-        if (this.skyMat) this.skyMat.visible = true;
-        // Clouds and rain visibility is handled by updateEnvironment() based on weather state
       }
 
       // Fade in

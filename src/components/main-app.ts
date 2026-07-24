@@ -1,10 +1,26 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import './diorama-screen';
+import gsap from 'gsap';
+import './lofi-dashboard';
 import './wavefield-screen';
 import './cinematic-credits';
-import { exportConfigAsJSON, exportDirectorConfig } from '../utils/exportConfig';
-import type { AudioDirector } from './AudioDirector/AudioDirector';
+import type { ExportableScreen } from '../types/screen';
+
+// HyperFrames composition contract: register one paused GSAP timeline at
+// window.__timelines['<composition-id>'], built synchronously at page load.
+// Uses the app's own bundled GSAP instead of a render-time CDN script so
+// renders don't depend on network access. No-op outside a HyperFrames render
+// (there's no #composition element in the normal dev/preview app).
+const compositionEl = document.getElementById('composition');
+if (compositionEl) {
+  const compositionId = compositionEl.getAttribute('data-composition-id');
+  if (compositionId) {
+    (window as any).__timelines = (window as any).__timelines || {};
+    if (!(window as any).__timelines[compositionId]) {
+      (window as any).__timelines[compositionId] = gsap.timeline({ paused: true });
+    }
+  }
+}
 
 @customElement('main-app')
 export class MainApp extends LitElement {
@@ -61,53 +77,14 @@ export class MainApp extends LitElement {
   }
 
   private handleExportConfig() {
-    if (this.activeScreen === 'wavefield') {
-      // Try the new director-based export first
-      const wavefieldScreen = this.shadowRoot?.querySelector('wavefield-screen') as any;
-      const director = wavefieldScreen?.shadowRoot?.querySelector('audio-director') as AudioDirector | null;
-      
-      if (director) {
-        exportDirectorConfig(director);
-      } else if (wavefieldScreen) {
-        // Fallback to legacy export
-        const script = wavefieldScreen.activeScriptEvents || [];
-        let exportData: any[] = [];
-        
-        if (script.length === 0) {
-          const state = wavefieldScreen.currentState;
-          exportData = [
-            { time: 0, type: 'theme', value: state.theme },
-            { time: 0, type: 'device', value: state.device },
-            { time: 0, type: 'speed', value: state.speed },
-            { time: 0, type: 'gap', value: state.gap },
-            { time: 0, type: 'height', value: state.height },
-            { time: 0, type: 'mode', value: state.mode },
-            { time: 0, type: 'rippleDir', value: state.rippleDir }
-          ];
-        } else {
-          exportData = script.map((evt: any) => ({
-            time: evt.time,
-            type: evt.config.target,
-            value: evt.config.amount
-          }));
-        }
-        
-        exportConfigAsJSON(exportData);
-      }
-    } else if (this.activeScreen === 'diorama') {
-      // Diorama export - will be fully wired in Phase 2
-      const dioramaScreen = this.shadowRoot?.querySelector('diorama-screen') as any;
-      const dashboard = dioramaScreen?.shadowRoot?.querySelector('lofi-dashboard') as any;
-      const director = dashboard?.shadowRoot?.querySelector('audio-director') as AudioDirector | null;
-      
-      if (director) {
-        exportDirectorConfig(director, {
-          primaryArray: dashboard.primaryArray || [],
-          secondaryArray: dashboard.secondaryArray || [],
-        });
-      } else {
-        alert("Load an audio file in the Diorama timeline first.");
-      }
+    const selector = this.activeScreen === 'diorama' 
+      ? 'lofi-dashboard' 
+      : this.activeScreen === 'wavefield' 
+        ? 'wavefield-screen' 
+        : 'cinematic-credits';
+    const activeScreenEl = this.shadowRoot?.querySelector(selector) as (Element & ExportableScreen) | null;
+    if (activeScreenEl && typeof activeScreenEl.exportConfig === 'function') {
+      activeScreenEl.exportConfig();
     }
   }
 
@@ -125,7 +102,7 @@ export class MainApp extends LitElement {
       
       <div class="screen-container">
         ${this.activeScreen === 'diorama' 
-          ? html`<diorama-screen></diorama-screen>` 
+          ? html`<lofi-dashboard></lofi-dashboard>` 
           : this.activeScreen === 'wavefield'
             ? html`<wavefield-screen></wavefield-screen>`
             : html`<cinematic-credits></cinematic-credits>`}
